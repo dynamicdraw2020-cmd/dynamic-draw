@@ -1,0 +1,24 @@
+Dynamic Draw v1.0.4 검증 결과
+
+수정 원인
+- React 비동기 submit 핸들러에서 await 이후 event.currentTarget을 다시 참조했습니다.
+- 이벤트 처리 종료 뒤 currentTarget이 null이 되어 reset() 호출에서 오류가 발생했습니다.
+
+수정 방식
+- await 전에 const formElement = event.currentTarget로 실제 HTMLFormElement를 보관했습니다.
+- FormData 생성과 성공 후 reset을 formElement로 수행하도록 변경했습니다.
+
+수정 파일
+- components/draw-manager.tsx
+- components/auth-form.tsx
+- components/exchange-rule-manager.tsx
+
+검증
+- event.currentTarget.reset() 잔존 여부 검사: 0건
+- TypeScript: 통과
+- ESLint: 통과
+- Next.js 프로덕션 빌드: 통과 (exit code 0)
+- 전체 앱 라우트 생성: 통과
+
+DB 변경
+- 없음

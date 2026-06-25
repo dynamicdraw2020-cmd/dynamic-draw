@@ -13,7 +13,8 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
     event.preventDefault();
     setLoading(true);
     setMessage(null);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
     if (mode === "signup" && payload.password !== payload.passwordConfirm) {
       setMessage({ type: "error", text: "비밀번호 확인이 일치하지 않습니다." });
@@ -33,7 +34,7 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
     }
     if (mode === "signup") {
       setMessage({ type: "success", text: body.data?.message ?? "가입 신청이 완료되었습니다." });
-      event.currentTarget.reset();
+      formElement.reset();
       if (typeof body.data?.redirectTo === "string") {
         window.setTimeout(() => { router.push(body.data.redirectTo); router.refresh(); }, 1100);
       }

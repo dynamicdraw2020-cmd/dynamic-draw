@@ -37,7 +37,8 @@ export function ExchangeRuleManager({ rules, rewards }: { rules: RuleRow[]; rewa
 
   async function createRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setLoading("new");
     try {
       await request("/api/admin/exchange-rules", "POST", {
@@ -47,7 +48,7 @@ export function ExchangeRuleManager({ rules, rewards }: { rules: RuleRow[]; rewa
         targetRewardId: form.get("targetRewardId"),
         targetQuantity: Number(form.get("targetQuantity")),
       });
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); }
   }
 

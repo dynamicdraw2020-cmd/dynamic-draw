@@ -25,7 +25,8 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
 
   async function createDraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBusy("create-draw");
     try {
       await jsonRequest("/api/admin/draws", "POST", {
@@ -33,7 +34,7 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
         description: form.get("description"),
         animationMs: Number(form.get("animationMs")),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       router.refresh();
     } catch (error) { window.alert((error as Error).message); } finally { setBusy(null); }
   }
@@ -54,7 +55,8 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
 
   async function createReward(event: FormEvent<HTMLFormElement>, drawId: string) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBusy(`reward-${drawId}`);
     try {
       await jsonRequest("/api/admin/rewards", "POST", {
@@ -66,7 +68,7 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
         isInventoryItem: form.get("isInventoryItem") === "on",
         isExchangeMaterial: form.get("isExchangeMaterial") === "on",
       });
-      event.currentTarget.reset();
+      formElement.reset();
       router.refresh();
     } catch (error) { window.alert((error as Error).message); } finally { setBusy(null); }
   }

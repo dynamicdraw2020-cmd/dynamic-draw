@@ -34,8 +34,8 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
     if (mode === "signup") {
       setMessage({ type: "success", text: body.data?.message ?? "가입 신청이 완료되었습니다." });
       event.currentTarget.reset();
-      if (body.data?.redirectTo === "/pending") {
-        window.setTimeout(() => { router.push("/pending"); router.refresh(); }, 800);
+      if (typeof body.data?.redirectTo === "string") {
+        window.setTimeout(() => { router.push(body.data.redirectTo); router.refresh(); }, 1100);
       }
       return;
     }

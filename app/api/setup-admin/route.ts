@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, requestMeta } from "@/lib/api";
-import { adminSetupConfigured, serverEnv, supabaseAdminConfigured } from "@/lib/env";
+import { serverEnv } from "@/lib/env";
+import { inspectSetupStatus } from "@/lib/setup-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({
@@ -20,8 +21,12 @@ function sameSecret(received: string, expected: string) {
 export async function POST(request: Request) {
   const csrf = enforceSameOrigin(request);
   if (csrf) return csrf;
-  if (!supabaseAdminConfigured) return fail("Supabase 환경변수가 연결되지 않았습니다.", 503, "SUPABASE_NOT_CONFIGURED");
-  if (!adminSetupConfigured) return fail("ADMIN_SETUP_SECRET은 32자 이상으로 설정해야 합니다.", 503, "SETUP_SECRET_NOT_CONFIGURED");
+
+  const setupStatus = await inspectSetupStatus();
+  if (!setupStatus.ready) {
+    const status = setupStatus.locked ? 409 : 503;
+    return fail(setupStatus.message, status, setupStatus.code, setupStatus.technicalCode);
+  }
 
   const meta = requestMeta(request);
   const limited = await enforceRateLimit(`setup-admin:${meta.ip}`, 5, 60 * 15);
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
     .from("profiles")
     .select("id", { count: "exact", head: true })
     .eq("role", "SUPER_ADMIN");
-  if (countError) return fail("DB 설치 SQL이 아직 실행되지 않았거나 profiles 테이블을 읽을 수 없습니다.", 503, "DATABASE_NOT_READY");
+  if (countError) return fail("최고 관리자 존재 여부를 확인하지 못했습니다.", 503, "DATABASE_NOT_READY", countError.code);
   if ((count ?? 0) > 0) return fail("최초 최고 관리자가 이미 존재합니다.", 409, "SUPER_ADMIN_ALREADY_EXISTS");
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -49,13 +54,13 @@ export async function POST(request: Request) {
   });
   if (createError || !created.user) {
     const duplicate = createError?.message.toLowerCase().includes("already");
-    return fail(duplicate ? "이미 가입된 이메일입니다. 다른 이메일을 사용해 주세요." : "관리자 로그인 계정을 만들지 못했습니다.", 400, "ADMIN_AUTH_CREATE_FAILED");
+    return fail(duplicate ? "이미 가입된 이메일입니다. 다른 이메일을 사용해 주세요." : "관리자 로그인 계정을 만들지 못했습니다.", 400, "ADMIN_AUTH_CREATE_FAILED", createError?.code);
   }
 
   const { data: generatedCode, error: codeError } = await admin.rpc("next_member_code");
   if (codeError || typeof generatedCode !== "string") {
     await admin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
-    return fail("관리자 고유 ID를 만들지 못했습니다. DB 설치 SQL을 다시 확인해 주세요.", 500, "ADMIN_CODE_CREATE_FAILED");
+    return fail("관리자 고유 ID를 만들지 못했습니다. DB 권한 보정 SQL을 확인해 주세요.", 500, "ADMIN_CODE_CREATE_FAILED", codeError?.code);
   }
   const memberCode = generatedCode;
   const { data: profile, error: profileError } = await admin
@@ -77,7 +82,7 @@ export async function POST(request: Request) {
 
   if (profileError || !profile) {
     await admin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
-    return fail("관리자 회원 정보를 만들지 못했습니다. 다시 시도해 주세요.", 500, "ADMIN_PROFILE_CREATE_FAILED", profileError?.message);
+    return fail("관리자 회원 정보를 만들지 못했습니다. 다시 시도해 주세요.", 500, "ADMIN_PROFILE_CREATE_FAILED", profileError?.code);
   }
 
   await admin.rpc("append_admin_log", {

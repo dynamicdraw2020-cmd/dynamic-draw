@@ -1,4 +1,4 @@
-# Dynamic Draw — 실제 배포용 홈페이지 v1.0.2
+# Dynamic Draw v1.0.3 — 실제 배포용 홈페이지 v1.0.2
 
 결제 없이 이벤트 추첨을 운영하는 Next.js + Supabase 웹 서비스입니다.
 
@@ -13,6 +13,16 @@
 
 기존 오류 원인은 SQL Editor로 만든 표에 서버용 `service_role` 권한이 명시적으로 부여되지 않은 것이었습니다. 공개 조회 권한은 있었기 때문에 메인 화면은 보였지만, 서버 Secret key를 사용하는 관리자 생성 확인만 실패했습니다.
 
+
+## v1.0.3 기존 배포 업데이트
+
+기존 Vercel·Supabase 프로젝트를 삭제하지 않습니다.
+
+1. `4_DB_보정_v1.0.3.sql`을 Supabase SQL Editor에서 한 번 실행합니다.
+2. `Dynamic-Draw-GitHub-교체파일-v1.0.3.zip`의 안쪽 파일을 GitHub에 덮어씁니다.
+3. Vercel 자동 배포가 `Ready`가 되면 `/api/health`를 확인합니다.
+
+자세한 순서는 `v1.0.3_적용방법_먼저읽기.txt`에 있습니다.
 
 ## 가장 먼저 할 일
 

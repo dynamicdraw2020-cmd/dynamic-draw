@@ -56,7 +56,6 @@ export function requestMeta(request: Request) {
   };
 }
 
-
 export function enforceSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
@@ -77,6 +76,8 @@ export function enforceSameOrigin(request: Request) {
   return null;
 }
 
+type RpcErrorLike = { code?: string; message?: string; details?: string; hint?: string };
+
 export async function enforceRateLimit(key: string, limit: number, windowSeconds: number) {
   try {
     const admin = createAdminClient();
@@ -85,15 +86,35 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
       p_limit: limit,
       p_window_seconds: windowSeconds,
     });
-    if (error || data !== true) return fail("요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.", 429, "RATE_LIMITED");
+
+    if (error) {
+      const candidate = error as RpcErrorLike;
+      return fail(
+        "요청 제한 기능이 DB와 연결되지 않았습니다. 관리자에게 DB 보정 SQL 적용 여부를 확인해 달라고 알려 주세요.",
+        503,
+        "RATE_LIMIT_UNAVAILABLE",
+        candidate.code ?? candidate.message,
+      );
+    }
+
+    if (data !== true) {
+      return fail("요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.", 429, "RATE_LIMITED");
+    }
+
     return null;
-  } catch {
-    return fail("요청 제한 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", 503, "RATE_LIMIT_UNAVAILABLE");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    return fail(
+      "요청 제한 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      503,
+      "RATE_LIMIT_UNAVAILABLE",
+      message,
+    );
   }
 }
 
 export function databaseRpcErrorMessage(error: unknown, fallback: string) {
-  const candidate = error && typeof error === "object" ? error as { message?: string; details?: string; hint?: string } : {};
+  const candidate = error && typeof error === "object" ? error as RpcErrorLike : {};
   const raw = [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(" ");
   const lowered = raw.toLowerCase();
 
@@ -102,7 +123,7 @@ export function databaseRpcErrorMessage(error: unknown, fallback: string) {
     || lowered.includes("gen_random_bytes")
     || (lowered.includes("pgcrypto") && lowered.includes("does not exist"))
   ) {
-    return "DB 보안 함수 연결을 수정해야 합니다. Supabase SQL Editor에서 4_PGCRYPTO_오류_수정.sql을 한 번 실행해 주세요.";
+    return "DB 보안 함수 연결을 수정해야 합니다. Supabase SQL Editor에서 4_DB_보정_v1.0.3.sql을 한 번 실행해 주세요.";
   }
 
   return candidate.message || fallback;

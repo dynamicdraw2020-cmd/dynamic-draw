@@ -52,7 +52,7 @@ function mapDatabaseError(input: unknown): SetupStatus {
       ready: false,
       locked: false,
       technicalCode: code,
-      message: "DB 암호화 함수 연결이 오래된 버전입니다. 4_PGCRYPTO_오류_수정.sql을 Supabase SQL Editor에서 한 번 실행해 주세요.",
+      message: "DB 암호화 함수 연결이 오래된 버전입니다. 4_DB_보정_v1.0.3.sql을 Supabase SQL Editor에서 한 번 실행해 주세요.",
     };
   }
 
@@ -62,7 +62,7 @@ function mapDatabaseError(input: unknown): SetupStatus {
       ready: false,
       locked: false,
       technicalCode: code,
-      message: "DB 표는 만들어졌지만 서버용 service_role 권한이 빠져 있습니다. 4_기존설치_권한오류_수정.sql을 Supabase SQL Editor에서 한 번 실행해 주세요.",
+      message: "DB 표는 만들어졌지만 서버용 service_role 권한이 빠져 있습니다. 4_DB_보정_v1.0.3.sql을 Supabase SQL Editor에서 한 번 실행해 주세요.",
     };
   }
 
@@ -101,7 +101,7 @@ function mapDatabaseError(input: unknown): SetupStatus {
     ready: false,
     locked: false,
     technicalCode: code,
-    message: `DB 준비 상태를 확인하지 못했습니다${code !== "UNKNOWN" ? ` (오류 코드 ${code})` : ""}. 4_기존설치_권한오류_수정.sql을 먼저 실행한 뒤 다시 확인해 주세요.`,
+    message: `DB 준비 상태를 확인하지 못했습니다${code !== "UNKNOWN" ? ` (오류 코드 ${code})` : ""}. 4_DB_보정_v1.0.3.sql을 먼저 실행한 뒤 다시 확인해 주세요.`,
   };
 }
 
@@ -160,7 +160,7 @@ export async function inspectSetupStatus(): Promise<SetupStatus> {
           ready: false,
           locked: false,
           schemaVersion,
-          message: "DB 암호화 함수 연결을 확인하지 못했습니다. 4_PGCRYPTO_오류_수정.sql을 Supabase SQL Editor에서 실행해 주세요.",
+          message: "DB 암호화 함수 연결을 확인하지 못했습니다. 4_DB_보정_v1.0.3.sql을 Supabase SQL Editor에서 실행해 주세요.",
         };
       }
 
@@ -170,7 +170,7 @@ export async function inspectSetupStatus(): Promise<SetupStatus> {
           ready: false,
           locked: false,
           schemaVersion,
-          message: "서버용 DB 권한이 빠져 있습니다. 4_기존설치_권한오류_수정.sql을 Supabase SQL Editor에서 한 번 실행해 주세요.",
+          message: "서버용 DB 권한이 빠져 있습니다. 4_DB_보정_v1.0.3.sql을 Supabase SQL Editor에서 한 번 실행해 주세요.",
         };
       }
 

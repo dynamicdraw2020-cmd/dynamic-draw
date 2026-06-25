@@ -1,0 +1,29 @@
+Dynamic Draw 빌드 검증 결과
+============================
+검증일: 2026-06-24
+
+통과 항목
+- TypeScript 타입 검사: 통과
+- ESLint 코드 검사: 통과
+- Next.js 프로덕션 빌드: 통과
+- 프로덕션 서버 시작: 통과
+- 주요 공개/관리자 화면 HTTP 200 확인: 통과
+- /api/health 응답 확인: 통과
+
+확인한 주요 화면
+/
+/draws
+/probabilities
+/live
+/results
+/stats
+/login
+/signup
+/setup-admin
+/admin
+/admin/members
+/admin/exchanges
+
+중요
+- 실제 Supabase 프로젝트의 키와 DB는 사용자 계정에 속하므로, 환경변수 입력 및 SQL 실행 후에 실제 계정 연동을 최종 확인해야 합니다.
+- 코드에 Supabase Secret key나 관리자 비밀번호는 포함되어 있지 않습니다.

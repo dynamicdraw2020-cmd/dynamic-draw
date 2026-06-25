@@ -1,0 +1,28 @@
+Dynamic Draw — 가장 먼저 읽기
+================================
+
+1. 이 ZIP을 컴퓨터에 다운로드합니다.
+2. ZIP을 압축 풉니다.
+3. 압축 푼 폴더의 "00_여기부터_더블클릭.html"을 두 번 누릅니다.
+4. 화면의 1단계부터 차례대로 따라갑니다.
+
+중요:
+- DB 설치 SQL은 Supabase 사이트 안에 있는 파일이 아닙니다.
+- 압축 푼 폴더 → supabase → PASTE_THIS_ONCE.sql 파일입니다.
+- 이 파일을 메모장으로 열어 전체 복사한 뒤 Supabase SQL Editor에 붙여넣습니다.
+
+필수 환경변수 6개:
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SECRET_KEY
+NEXT_PUBLIC_SITE_URL
+NEXT_PUBLIC_DEMO_MODE
+ADMIN_SETUP_SECRET
+
+첫 관리자 만들기:
+https://Vercel에서-받은-주소/setup-admin
+
+사용 설명서:
+- 일반 회원: docs/02_일반회원_사용설명서.md
+- 관리자: docs/03_관리자_사용설명서.md
+- 문제 해결: docs/06_운영체크리스트_문제해결.md

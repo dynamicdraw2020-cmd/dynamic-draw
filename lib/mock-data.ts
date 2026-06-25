@@ -1,0 +1,188 @@
+import type { Draw, DrawResult, ExchangeRule, InventoryItem, Profile, PublicStats } from "@/lib/types";
+
+const drawId = "11111111-1111-4111-8111-111111111111";
+
+export const mockDraw: Draw = {
+  id: drawId,
+  name: "입장권 뽑기",
+  slug: "ticket-draw",
+  description: "투명하게 공개되는 Dynamic Draw 대표 이벤트입니다.",
+  status: "ACTIVE",
+  animation_ms: 4000,
+  is_public: true,
+  rewards: [
+    {
+      id: "reward-none",
+      draw_id: drawId,
+      name: "꽝",
+      description: "다음 기회를 노려보세요.",
+      probability_units: 550000,
+      color: "#64748b",
+      image_url: null,
+      stock: null,
+      is_inventory_item: false,
+      is_exchange_material: false,
+      is_active: true,
+      sort_order: 1,
+    },
+    {
+      id: "reward-ticket",
+      draw_id: drawId,
+      name: "찢어진 입장권",
+      description: "모아서 더 좋은 상품으로 교환할 수 있습니다.",
+      probability_units: 400000,
+      color: "#38bdf8",
+      image_url: null,
+      stock: null,
+      is_inventory_item: true,
+      is_exchange_material: true,
+      is_active: true,
+      sort_order: 2,
+    },
+    {
+      id: "reward-dwx",
+      draw_id: drawId,
+      name: "DwX",
+      description: "희귀 등급 상품",
+      probability_units: 40000,
+      color: "#a78bfa",
+      image_url: null,
+      stock: 40,
+      is_inventory_item: true,
+      is_exchange_material: false,
+      is_active: true,
+      sort_order: 3,
+    },
+    {
+      id: "reward-dynamic",
+      draw_id: drawId,
+      name: "Dynamic",
+      description: "최고 등급 상품",
+      probability_units: 10000,
+      color: "#fbbf24",
+      image_url: null,
+      stock: 10,
+      is_inventory_item: true,
+      is_exchange_material: false,
+      is_active: true,
+      sort_order: 4,
+    },
+  ],
+};
+
+export const mockResults: DrawResult[] = [
+  {
+    id: "r1",
+    draw_id: drawId,
+    reward_id: "reward-ticket",
+    participant_id: "u1",
+    public_member_code: "DD-2026-001842",
+    public_display_name: "김다이나믹",
+    reward_name: "찢어진 입장권",
+    reward_color: "#38bdf8",
+    draw_name: "입장권 뽑기",
+    created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
+    revealed_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
+  },
+  {
+    id: "r2",
+    draw_id: drawId,
+    reward_id: "reward-dwx",
+    participant_id: "u2",
+    public_member_code: "DD-2026-007315",
+    public_display_name: "박드로우",
+    reward_name: "DwX",
+    reward_color: "#a78bfa",
+    draw_name: "입장권 뽑기",
+    created_at: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+    revealed_at: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+  },
+  {
+    id: "r3",
+    draw_id: drawId,
+    reward_id: "reward-dynamic",
+    participant_id: "u3",
+    public_member_code: "DD-2026-009024",
+    public_display_name: "이다인",
+    reward_name: "Dynamic",
+    reward_color: "#fbbf24",
+    draw_name: "입장권 뽑기",
+    created_at: new Date(Date.now() - 1000 * 60 * 41).toISOString(),
+    revealed_at: new Date(Date.now() - 1000 * 60 * 41).toISOString(),
+  },
+];
+
+export const mockStats: PublicStats = {
+  totalDraws: 1284,
+  todayDraws: 67,
+  totalMembers: 243,
+  rewardStats: [
+    { rewardId: "reward-none", name: "꽝", count: 703, actualRate: 54.75, configuredRate: 55, color: "#64748b" },
+    { rewardId: "reward-ticket", name: "찢어진 입장권", count: 518, actualRate: 40.34, configuredRate: 40, color: "#38bdf8" },
+    { rewardId: "reward-dwx", name: "DwX", count: 50, actualRate: 3.89, configuredRate: 4, color: "#a78bfa" },
+    { rewardId: "reward-dynamic", name: "Dynamic", count: 13, actualRate: 1.01, configuredRate: 1, color: "#fbbf24" },
+  ],
+  dailyStats: [
+    { date: "06/18", count: 118 },
+    { date: "06/19", count: 154 },
+    { date: "06/20", count: 143 },
+    { date: "06/21", count: 170 },
+    { date: "06/22", count: 183 },
+    { date: "06/23", count: 192 },
+    { date: "06/24", count: 67 },
+  ],
+};
+
+export const mockProfile: Profile = {
+  id: "demo-user",
+  email: "demo@dynamic2020.com",
+  display_name: "데모 회원",
+  phone: "010-0000-0000",
+  role: "USER",
+  status: "APPROVED",
+  member_code: "DD-2026-000001",
+  created_at: new Date().toISOString(),
+  approved_at: new Date().toISOString(),
+};
+
+export const mockInventory: InventoryItem[] = [
+  { reward_id: "reward-ticket", reward_name: "찢어진 입장권", reward_color: "#38bdf8", quantity: 7, is_exchange_material: true },
+  { reward_id: "reward-dwx", reward_name: "DwX", reward_color: "#a78bfa", quantity: 1, is_exchange_material: false },
+];
+
+export const mockExchangeRules: ExchangeRule[] = [
+  {
+    id: "ex-1",
+    name: "DwX 교환",
+    source_reward_id: "reward-ticket",
+    source_reward_name: "찢어진 입장권",
+    source_quantity: 5,
+    target_reward_id: "reward-dwx",
+    target_reward_name: "DwX",
+    target_quantity: 1,
+    is_active: true,
+  },
+  {
+    id: "ex-2",
+    name: "Dynamic 교환",
+    source_reward_id: "reward-ticket",
+    source_reward_name: "찢어진 입장권",
+    source_quantity: 8,
+    target_reward_id: "reward-dynamic",
+    target_reward_name: "Dynamic",
+    target_quantity: 1,
+    is_active: true,
+  },
+];
+
+export const mockAdmin: Profile = {
+  id: "demo-admin",
+  email: "admin@dynamic2020.com",
+  display_name: "Dynamic 관리자",
+  phone: null,
+  role: "SUPER_ADMIN",
+  status: "APPROVED",
+  member_code: "ADMIN-0001",
+  created_at: new Date().toISOString(),
+  approved_at: new Date().toISOString(),
+};

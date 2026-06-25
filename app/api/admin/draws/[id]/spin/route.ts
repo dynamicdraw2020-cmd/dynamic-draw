@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ participantId: z.uuid(), idempotencyKey: z.uuid() });
@@ -22,6 +22,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     p_ip: meta.ip,
     p_user_agent: meta.userAgent,
   });
-  if (error) return fail(error.message, 409, "DRAW_EXECUTION_FAILED");
+  if (error) return fail(databaseRpcErrorMessage(error, "추첨을 실행하지 못했습니다."), 409, "DRAW_EXECUTION_FAILED");
   return ok(data, 201);
 }

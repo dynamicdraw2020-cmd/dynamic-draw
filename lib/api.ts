@@ -91,3 +91,19 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
     return fail("요청 제한 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", 503, "RATE_LIMIT_UNAVAILABLE");
   }
 }
+
+export function databaseRpcErrorMessage(error: unknown, fallback: string) {
+  const candidate = error && typeof error === "object" ? error as { message?: string; details?: string; hint?: string } : {};
+  const raw = [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(" ");
+  const lowered = raw.toLowerCase();
+
+  if (
+    lowered.includes("function digest")
+    || lowered.includes("gen_random_bytes")
+    || (lowered.includes("pgcrypto") && lowered.includes("does not exist"))
+  ) {
+    return "DB 보안 함수 연결을 수정해야 합니다. Supabase SQL Editor에서 4_PGCRYPTO_오류_수정.sql을 한 번 실행해 주세요.";
+  }
+
+  return candidate.message || fallback;
+}

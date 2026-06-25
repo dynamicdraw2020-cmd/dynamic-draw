@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({
@@ -27,6 +27,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     p_ip: meta.ip,
     p_user_agent: meta.userAgent,
   });
-  if (error) return fail(error.message, 400, "PROBABILITY_UPDATE_FAILED");
+  if (error) return fail(databaseRpcErrorMessage(error, "확률을 저장하지 못했습니다."), 400, "PROBABILITY_UPDATE_FAILED");
   return ok(data);
 }

@@ -1,7 +1,8 @@
 -- Dynamic Draw production schema
 -- Supabase PostgreSQL / 2026-06-24
 
-create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 
 DO $$ BEGIN
   create type public.profile_status as enum ('PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED');
@@ -46,7 +47,7 @@ create or replace function public.next_member_code()
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_code text;
@@ -245,7 +246,7 @@ create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 begin
   insert into public.profiles(id, email, display_name, phone)
@@ -304,7 +305,7 @@ create or replace function public.append_admin_log(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_previous_hash text;
@@ -331,7 +332,7 @@ create or replace function public.validate_draw_ready(p_draw_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_count integer;
@@ -360,7 +361,7 @@ create or replace function public.admin_update_probabilities(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_active_count integer;
@@ -435,7 +436,7 @@ create or replace function public.execute_draw(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_draw public.draws%rowtype;
@@ -534,7 +535,7 @@ create or replace function public.reveal_result(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_result public.results%rowtype;
@@ -582,7 +583,7 @@ create or replace function public.reveal_due_results()
 returns integer
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_row record;
@@ -607,7 +608,7 @@ create or replace function public.exchange_items(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_rule public.exchange_rules%rowtype;
@@ -670,7 +671,7 @@ create or replace function public.void_result(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_result public.results%rowtype;
@@ -701,7 +702,7 @@ create or replace function public.consume_rate_limit(p_key text, p_limit integer
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_count integer;
@@ -721,7 +722,7 @@ create or replace function public.verify_admin_log_chain()
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_row record;
@@ -755,7 +756,7 @@ create or replace function public.verify_probability_history_chain()
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 declare
   v_row record;
@@ -789,7 +790,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
 with valid_results as (
   select res.*
@@ -837,7 +838,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
   select case
     when coalesce((select (value #>> '{}')::boolean from public.site_settings where key = 'public_stats'), true)
@@ -857,7 +858,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = pg_catalog, extensions, public
 as $$
   select public.calculate_stats();
 $$;
@@ -884,6 +885,33 @@ where res.revealed_at is not null
   and d.is_public = true
   and d.status in ('ACTIVE','PAUSED','ENDED');
 
+
+-- 설치 상태와 service_role 권한을 안전하게 확인하는 서버 전용 함수
+create or replace function public.dynamic_draw_install_status()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = pg_catalog, extensions, public
+as $$
+  select jsonb_build_object(
+    'ready', true,
+    'schemaVersion', '1.0.2',
+    'pgcryptoReady', exists (
+      select 1
+      from pg_catalog.pg_extension e
+      join pg_catalog.pg_namespace n on n.oid = e.extnamespace
+      where e.extname = 'pgcrypto'
+    ),
+    'superAdminCount', (select count(*)::integer from public.profiles where role = 'SUPER_ADMIN'),
+    'serviceRoleCanReadProfiles', has_table_privilege('service_role', 'public.profiles', 'SELECT'),
+    'serviceRoleCanWriteProfiles',
+      has_table_privilege('service_role', 'public.profiles', 'INSERT')
+      and has_table_privilege('service_role', 'public.profiles', 'UPDATE')
+      and has_table_privilege('service_role', 'public.profiles', 'DELETE')
+  );
+$$;
+
 -- Row Level Security
 alter table public.profiles enable row level security;
 alter table public.draws enable row level security;
@@ -898,13 +926,18 @@ alter table public.live_events enable row level security;
 alter table public.site_settings enable row level security;
 alter table public.rate_limits enable row level security;
 
+drop policy if exists profiles_select_self on public.profiles;
 create policy profiles_select_self on public.profiles for select to authenticated using (id = auth.uid());
+drop policy if exists draws_select_public on public.draws;
 create policy draws_select_public on public.draws for select to anon, authenticated using (is_public = true and status in ('ACTIVE','PAUSED','ENDED'));
+drop policy if exists draws_select_participated on public.draws;
 create policy draws_select_participated on public.draws for select to authenticated using (
   exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED')
   and exists(select 1 from public.results res where res.draw_id = draws.id and res.participant_id = auth.uid() and res.revealed_at is not null)
 );
+drop policy if exists rewards_select_public on public.rewards;
 create policy rewards_select_public on public.rewards for select to anon, authenticated using (is_active = true and exists(select 1 from public.draws d where d.id = draw_id and d.is_public = true and d.status in ('ACTIVE','PAUSED','ENDED')));
+drop policy if exists rewards_select_owned on public.rewards;
 create policy rewards_select_owned on public.rewards for select to authenticated using (
   exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED')
   and (
@@ -912,14 +945,20 @@ create policy rewards_select_owned on public.rewards for select to authenticated
     or exists(select 1 from public.results res where res.reward_id = rewards.id and res.participant_id = auth.uid() and res.revealed_at is not null)
   )
 );
+drop policy if exists rewards_select_exchange_rule on public.rewards;
 create policy rewards_select_exchange_rule on public.rewards for select to authenticated using (
   exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED')
   and exists(select 1 from public.exchange_rules er where er.is_active = true and (er.source_reward_id = rewards.id or er.target_reward_id = rewards.id))
 );
+drop policy if exists participant_items_select_self on public.participant_items;
 create policy participant_items_select_self on public.participant_items for select to authenticated using (profile_id = auth.uid() and exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED'));
+drop policy if exists results_select_self on public.results;
 create policy results_select_self on public.results for select to authenticated using (participant_id = auth.uid() and revealed_at is not null and exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED'));
+drop policy if exists exchange_rules_select_active on public.exchange_rules;
 create policy exchange_rules_select_active on public.exchange_rules for select to anon, authenticated using (is_active = true);
+drop policy if exists exchange_logs_select_self on public.exchange_logs;
 create policy exchange_logs_select_self on public.exchange_logs for select to authenticated using (profile_id = auth.uid() and exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED'));
+drop policy if exists live_events_select_public on public.live_events;
 create policy live_events_select_public on public.live_events for select to anon, authenticated using (
   created_at > now() - interval '24 hours'
   and (
@@ -927,13 +966,15 @@ create policy live_events_select_public on public.live_events for select to anon
     or exists(select 1 from public.profiles p where p.id = auth.uid() and p.status = 'APPROVED' and p.role in ('VIEWER','MANAGER','SUPER_ADMIN'))
   )
 );
+drop policy if exists site_settings_select_public on public.site_settings;
 create policy site_settings_select_public on public.site_settings for select to anon, authenticated using (is_public = true);
 
 revoke all on public.rate_limits from anon, authenticated;
 revoke all on public.admin_logs from anon, authenticated;
 revoke all on public.probability_history from anon, authenticated;
 
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
+grant usage on schema extensions to service_role;
 revoke select on public.draws, public.rewards, public.exchange_rules, public.site_settings from anon, authenticated;
 grant select (id, name, slug, description, status, animation_ms, is_public, created_at, updated_at) on public.draws to anon, authenticated;
 grant select (id, draw_id, name, description, image_url, color, probability_units, is_inventory_item, is_exchange_material, is_active, sort_order, created_at, updated_at) on public.rewards to anon, authenticated;
@@ -943,6 +984,13 @@ grant select on public.live_events, public.public_results to anon, authenticated
 grant select on public.profiles, public.participant_items, public.results, public.exchange_logs to authenticated;
 grant execute on function public.get_public_stats() to anon, authenticated;
 
+-- Supabase의 새 Secret key와 레거시 service_role key 모두가 서버 API에서 동작하도록 명시적 권한 부여
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select, update on all sequences in schema public to service_role;
+alter default privileges for role postgres in schema public grant select, insert, update, delete on tables to service_role;
+alter default privileges for role postgres in schema public grant usage, select, update on sequences to service_role;
+
+revoke execute on function public.dynamic_draw_install_status() from public, anon, authenticated;
 revoke execute on function public.next_member_code() from public, anon, authenticated;
 revoke execute on function public.append_admin_log(uuid,text,text,uuid,jsonb,text,text) from public, anon, authenticated;
 revoke execute on function public.validate_draw_ready(uuid) from public, anon, authenticated;
@@ -958,6 +1006,7 @@ revoke execute on function public.verify_probability_history_chain() from public
 revoke execute on function public.calculate_stats() from public, anon, authenticated;
 revoke execute on function public.get_admin_stats() from public, anon, authenticated;
 
+grant execute on function public.dynamic_draw_install_status() to service_role;
 grant execute on function public.next_member_code() to service_role;
 grant execute on function public.append_admin_log(uuid,text,text,uuid,jsonb,text,text) to service_role;
 grant execute on function public.validate_draw_ready(uuid) to service_role;
@@ -980,6 +1029,10 @@ insert into public.site_settings(key, value, is_public) values
   ('public_stats', 'true'::jsonb, true)
 on conflict(key) do nothing;
 
+insert into public.site_settings(key, value, is_public)
+values ('schema_version', '"1.0.2"'::jsonb, true)
+on conflict(key) do update set value = excluded.value, is_public = true, updated_at = now();
+
 DO $$
 begin
   if exists(select 1 from pg_publication where pubname = 'supabase_realtime')
@@ -987,3 +1040,5 @@ begin
     alter publication supabase_realtime add table public.live_events;
   end if;
 end $$;
+
+notify pgrst, 'reload schema';

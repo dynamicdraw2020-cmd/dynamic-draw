@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiUser } from "@/lib/api";
+import { enforceRateLimit, databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiUser } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ ruleId: z.uuid(), idempotencyKey: z.uuid() });
@@ -21,6 +21,6 @@ export async function POST(request: Request) {
     p_ip: meta.ip,
     p_user_agent: meta.userAgent,
   });
-  if (error) return fail(error.message, 409, "EXCHANGE_FAILED");
+  if (error) return fail(databaseRpcErrorMessage(error, "교환하지 못했습니다."), 409, "EXCHANGE_FAILED");
   return ok(data, 201);
 }

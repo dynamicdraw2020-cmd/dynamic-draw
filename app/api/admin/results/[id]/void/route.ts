@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ reason: z.string().trim().min(2).max(300) });
@@ -14,6 +14,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const meta = requestMeta(request);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("void_result", { p_result_id: id, p_admin_id: guard.auth.userId, p_reason: parsed.data.reason, p_ip: meta.ip, p_user_agent: meta.userAgent });
-  if (error) return fail(error.message, 409, "RESULT_VOID_FAILED");
+  if (error) return fail(databaseRpcErrorMessage(error, "결과를 무효 처리하지 못했습니다."), 409, "RESULT_VOID_FAILED");
   return ok(data);
 }

@@ -1,6 +1,18 @@
-# Dynamic Draw — 실제 배포용 홈페이지
+# Dynamic Draw — 실제 배포용 홈페이지 v1.0.2
 
 결제 없이 이벤트 추첨을 운영하는 Next.js + Supabase 웹 서비스입니다.
+
+## v1.0.1 기존 배포 오류 수정
+
+이미 GitHub·Vercel·Supabase까지 연결했다면 처음부터 다시 하지 않습니다.
+
+1. `4_기존설치_권한오류_수정.sql`을 Supabase SQL Editor에서 한 번 실행합니다.
+2. `/setup-admin`을 새로고침합니다.
+3. 관리자 생성 후 로그인합니다.
+4. 코드도 최신 진단 기능으로 바꾸려면 이 수정본을 GitHub에 덮어쓰면 Vercel이 자동 재배포합니다.
+
+기존 오류 원인은 SQL Editor로 만든 표에 서버용 `service_role` 권한이 명시적으로 부여되지 않은 것이었습니다. 공개 조회 권한은 있었기 때문에 메인 화면은 보였지만, 서버 Secret key를 사용하는 관리자 생성 확인만 실패했습니다.
+
 
 ## 가장 먼저 할 일
 
@@ -83,6 +95,8 @@ DB와 Vercel 환경변수를 연결한 뒤 다음 주소에서 첫 관리자를 
 https://배포주소/setup-admin
 ```
 
+`4_기존설치_권한오류_수정.sql`은 기존 설치에서 service_role 권한 오류가 날 때 실행하는 보정 파일입니다.
+
 `supabase/MAKE_FIRST_ADMIN.sql`은 설치 페이지가 작동하지 않을 때만 사용하는 예비 방법입니다.
 
 ## 검증 명령
@@ -102,3 +116,8 @@ npm run build
 - `docs/04_아주쉬운_배포설명서.md`
 - `docs/05_DB_API_보안_기술문서.md`
 - `docs/06_운영체크리스트_문제해결.md`
+
+
+## v1.0.2 pgcrypto 오류 수정
+
+Supabase에서 `function digest(text, unknown) does not exist` 또는 `gen_random_bytes` 오류가 나오면 루트의 `4_PGCRYPTO_오류_수정.sql`을 SQL Editor에서 한 번 실행합니다. 기존 회원·결과·설정 데이터는 삭제하지 않습니다.

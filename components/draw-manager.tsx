@@ -169,7 +169,7 @@ export function DrawManager({ draws, products }: { draws: Draw[]; products: Prod
     <div className="grid grid-2">
       <form className="panel panel-pad form-grid" onSubmit={createProduct}>
         <h2 className="panel-title">상품 보관함에 상품 추가</h2>
-        <div className="form-row"><div className="field"><label>상품명</label><input className="input" name="name" required maxLength={80} placeholder="예: Dynamic 입장권" /></div><div className="field"><label>색상</label><input className="input" name="color" type="color" defaultValue="#111111" /></div></div>
+        <div className="form-row"><div className="field"><label>상품명</label><input className="input" name="name" required maxLength={80} placeholder="예: 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 입장권" /></div><div className="field"><label>색상</label><input className="input" name="color" type="color" defaultValue="#111111" /></div></div>
         <div className="field"><label>설명</label><input className="input" name="description" maxLength={300} placeholder="상품 설명" /></div>
         <div className="form-row"><div className="field"><label>기본 재고</label><input className="input" name="defaultStock" type="number" min="0" placeholder="비우면 무제한" /></div><div className="field"><label>PNG 파일</label><input className="input" name="imageFile" type="file" accept="image/png" onChange={handleProductFile} /><small>룰렛·결과 화면에 사용할 PNG 파일을 직접 넣습니다. 900KB 이하 권장.</small></div></div>
         {productPreview && <div className="upload-preview"><img src={productPreview} alt="상품 이미지 미리보기" /><span>PNG 미리보기</span></div>}

@@ -46,8 +46,8 @@ const emptyStats: PublicStats = {
 export async function getPublicSettings(): Promise<PublicSettings> {
   const fallback = {
     siteName: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃",
-    heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 - 이벤트 전용 사이트",
-    heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜에서 주관하는 모든 뽑기(추첨)형 이벤트를 주관하는 사이트. 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 - 누구보다 빠른 본방 입성을 향한 길.",
+    heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃",
+    heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event server",
     publicStats: true,
   };
   if (!supabaseConfigured) return fallback;
@@ -359,7 +359,7 @@ export async function getPublicEvents(limit = 12): Promise<EventPost[]> {
 
 export async function getPublicRaffles(limit = 8): Promise<RaffleEvent[]> {
   if (demoMode) {
-    return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "승인된 전체 회원을 대상으로 진행하는 공개 추첨 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
+    return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "전체 추첨 이벤트 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
   }
   const supabase = await createClient();
   const { data, error } = await supabase.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").eq("is_public", true).in("status", ["ACTIVE", "COMPLETED"]).order("created_at", { ascending: false }).limit(limit);
@@ -368,7 +368,7 @@ export async function getPublicRaffles(limit = 8): Promise<RaffleEvent[]> {
 }
 
 export async function getAdminRaffles(): Promise<AdminRaffleEvent[]> {
-  if (demoMode) return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "승인된 전체 회원을 대상으로 진행하는 공개 추첨 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
+  if (demoMode) return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "전체 추첨 이벤트 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
   const admin = createAdminClient();
   const [{ data }, { count }] = await Promise.all([
     admin.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").order("created_at", { ascending: false }).limit(200),
@@ -399,8 +399,8 @@ export async function getAdminDashboardData() {
       activeDraws: 1,
       recentResults: mockResults,
       recentLogs: [
-        { id: "l1", action: "DRAW_EXECUTED", created_at: new Date().toISOString(), admin_name: "Dynamic 관리자" },
-        { id: "l2", action: "MEMBER_APPROVED", created_at: new Date(Date.now() - 3600000).toISOString(), admin_name: "Dynamic 관리자" },
+        { id: "l1", action: "DRAW_EXECUTED", created_at: new Date().toISOString(), admin_name: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 관리자" },
+        { id: "l2", action: "MEMBER_APPROVED", created_at: new Date(Date.now() - 3600000).toISOString(), admin_name: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 관리자" },
       ],
     };
   }
@@ -463,7 +463,7 @@ export async function getAdminMembers(): Promise<Profile[]> {
 }
 
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
-  if (demoMode) return [{ id: "product-demo", name: "Dynamic 입장권", description: "전체 상품 보관함 예시", image_url: null, color: "#111111", default_stock: null, is_inventory_item: true, is_exchange_material: false, is_active: true, sort_order: 10 }];
+  if (demoMode) return [{ id: "product-demo", name: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 입장권", description: "전체 상품 보관함 예시", image_url: null, color: "#111111", default_stock: null, is_inventory_item: true, is_exchange_material: false, is_active: true, sort_order: 10 }];
   const admin = createAdminClient();
   const { data } = await admin.from("product_catalog").select("id,name,description,image_url,color,default_stock,is_inventory_item,is_exchange_material,is_active,sort_order,created_at,updated_at,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true }).order("created_at", { ascending: false });
   return (data as ProductCatalogItem[] | null) ?? [];
@@ -507,8 +507,8 @@ export async function getAdminResults(limit = 100) {
 export async function getAdminLogs(limit = 100) {
   if (demoMode) {
     return [
-      { id: "log-1", action: "DRAW_EXECUTED", target_table: "results", target_id: "r1", created_at: new Date().toISOString(), ip_address: "127.0.0.1", entry_hash: "a9f0…demo", profiles: { display_name: "Dynamic 관리자" } },
-      { id: "log-2", action: "PROBABILITY_UPDATED", target_table: "draws", target_id: mockDraw.id, created_at: new Date(Date.now() - 7200000).toISOString(), ip_address: "127.0.0.1", entry_hash: "41cd…demo", profiles: { display_name: "Dynamic 관리자" } },
+      { id: "log-1", action: "DRAW_EXECUTED", target_table: "results", target_id: "r1", created_at: new Date().toISOString(), ip_address: "127.0.0.1", entry_hash: "a9f0…demo", profiles: { display_name: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 관리자" } },
+      { id: "log-2", action: "PROBABILITY_UPDATED", target_table: "draws", target_id: mockDraw.id, created_at: new Date(Date.now() - 7200000).toISOString(), ip_address: "127.0.0.1", entry_hash: "41cd…demo", profiles: { display_name: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 관리자" } },
     ];
   }
   const admin = createAdminClient();

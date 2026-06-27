@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const event = await getPublicEventBySlug(slug);
-  return { title: event ? `${event.title} · Dynamic D` : "이벤트 상세" };
+  return { title: event ? `${event.title} · 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃` : "이벤트 상세" };
 }
 
 export default async function EventDetailPage({ params }: { params: Promise<{ slug: string }> }) {

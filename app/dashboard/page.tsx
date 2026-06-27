@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BarChart3, ClipboardList, Gift, Ticket } from "lucide-react";
 import { RecentResults } from "@/components/recent-results";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { getPublicDashboardData } from "@/lib/data";
 
 export const metadata: Metadata = { title: "공개 대시보드" };
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicDashboardPage() {
   const { byDraw, recent, stats } = await getPublicDashboardData();
-  return <main className="page public-dashboard-page dynamic-ink-page"><div className="container grid">
+  return <main className="page public-dashboard-page dynamic-ink-page"><RealtimeRefresh /><div className="container grid">
     <section className="dashboard-hero panel panel-pad ink-panel">
       <span className="section-kicker"><BarChart3 size={14} /> Public Dashboard</span>
       <h1>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 운영 대시보드</h1>

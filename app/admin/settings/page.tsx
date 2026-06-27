@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "사이트 설정" };
 
 export default async function AdminSettingsPage() {
   await requireAdmin("SUPER_ADMIN");
-  const initial = { siteName: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 - 이벤트 전용 사이트", heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜에서 주관하는 모든 뽑기(추첨)형 이벤트를 주관하는 사이트. 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 - 누구보다 빠른 본방 입성을 향한 길.", publicStats: true };
+  const initial = { siteName: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event server", publicStats: true };
   if (!demoMode) {
     const admin = createAdminClient();
     const { data } = await admin.from("site_settings").select("key,value").in("key", ["site_name", "hero_title", "hero_description", "public_stats"]);

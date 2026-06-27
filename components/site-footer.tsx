@@ -6,7 +6,7 @@ export function SiteFooter() {
       <div className="container footer-inner official-footer-inner">
         <div>
           <strong>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃</strong>
-          <span>Dynamic 전용 이벤트 운영 사이트 · v1.5.0</span>
+          <span>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 전용 이벤트 운영 사이트 · v1.0.1</span>
         </div>
         <div className="footer-links">
           <Link href="/notices">공지</Link>

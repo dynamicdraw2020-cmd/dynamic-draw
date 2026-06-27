@@ -588,7 +588,7 @@ body { color: var(--dd-ink); background: #f6f7f9; }
 @media (max-width:900px){.official-hero-inner,.official-two-column,.claw-public-layout{grid-template-columns:1fr}.official-hero{padding-top:52px}.official-contact-card{padding:22px}.claw-machine{height:240px}}
 @media (max-width:560px){.official-hero h1{font-size:36px}.official-lead,.official-sublead{font-size:16px}.official-actions .btn{width:100%}.public-card,.public-card-feature{padding:18px;border-radius:16px}.raffle-public-item{display:grid}.raffle-prize{min-width:0}.claw-machine{height:220px}}
 
-/* v1.5.0 — public all-ages redesign and operation tools */
+/* v1.0.1 — public all-ages redesign and operation tools */
 :root { --dd-bg:#f7f8fb; --dd-card:#ffffff; --dd-ink:#102033; --dd-sub:#53657a; --dd-line:#dfe6ef; --dd-blue:#1d4ed8; --dd-blue-soft:#eaf2ff; --dd-green:#15803d; --dd-red:#b91c1c; }
 .public-home.community-home, .public-subpage { background: var(--dd-bg); }
 .community-hero { padding: 58px 0 36px; background: linear-gradient(180deg,#fff 0%,#f7f8fb 100%); border-bottom:1px solid #e9eef5; }

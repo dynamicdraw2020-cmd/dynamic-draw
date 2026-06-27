@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
 
 export default async function LivePage() {
   const [draw, results] = await Promise.all([getActiveDraw(), getPublicResults(12)]);
-  return <main className="page"><RealtimeRefresh /><div className="container"><div className="page-heading"><span className="eyebrow"><span className="live-dot" /> LIVE</span><h1>실시간 추첨 현장</h1><p>새로고침 없이 추첨 시작, 카드 연출, 결과 공개를 함께 봅니다.</p></div><div className="grid grid-2"><LiveDrawStage drawId={draw?.id} initialResult={results[0] ?? null} draw={draw} /><section className="panel panel-pad"><h2 className="panel-title">최근 공개 기록</h2><p className="panel-description">무효 처리된 결과는 통계와 목록에서 제외됩니다.</p><div className="mt-3"><RecentResults results={results} compact /></div></section></div></div></main>;
+  return <main className="page"><RealtimeRefresh /><div className="container"><div className="page-heading"><span className="eyebrow"><span className="live-dot" /> LIVE</span><h1>실시간 추첨 현장</h1><p>새로고침 없이 추첨 시작, 라이브 연출, 결과 공개를 함께 봅니다.</p></div><div className="grid grid-2"><LiveDrawStage initialResult={results[0] ?? null} draw={draw} /><section className="panel panel-pad"><h2 className="panel-title">최근 공개 기록</h2><p className="panel-description">무효 처리된 결과는 통계와 목록에서 제외됩니다.</p><div className="mt-3"><RecentResults results={results} compact /></div></section></div></div></main>;
 }

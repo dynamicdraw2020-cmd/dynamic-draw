@@ -24,12 +24,12 @@ export function PublicEventBoard({ events, notices }: { events: EventPost[]; not
   }
 
   return (
-    <section className="home-event-console" aria-label="Dynamic D 이벤트 안내판">
+    <section className="home-event-console" aria-label="𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 이벤트 안내판">
       <div className="home-event-head">
         <div>
           <span className="section-kicker"><ClipboardList size={14} /> Event Desk</span>
           <h2>이벤트 안내</h2>
-          <p>공지, 진행 이벤트, 참여 방법을 한 화면에서 확인합니다.</p>
+          <p>현재 진행중인 이벤트를 확인할 수 있습니다.</p>
         </div>
         <div className="home-event-controls">
           <button type="button" onClick={() => move(-1)} aria-label="이전 이벤트"><ChevronLeft size={18} /></button>

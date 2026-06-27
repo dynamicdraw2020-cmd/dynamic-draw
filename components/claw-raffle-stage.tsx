@@ -17,7 +17,7 @@ async function jsonRequest(url: string, body: unknown = {}) {
 }
 
 export function ClawMachinePreview({ calm = false, winnerName = null }: { calm?: boolean; winnerName?: string | null }) {
-  return <div className={`claw-machine ${calm ? "calm" : ""}`} aria-hidden="true"><div className="claw-rail" /><div className="claw-head"><span /></div><div className="claw-cable" /><div className="claw-arm left" /><div className="claw-arm right" /><div className="capsule capsule-a" /><div className="capsule capsule-b" /><div className="capsule capsule-c" />{winnerName && <div className="winner-capsule-label">{winnerName}</div>}<div className="machine-base">Dynamic D</div></div>;
+  return <div className={`claw-machine ${calm ? "calm" : ""}`} aria-hidden="true"><div className="claw-rail" /><div className="claw-head"><span /></div><div className="claw-cable" /><div className="claw-arm left" /><div className="claw-arm right" /><div className="capsule capsule-a" /><div className="capsule capsule-b" /><div className="capsule capsule-c" />{winnerName && <div className="winner-capsule-label">{winnerName}</div>}<div className="machine-base">𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃</div></div>;
 }
 
 export function PublicClawRaffle({ raffles }: { raffles: RaffleEvent[] }) {

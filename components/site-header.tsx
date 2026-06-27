@@ -19,9 +19,9 @@ export async function SiteHeader() {
   return (
     <header className="site-header official-header">
       <div className="container header-inner">
-        <Link className="brand official-brand" href="/" aria-label="Dynamic D 홈">
+        <Link className="brand official-brand" href="/" aria-label="𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 홈">
           <span className="brand-mark official-brand-mark">D</span>
-          <span className="brand-text">Dynamic <span>D</span></span>
+          <span className="brand-text">𝐃𝐲𝐧𝐚𝐦𝐢𝐜 <span>𝐃</span></span>
         </Link>
         <nav className="nav" aria-label="공개 메뉴">
           {navLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}

@@ -2,10 +2,12 @@ import { z } from "zod";
 import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const imageInputSchema = z.string().trim().max(1_400_000).refine((value) => value.length === 0 || /^https?:\/\//.test(value) || /^data:image\/png;base64,/.test(value), "PNG 파일 또는 이미지 URL을 확인해 주세요.");
+
 const schema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(300).optional().nullable(),
-  imageUrl: z.string().trim().url().max(500).optional().nullable(),
+  imageUrl: imageInputSchema.optional().nullable(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#111111"),
   defaultStock: z.number().int().min(0).nullable().optional(),
   isInventoryItem: z.boolean().default(true),

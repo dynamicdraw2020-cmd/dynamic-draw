@@ -45,9 +45,9 @@ const emptyStats: PublicStats = {
 
 export async function getPublicSettings(): Promise<PublicSettings> {
   const fallback = {
-    siteName: "Dynamic D",
-    heroTitle: "Dynamic D - 이벤트 전용 사이트",
-    heroDescription: "Dynamic에서 주관하는 모든 뽑기(추첨)형 이벤트를 주관하는 사이트. Dynamic D - 누구보다 빠른 본방 입성을 향한 길.",
+    siteName: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃",
+    heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 - 이벤트 전용 사이트",
+    heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜에서 주관하는 모든 뽑기(추첨)형 이벤트를 주관하는 사이트. 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 - 누구보다 빠른 본방 입성을 향한 길.",
     publicStats: true,
   };
   if (!supabaseConfigured) return fallback;
@@ -325,7 +325,7 @@ export async function getAdminTicketExchangeRates(): Promise<Array<TicketExchang
 
 
 export async function getPublicNotices(limit = 5): Promise<Notice[]> {
-  if (demoMode) return [{ id: "notice-demo", title: "운영 안내", body: "모든 추첨 결과는 서버에서 먼저 결정되며, 화면의 룰렛은 연출용입니다.", is_pinned: true, is_public: true, starts_at: null, ends_at: null, created_at: new Date().toISOString() }];
+  if (demoMode) return [];
   const supabase = await createClient();
   const now = new Date().toISOString();
   const { data, error } = await supabase
@@ -378,7 +378,7 @@ export async function getAdminRaffles(): Promise<AdminRaffleEvent[]> {
 }
 
 export async function getAdminNotices(): Promise<Notice[]> {
-  if (demoMode) return [{ id: "notice-demo", title: "운영 안내", body: "공지 예시입니다.", is_pinned: true, is_public: true, starts_at: null, ends_at: null, created_at: new Date().toISOString() }];
+  if (demoMode) return [];
   const admin = createAdminClient();
   const { data } = await admin.from("notices").select("id,title,body,is_pinned,is_public,starts_at,ends_at,created_at,updated_at").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }).limit(200);
   return (data as Notice[] | null) ?? [];

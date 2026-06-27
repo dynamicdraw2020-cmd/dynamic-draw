@@ -5,7 +5,7 @@ export function SiteFooter() {
     <footer className="footer official-footer">
       <div className="container footer-inner official-footer-inner">
         <div>
-          <strong>Dynamic D</strong>
+          <strong>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃</strong>
           <span>Dynamic 전용 이벤트 운영 사이트 · v1.5.0</span>
         </div>
         <div className="footer-links">

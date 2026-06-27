@@ -789,3 +789,11 @@ body {
   .community-copy h1 { font-size: clamp(42px, 13vw, 64px); }
   .dashboard-metrics div { flex: 1 1 100%; }
 }
+
+/* Dynamic D 1.0.1 운영 패치 */
+.brand-text { font-family: "Arial Black", Pretendard, "Noto Sans KR", system-ui, sans-serif; letter-spacing: -0.045em; }
+.notice-editor, .notice-preview, .content-body, .event-detail-body-copy { word-break: keep-all; overflow-wrap: anywhere; line-height: 1.78; white-space: pre-line; }
+.upload-preview { display: inline-flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.045); color: var(--muted); font-size: 12px; }
+.upload-preview img { width: 58px; height: 58px; object-fit: contain; border-radius: 12px; background: rgba(255,255,255,.72); padding: 6px; }
+.notice-preview { max-width: 360px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ink-brand-bg { background-image: url('/brand/dynamic-reference.png'); background-size: cover; background-position: center; }

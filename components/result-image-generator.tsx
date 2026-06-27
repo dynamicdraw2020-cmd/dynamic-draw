@@ -34,7 +34,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
 
 export function ResultImageGenerator() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [title, setTitle] = useState("Dynamic D 추첨 결과");
+  const [title, setTitle] = useState("𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 추첨 결과");
   const [winner, setWinner] = useState("당첨 회원명");
   const [prize, setPrize] = useState("당첨 상품명");
   const [message, setMessage] = useState("당첨을 축하드립니다. 자세한 안내는 공식 공지 채널을 확인해 주세요.");
@@ -63,7 +63,7 @@ export function ResultImageGenerator() {
     ctx.fillStyle = "#f7f9fc"; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#ffffff"; drawRoundedRect(ctx, 72, 66, 1056, 543, 34); ctx.fill();
     ctx.strokeStyle = "#d9e2ef"; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = "#0f2a43"; ctx.font = "800 34px Arial, sans-serif"; ctx.fillText("Dynamic D", 112, 126);
+    ctx.fillStyle = "#0f2a43"; ctx.font = "800 34px Arial, sans-serif"; ctx.fillText("𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", 112, 126);
     ctx.fillStyle = "#33516b"; ctx.font = "700 22px Arial, sans-serif"; ctx.fillText("공식 이벤트 결과 안내", 112, 164);
     if (image) {
       const boxX = 792, boxY = 122, boxW = 268, boxH = 268;

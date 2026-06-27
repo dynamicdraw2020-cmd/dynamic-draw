@@ -12,7 +12,7 @@ export default async function PublicDashboardPage() {
   return <main className="page public-dashboard-page dynamic-ink-page"><div className="container grid">
     <section className="dashboard-hero panel panel-pad ink-panel">
       <span className="section-kicker"><BarChart3 size={14} /> Public Dashboard</span>
-      <h1>Dynamic D 운영 대시보드</h1>
+      <h1>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 운영 대시보드</h1>
       <p>모든 뽑기와 추첨은 이벤트별로 따로 집계됩니다. 공개 가능한 누적 결과와 최근 기록을 한 화면에서 확인합니다.</p>
       <div className="dashboard-metrics"><div><strong>{stats.totalDraws.toLocaleString()}</strong><span>누적 추첨</span></div><div><strong>{stats.todayDraws.toLocaleString()}</strong><span>오늘 추첨</span></div><div><strong>{stats.totalMembers.toLocaleString()}</strong><span>승인 회원</span></div></div>
     </section>

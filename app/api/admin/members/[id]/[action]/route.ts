@@ -20,18 +20,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id, action } = await context.params;
   if (!z.uuid().safeParse(id).success) return fail("잘못된 회원 ID입니다.", 400);
-  if (!new Set(["approve", "reject", "suspend", "restore"]).has(action)) return fail("지원하지 않는 회원 처리입니다.", 404);
+  if (!new Set(["approve", "reject", "suspend", "restore", "delete"]).has(action)) return fail("지원하지 않는 회원 처리입니다.", 404);
 
   const admin = createAdminClient();
   const { data: target } = await admin.from("profiles").select("id,email,username,display_name,member_code,role,status").eq("id", id).maybeSingle();
   if (!target) return fail("회원을 찾을 수 없습니다.", 404);
-  if (target.id === guard.auth.userId && ["reject", "suspend"].includes(action)) {
+  if (target.id === guard.auth.userId && ["reject", "suspend", "delete"].includes(action)) {
     return fail("현재 로그인한 본인 계정은 반려하거나 정지할 수 없습니다.", 409, "SELF_STATUS_CHANGE_BLOCKED");
   }
   if (target.role !== "USER" && guard.auth.profile.role !== "SUPER_ADMIN") {
     return fail("관리자 계정 상태는 최고 관리자만 변경할 수 있습니다.", 403, "ADMIN_ACCOUNT_PROTECTED");
   }
-  if (target.role === "SUPER_ADMIN" && action === "suspend") {
+  if (target.role === "SUPER_ADMIN" && ["suspend", "delete"].includes(action)) {
     const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("role", "SUPER_ADMIN").eq("status", "APPROVED");
     if ((count ?? 0) <= 1) return fail("최고 관리자는 최소 한 명이 남아 있어야 합니다.", 409, "LAST_SUPER_ADMIN");
   }
@@ -58,8 +58,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const parsed = reasonSchema.safeParse(body); if (!parsed.success) return fail("사유를 2자 이상 입력해 주세요.", 422);
     update = { status: "SUSPENDED", rejection_reason: parsed.data.reason };
     logAction = "MEMBER_SUSPENDED";
+  } else if (action === "delete") {
+    if (guard.auth.profile.role !== "SUPER_ADMIN") return fail("회원 삭제는 최고 관리자만 가능합니다.", 403, "SUPER_ADMIN_REQUIRED");
+    const parsed = reasonSchema.safeParse(body); if (!parsed.success) return fail("삭제 사유를 2자 이상 입력해 주세요.", 422);
+    update = { status: "DELETED", rejection_reason: parsed.data.reason, deleted_at: new Date().toISOString() };
+    logAction = "MEMBER_DELETED";
   } else {
-    if (!["REJECTED", "SUSPENDED"].includes(target.status)) return fail("반려 또는 정지된 회원만 복구할 수 있습니다.", 409, "INVALID_MEMBER_STATUS");
+    if (!["REJECTED", "SUSPENDED", "DELETED"].includes(target.status)) return fail("반려·정지·삭제된 회원만 복구할 수 있습니다.", 409, "INVALID_MEMBER_STATUS");
     let memberCode = target.member_code;
     if (!memberCode) {
       const parsed = approveSchema.safeParse(body); if (!parsed.success) return fail("고유 ID 입력값을 확인해 주세요.", 422);

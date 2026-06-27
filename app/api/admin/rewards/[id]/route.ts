@@ -74,9 +74,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   ]);
   if ((ownedCount ?? 0) > 0) return fail("회원이 보유 중인 상품은 비활성화할 수 없습니다.", 409, "REWARD_OWNED_BY_MEMBER");
   if ((ruleCount ?? 0) > 0) return fail("활성 교환 규칙에 연결된 상품입니다. 교환 규칙을 먼저 꺼 주세요.", 409, "REWARD_USED_BY_RULE");
-  const { error } = await admin.from("rewards").update({ is_active: false }).eq("id", id);
+  const { error } = await admin.from("rewards").update({ is_active: false, deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) return fail("상품을 비활성화하지 못했습니다.", 400);
   const meta = requestMeta(request);
-  await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "REWARD_DEACTIVATED", p_target_table: "rewards", p_target_id: id, p_details: { name: reward.name }, p_ip: meta.ip, p_user_agent: meta.userAgent });
-  return ok({ id, deactivated: true });
+  await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "REWARD_DELETED_FROM_DRAW", p_target_table: "rewards", p_target_id: id, p_details: { name: reward.name }, p_ip: meta.ip, p_user_agent: meta.userAgent });
+  return ok({ id, deleted: true });
 }

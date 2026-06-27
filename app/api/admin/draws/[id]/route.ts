@@ -36,3 +36,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "DRAW_UPDATED", p_target_table: "draws", p_target_id: id, p_details: patch, p_ip: meta.ip, p_user_agent: meta.userAgent });
   return ok(data);
 }
+
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const demo = rejectDemoMutation(); if (demo) return demo;
+  const csrf = enforceSameOrigin(request); if (csrf) return csrf;
+  const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
+  const { id } = await context.params;
+  const admin = createAdminClient();
+  const { data: draw } = await admin.from("draws").select("id,name,status").eq("id", id).maybeSingle();
+  if (!draw) return fail("뽑기를 찾을 수 없습니다.", 404);
+  await admin.from("rewards").update({ is_active: false, probability_units: 0, deleted_at: new Date().toISOString() }).eq("draw_id", id).is("deleted_at", null);
+  const { error } = await admin.from("draws").update({ status: "ENDED", is_public: false, deleted_at: new Date().toISOString() }).eq("id", id);
+  if (error) return fail("뽑기를 삭제하지 못했습니다.", 400, "DRAW_DELETE_FAILED", error.message);
+  const meta = requestMeta(request);
+  await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "DRAW_DELETED", p_target_table: "draws", p_target_id: id, p_details: { name: draw.name }, p_ip: meta.ip, p_user_agent: meta.userAgent });
+  return ok({ id, deleted: true });
+}

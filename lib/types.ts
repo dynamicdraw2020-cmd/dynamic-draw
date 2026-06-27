@@ -41,6 +41,30 @@ export interface Draw {
   created_at?: string;
 }
 
+export interface DrawTicket {
+  profile_id: string;
+  draw_id: string;
+  quantity: number;
+  updated_at?: string;
+  draws?: Draw | Draw[] | null;
+}
+
+export interface UserDrawTicket {
+  draw: Draw;
+  quantity: number;
+}
+
+export interface AdminTicketBalance {
+  profile_id: string;
+  draw_id: string;
+  quantity: number;
+  profile_name: string;
+  profile_email: string;
+  member_code: string | null;
+  draw_name: string;
+  updated_at: string | null;
+}
+
 export interface DrawResult {
   id: string;
   draw_id: string;

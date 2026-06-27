@@ -22,7 +22,8 @@ export default async function HomePage() {
             <h1>{titleParts[0]}{titleParts.length > 1 && <>,<br /><em>{titleParts.slice(1).join(",").trim()}</em></>}</h1>
             <p className="hero-copy">{settings.heroDescription}</p>
             <div className="hero-actions">
-              <Link className="btn btn-primary btn-lg" href="/live"><Radio size={18} /> 실시간 추첨 보기</Link>
+              <Link className="btn btn-primary btn-lg" href="/play"><Dices size={18} /> 직접 룰렛 돌리기</Link>
+              <Link className="btn btn-secondary btn-lg" href="/live"><Radio size={18} /> 실시간 추첨 보기</Link>
               <Link className="btn btn-secondary btn-lg" href="/signup">회원가입 신청 <ArrowRight size={18} /></Link>
             </div>
             <div className="hero-trust"><span><CheckCircle2 size={14} /> 서버 측 결과 결정</span><span><CheckCircle2 size={14} /> 확률 100% 자동 검증</span><span><CheckCircle2 size={14} /> 변경 기록 영구 보존</span></div>
@@ -54,14 +55,14 @@ export default async function HomePage() {
 
       <section className="section">
         <div className="container grid grid-2">
-          <div><div className="section-heading"><div><span className="eyebrow">LIVE STAGE</span><h2>지금 이 순간의 추첨</h2><p>관리자가 추첨을 실행하면 모든 접속 화면에서 같은 연출과 결과를 확인합니다.</p></div></div><LiveDrawStage drawId={draw?.id} initialResult={results[0] ?? null} /></div>
+          <div><div className="section-heading"><div><span className="eyebrow">LIVE STAGE</span><h2>지금 이 순간의 추첨</h2><p>관리자가 추첨을 실행하면 모든 접속 화면에서 같은 연출과 결과를 확인합니다.</p></div></div><LiveDrawStage drawId={draw?.id} initialResult={results[0] ?? null} draw={draw} /></div>
           <div><div className="section-heading"><div><span className="eyebrow">RECENT RESULTS</span><h2>최근 공개 결과</h2><p>개인정보는 가리고 결과는 투명하게 보여줍니다.</p></div></div><div className="panel panel-pad"><RecentResults results={results} compact /></div></div>
         </div>
       </section>
 
       <section className="section">
         <div className="container">
-          <div className="section-heading"><div><span className="eyebrow">TRUST BY DESIGN</span><h2>처음부터 조작하기 어렵게</h2><p>화려한 카드 연출과 결과 결정은 완전히 분리되어 있습니다.</p></div></div>
+          <div className="section-heading"><div><span className="eyebrow">TRUST BY DESIGN</span><h2>처음부터 조작하기 어렵게</h2><p>화려한 룰렛 연출과 결과 결정은 완전히 분리되어 있습니다.</p></div></div>
           <div className="grid grid-3">
             <article className="panel panel-pad"><div className="metric-icon"><LockKeyhole size={21} /></div><h3>서버·DB 추첨</h3><p className="panel-description">브라우저는 결과를 고르지 않습니다. 보안 난수와 DB 트랜잭션으로 결과를 먼저 확정합니다.</p></article>
             <article className="panel panel-pad"><div className="metric-icon"><ShieldCheck size={21} /></div><h3>변경 이력 보존</h3><p className="panel-description">확률 변경 전후 값, 관리자, 사유, 시각을 기록하며 수정·삭제를 차단합니다.</p></article>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowLeftRight, BarChart3, FileClock, LayoutDashboard, ListChecks, Logs, Settings, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, FileClock, LayoutDashboard, ListChecks, Logs, Settings, ShieldCheck, TicketCheck, Tickets, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
@@ -9,6 +9,7 @@ const items = [
   { href: "/admin", label: "대시보드", icon: LayoutDashboard, minimum: "VIEWER" },
   { href: "/admin/draws", label: "뽑기·상품·확률", icon: TicketCheck, minimum: "MANAGER" },
   { href: "/admin/live", label: "실시간 추첨", icon: Activity, minimum: "MANAGER" },
+  { href: "/admin/tickets", label: "추첨권 지급", icon: Tickets, minimum: "MANAGER" },
   { href: "/admin/members", label: "회원 관리", icon: UsersRound, minimum: "MANAGER" },
   { href: "/admin/exchanges", label: "교환 시스템", icon: ArrowLeftRight, minimum: "MANAGER" },
   { href: "/admin/results", label: "결과 관리", icon: ListChecks, minimum: "VIEWER" },

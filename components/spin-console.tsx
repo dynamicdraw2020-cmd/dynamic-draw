@@ -55,7 +55,7 @@ export function SpinConsole({ draws, members }: { draws: Draw[]; members: Profil
           <p className="text-muted text-small">{message}</p>
         </div>
       </section>
-      <LiveDrawStage drawId={drawId || undefined} />
+      <LiveDrawStage drawId={drawId || undefined} draw={activeDraws.find((draw) => draw.id === drawId) ?? null} />
     </div>
   );
 }

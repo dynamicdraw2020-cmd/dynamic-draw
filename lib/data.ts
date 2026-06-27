@@ -11,6 +11,9 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   Draw,
   DrawResult,
+  DrawTicket,
+  UserDrawTicket,
+  AdminTicketBalance,
   ExchangeRule,
   InventoryItem,
   Profile,
@@ -163,6 +166,61 @@ export async function getUserResults(profileId: string, limit = 20): Promise<Use
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data as UserResultRow[] | null) ?? [];
+}
+
+
+export async function getUserDrawTickets(profileId: string): Promise<UserDrawTicket[]> {
+  if (demoMode) return [{ draw: mockDraw, quantity: 3 }];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("draw_tickets")
+    .select("profile_id,draw_id,quantity,updated_at,draws(id,name,slug,description,status,animation_ms,is_public,created_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order))")
+    .eq("profile_id", profileId)
+    .gt("quantity", 0)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return (data as DrawTicket[])
+    .map((row) => {
+      const draw = Array.isArray(row.draws) ? row.draws[0] : row.draws;
+      return draw ? { draw, quantity: row.quantity } : null;
+    })
+    .filter((row): row is UserDrawTicket => Boolean(row));
+}
+
+export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
+  if (demoMode) {
+    return [{
+      profile_id: "approved-1",
+      draw_id: mockDraw.id,
+      quantity: 3,
+      profile_name: "승인 회원",
+      profile_email: "member@example.com",
+      member_code: "DD-2026-000432",
+      draw_name: mockDraw.name,
+      updated_at: new Date().toISOString(),
+    }];
+  }
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("draw_tickets")
+    .select("profile_id,draw_id,quantity,updated_at,profiles(display_name,email,member_code),draws(name)")
+    .gt("quantity", 0)
+    .order("updated_at", { ascending: false })
+    .limit(500);
+  return (data ?? []).map((row) => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    const draw = Array.isArray(row.draws) ? row.draws[0] : row.draws;
+    return {
+      profile_id: row.profile_id,
+      draw_id: row.draw_id,
+      quantity: row.quantity,
+      profile_name: profile?.display_name ?? "회원",
+      profile_email: profile?.email ?? "-",
+      member_code: profile?.member_code ?? null,
+      draw_name: draw?.name ?? "뽑기",
+      updated_at: row.updated_at ?? null,
+    };
+  });
 }
 
 export async function getAdminDashboardData() {

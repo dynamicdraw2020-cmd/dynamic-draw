@@ -9,8 +9,8 @@ const navLinks = [
   { href: "/notices", label: "공지" },
   { href: "/events", label: "이벤트" },
   { href: "/raffles", label: "전체 추첨" },
-  { href: "/play", label: "직접 추첨" },
-  { href: "/probabilities", label: "확률 안내" },
+  { href: "/play", label: "직접 참여" },
+  { href: "/probabilities", label: "운영 안내" },
 ];
 
 export async function SiteHeader() {

@@ -22,6 +22,8 @@ async function jsonRequest(url: string, method: string, body?: unknown) {
 export function DrawManager({ draws }: { draws: Draw[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [drawFormVersion, setDrawFormVersion] = useState(0);
+  const [rewardFormVersions, setRewardFormVersions] = useState<Record<string, number>>({});
 
   async function createDraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +36,7 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
         description: form.get("description"),
         animationMs: Number(form.get("animationMs")),
       });
-      formElement.reset();
+      setDrawFormVersion((version) => version + 1);
       router.refresh();
     } catch (error) { window.alert((error as Error).message); } finally { setBusy(null); }
   }
@@ -67,8 +69,12 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
         stock: form.get("stock") ? Number(form.get("stock")) : null,
         isInventoryItem: form.get("isInventoryItem") === "on",
         isExchangeMaterial: form.get("isExchangeMaterial") === "on",
+        imageUrl: form.get("imageUrl"),
       });
-      formElement.reset();
+      setRewardFormVersions((versions) => ({
+        ...versions,
+        [drawId]: (versions[drawId] ?? 0) + 1,
+      }));
       router.refresh();
     } catch (error) { window.alert((error as Error).message); } finally { setBusy(null); }
   }
@@ -78,12 +84,14 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
     if (!name) return;
     const description = window.prompt("상품 설명", reward.description ?? "") ?? reward.description;
     const stockText = window.prompt("재고 수량 (무제한은 비워두기)", reward.stock === null ? "" : String(reward.stock));
+    const imageUrl = window.prompt("룰렛/결과 화면 이미지 URL (PNG 권장, 비우면 제거)", reward.image_url ?? "") ?? reward.image_url;
     setBusy(reward.id);
     try {
       await jsonRequest(`/api/admin/rewards/${reward.id}`, "PATCH", {
         name,
         description,
         stock: stockText === "" || stockText === null ? null : Number(stockText),
+        imageUrl: imageUrl || null,
       });
       router.refresh();
     } catch (error) { window.alert((error as Error).message); } finally { setBusy(null); }
@@ -99,8 +107,8 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
 
   return (
     <div className="grid">
-      <form className="panel panel-pad form-grid" onSubmit={createDraw}>
-        <div><h2 className="panel-title">새 뽑기 만들기</h2><p className="panel-description">생성 후 상품과 확률을 넣고 진행 상태로 바꿉니다.</p></div>
+      <form key={`draw-form-${drawFormVersion}`} className="panel panel-pad form-grid" onSubmit={createDraw}>
+        <div><h2 className="panel-title">새 뽑기 만들기</h2><p className="panel-description">생성 후 상품과 확률을 넣고 진행 상태로 바꿉니다. <span className="text-muted">· 폼 v1.0.5</span></p></div>
         <div className="form-row">
           <div className="field"><label htmlFor="draw-name">뽑기 이름</label><input id="draw-name" className="input" name="name" required maxLength={80} placeholder="예: 입장권 뽑기" /></div>
           <div className="field"><label htmlFor="animation-ms">연출 시간</label><select id="animation-ms" className="select" name="animationMs" defaultValue="4000"><option value="3000">3초</option><option value="4000">4초</option><option value="5000">5초</option></select></div>
@@ -129,7 +137,7 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
                   <tbody>
                     {(draw.rewards ?? []).map((reward) => (
                       <tr key={reward.id}>
-                        <td><strong style={{ color: reward.color }}>{reward.name}</strong><div className="text-muted text-small">{reward.description}</div></td>
+                        <td><strong style={{ color: reward.color }}>{reward.name}</strong><div className="text-muted text-small">{reward.description}{reward.image_url ? " · 이미지 등록" : ""}</div></td>
                         <td>{formatPercent(probabilityToPercent(reward.probability_units), 4)}</td>
                         <td>{reward.stock ?? "∞"}</td>
                         <td className="muted">{reward.is_exchange_material ? "교환 재료" : reward.is_inventory_item ? "보관 상품" : "기록 전용"}</td>
@@ -139,7 +147,7 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
                   </tbody>
                 </table>
               </div>
-              <form className="form-grid mt-3" onSubmit={(event) => createReward(event, draw.id)}>
+              <form key={`reward-form-${draw.id}-${rewardFormVersions[draw.id] ?? 0}`} className="form-grid mt-3" onSubmit={(event) => createReward(event, draw.id)}>
                 <div className="form-row">
                   <div className="field"><label>새 상품명</label><input className="input" name="name" required maxLength={80} placeholder="상품명" /></div>
                   <div className="field"><label>색상</label><input className="input" name="color" type="color" defaultValue="#38bdf8" /></div>
@@ -148,6 +156,7 @@ export function DrawManager({ draws }: { draws: Draw[] }) {
                   <div className="field"><label>설명</label><input className="input" name="description" maxLength={300} placeholder="상품 설명" /></div>
                   <div className="field"><label>재고</label><input className="input" name="stock" type="number" min="0" placeholder="비우면 무제한" /></div>
                 </div>
+                <div className="field"><label>룰렛 이미지 URL</label><input className="input" name="imageUrl" type="url" maxLength={500} placeholder="https://.../image.png (선택)" /><small>상품 이미지나 PNG 주소를 넣으면 룰렛·결과 화면에서 사용할 수 있습니다.</small></div>
                 <div className="flex wrap gap-2"><label className="checkbox-row"><input type="checkbox" name="isInventoryItem" defaultChecked /> 회원 보유 상품</label><label className="checkbox-row"><input type="checkbox" name="isExchangeMaterial" /> 교환 재료</label></div>
                 <button className="btn btn-secondary" type="submit" disabled={busy === `reward-${draw.id}`}><Gift size={16} /> 상품 추가</button>
               </form>

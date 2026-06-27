@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowLeftRight, BarChart3, FileClock, LayoutDashboard, ListChecks, Logs, Megaphone, Settings, ShieldCheck, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, FileClock, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, Settings, ShieldCheck, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
@@ -13,8 +13,10 @@ const items = [
   { href: "/admin/raffles", label: "전체 회원 추첨", icon: Trophy, minimum: "MANAGER" },
   { href: "/admin/contents", label: "공지·이벤트", icon: Megaphone, minimum: "MANAGER" },
   { href: "/admin/members", label: "회원 관리", icon: UsersRound, minimum: "MANAGER" },
+  { href: "/admin/activity", label: "유저 활동 로그", icon: Activity, minimum: "VIEWER" },
   { href: "/admin/exchanges", label: "교환 시스템", icon: ArrowLeftRight, minimum: "MANAGER" },
   { href: "/admin/results", label: "결과 관리", icon: ListChecks, minimum: "VIEWER" },
+  { href: "/admin/result-images", label: "결과 이미지 생성", icon: ImageIcon, minimum: "MANAGER" },
   { href: "/admin/stats", label: "통계", icon: BarChart3, minimum: "VIEWER" },
   { href: "/admin/probability-history", label: "확률 변경 기록", icon: FileClock, minimum: "VIEWER" },
   { href: "/admin/logs", label: "관리자 로그", icon: Logs, minimum: "VIEWER" },

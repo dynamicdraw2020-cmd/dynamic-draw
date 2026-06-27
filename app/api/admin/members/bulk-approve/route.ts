@@ -1,0 +1,36 @@
+import { z } from "zod";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+const schema = z.object({ memberIds: z.array(z.uuid()).min(1).max(300) });
+
+async function nextMemberCode(admin: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await admin.rpc("next_member_code");
+  if (error || typeof data !== "string") throw new Error(error?.message ?? "고유 ID를 생성하지 못했습니다.");
+  return data;
+}
+
+export async function POST(request: Request) {
+  const demo = rejectDemoMutation(); if (demo) return demo;
+  const csrf = enforceSameOrigin(request); if (csrf) return csrf;
+  const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
+  const parsed = schema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return fail("승인할 회원을 선택해 주세요.", 422, "VALIDATION_ERROR");
+  const ids = Array.from(new Set(parsed.data.memberIds));
+  const admin = createAdminClient();
+  const { data: targets, error: targetError } = await admin.from("profiles").select("id,email,username,display_name,member_code,role,status").in("id", ids);
+  if (targetError) return fail("회원 목록을 확인하지 못했습니다.", 400, "MEMBER_FETCH_FAILED", targetError.message);
+  const pending = (targets ?? []).filter((profile) => profile.status === "PENDING" && profile.role === "USER");
+  if (!pending.length) return fail("승인 가능한 대기 회원이 없습니다.", 409, "NO_PENDING_MEMBERS");
+  const meta = requestMeta(request);
+  const approved: Array<{ id: string; member_code: string }> = [];
+  for (const profile of pending) {
+    const code = profile.member_code ?? await nextMemberCode(admin);
+    const { data, error } = await admin.from("profiles").update({ status: "APPROVED", member_code: code, approved_by: guard.auth.userId, approved_at: new Date().toISOString(), rejection_reason: null }).eq("id", profile.id).eq("status", "PENDING").select("id,member_code").maybeSingle();
+    if (!error && data) {
+      approved.push({ id: data.id, member_code: data.member_code });
+      await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "MEMBER_BULK_APPROVED", p_target_table: "profiles", p_target_id: profile.id, p_details: { before: profile, after: data }, p_ip: meta.ip, p_user_agent: meta.userAgent });
+    }
+  }
+  return ok({ approvedCount: approved.length, approved });
+}

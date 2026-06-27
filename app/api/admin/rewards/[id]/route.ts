@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const schema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   description: z.string().trim().max(300).nullable().optional(),
+  imageUrl: z.string().trim().url().max(500).nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   stock: z.number().int().min(0).nullable().optional(),
   isInventoryItem: z.boolean().optional(),
@@ -45,6 +46,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const d = parsed.data;
   if (d.name !== undefined) patch.name = d.name;
   if (d.description !== undefined) patch.description = d.description;
+  if (d.imageUrl !== undefined) patch.image_url = d.imageUrl || null;
   if (d.color !== undefined) patch.color = d.color;
   if (d.stock !== undefined) patch.stock = d.stock;
   if (d.isInventoryItem !== undefined) patch.is_inventory_item = d.isInventoryItem;

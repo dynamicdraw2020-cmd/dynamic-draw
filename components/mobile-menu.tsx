@@ -8,8 +8,8 @@ const links = [
   ["공지", "/notices"],
   ["이벤트", "/events"],
   ["전체 추첨", "/raffles"],
-  ["직접 추첨", "/play"],
-  ["확률 안내", "/probabilities"],
+  ["직접 참여", "/play"],
+  ["운영 안내", "/probabilities"],
   ["최근 결과", "/results"],
 ];
 

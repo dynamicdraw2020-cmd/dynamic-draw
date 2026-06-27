@@ -238,3 +238,20 @@ export interface EventPost {
   created_at: string;
   updated_at?: string | null;
 }
+
+export interface UserActivityEntry {
+  id: string;
+  created_at: string;
+  action: string;
+  title: string;
+  description: string;
+  amount?: number | null;
+}
+
+export interface AdminUserActivityData {
+  profile: Profile | null;
+  tickets: AdminTicketBalance[];
+  currencies: AdminCurrencyBalance[];
+  inventory: InventoryItem[];
+  activities: UserActivityEntry[];
+}

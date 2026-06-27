@@ -6,7 +6,7 @@ export const mockDraw: Draw = {
   id: drawId,
   name: "입장권 뽑기",
   slug: "ticket-draw",
-  description: "투명하게 공개되는 Dynamic Draw 대표 이벤트입니다.",
+  description: "Dynamic D에서 운영하는 대표 이벤트입니다.",
   status: "ACTIVE",
   animation_ms: 4000,
   is_public: true,

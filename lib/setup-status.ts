@@ -72,7 +72,7 @@ function mapDatabaseError(input: unknown): SetupStatus {
       ready: false,
       locked: false,
       technicalCode: code,
-      message: "Dynamic Draw DB 표를 찾지 못했습니다. 1_SUPABASE에_한번만_붙여넣기.sql을 Supabase SQL Editor에서 실행해 주세요.",
+      message: "Dynamic D DB 표를 찾지 못했습니다. 1_SUPABASE에_한번만_붙여넣기.sql을 Supabase SQL Editor에서 실행해 주세요.",
     };
   }
 

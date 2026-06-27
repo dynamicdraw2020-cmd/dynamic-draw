@@ -5,14 +5,12 @@ import Link from "next/link";
 import { useState } from "react";
 
 const links = [
-  ["진행 중인 뽑기", "/draws"],
-  ["직접 뽑기", "/play"],
-  ["실시간 결과", "/live"],
-  ["확률표", "/probabilities"],
   ["공지", "/notices"],
   ["이벤트", "/events"],
-  ["최근 당첨", "/results"],
-  ["통계", "/stats"],
+  ["전체 추첨", "/raffles"],
+  ["직접 추첨", "/play"],
+  ["확률 안내", "/probabilities"],
+  ["최근 결과", "/results"],
 ];
 
 export function MobileMenu() {

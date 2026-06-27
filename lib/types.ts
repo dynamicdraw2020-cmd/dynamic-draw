@@ -183,6 +183,28 @@ export interface UserResultRow {
   rewards: { name: string; color: string } | Array<{ name: string; color: string }> | null;
 }
 
+
+export interface RaffleEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  prize_name: string;
+  status: "DRAFT" | "ACTIVE" | "COMPLETED" | "ARCHIVED";
+  is_public: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  winner_profile_id: string | null;
+  winner_member_code: string | null;
+  winner_display_name: string | null;
+  executed_at: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface AdminRaffleEvent extends RaffleEvent {
+  participant_count?: number;
+}
+
 export interface PublicSettings {
   siteName: string;
   heroTitle: string;

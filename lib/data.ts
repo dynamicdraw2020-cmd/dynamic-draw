@@ -26,6 +26,8 @@ import type {
   PublicSettings,
   Notice,
   EventPost,
+  RaffleEvent,
+  AdminRaffleEvent,
   UserResultRow,
 } from "@/lib/types";
 
@@ -40,9 +42,9 @@ const emptyStats: PublicStats = {
 
 export async function getPublicSettings(): Promise<PublicSettings> {
   const fallback = {
-    siteName: "Dynamic Draw",
-    heroTitle: "투명한 이벤트 추첨 운영",
-    heroDescription: "공지, 이벤트, 추첨권, 결과 공개를 한곳에서 관리하는 운영형 추첨 플랫폼",
+    siteName: "Dynamic D",
+    heroTitle: "Dynamic D - 이벤트 전용 사이트",
+    heroDescription: "Dynamic에서 주관하는 모든 뽑기(추첨)형 이벤트를 주관하는 사이트. Dynamic D - 누구보다 빠른 본방 입성을 향한 길.",
     publicStats: true,
   };
   if (!supabaseConfigured) return fallback;
@@ -326,6 +328,27 @@ export async function getPublicEvents(limit = 12): Promise<EventPost[]> {
     .limit(limit);
   if (error || !data) return [];
   return data as EventPost[];
+}
+
+
+export async function getPublicRaffles(limit = 8): Promise<RaffleEvent[]> {
+  if (demoMode) {
+    return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "승인된 전체 회원을 대상으로 진행하는 공개 추첨 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").eq("is_public", true).in("status", ["ACTIVE", "COMPLETED"]).order("created_at", { ascending: false }).limit(limit);
+  if (error || !data) return [];
+  return data as RaffleEvent[];
+}
+
+export async function getAdminRaffles(): Promise<AdminRaffleEvent[]> {
+  if (demoMode) return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "승인된 전체 회원을 대상으로 진행하는 공개 추첨 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
+  const admin = createAdminClient();
+  const [{ data }, { count }] = await Promise.all([
+    admin.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").order("created_at", { ascending: false }).limit(200),
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "APPROVED").eq("role", "USER"),
+  ]);
+  return ((data as RaffleEvent[] | null) ?? []).map((item) => ({ ...item, participant_count: count ?? 0 }));
 }
 
 export async function getAdminNotices(): Promise<Notice[]> {

@@ -1,0 +1,24 @@
+Dynamic D v1.4.0 검증 결과
+
+검증 완료:
+- npm ci 성공
+- npm run typecheck 성공
+- npm run lint 성공
+- npm run build 성공
+- Next.js 16.2.9 프로덕션 빌드 성공
+- 신규 라우트 확인:
+  /raffles
+  /admin/raffles
+  /api/admin/raffles
+  /api/admin/raffles/[id]/run
+- TypeScript 컴파일 오류 없음
+- ESLint 오류 없음
+
+주요 변경:
+- 공개 홈페이지를 Dynamic D 공식 이벤트 사이트 스타일로 개편
+- 첫 페이지에 공지/이벤트 노출
+- 공식 디스코드/오픈채팅/1:1 문의 표시
+- 전체 회원 대상 추첨 이벤트 추가
+- 인형뽑기식 추첨 연출 추가
+- 관리자 전체 회원 추첨 메뉴 추가
+- 추천 기능 메모 파일 추가

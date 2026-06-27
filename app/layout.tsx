@@ -5,11 +5,11 @@ import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: { default: "Dynamic Draw", template: "%s | Dynamic Draw" },
-  description: "확률과 결과를 투명하게 공개하는 실시간 이벤트 추첨 시스템",
+  title: { default: "Dynamic D", template: "%s | Dynamic D" },
+  description: "Dynamic에서 주관하는 이벤트 전용 추첨 안내 사이트",
   openGraph: {
-    title: "Dynamic Draw",
-    description: "실시간 이벤트 추첨과 투명한 확률 공개",
+    title: "Dynamic D",
+    description: "Dynamic D - 이벤트 전용 사이트",
     type: "website",
     locale: "ko_KR",
   },

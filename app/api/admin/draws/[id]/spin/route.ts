@@ -14,7 +14,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!parsed.success) return fail("참가자 정보가 올바르지 않습니다.", 422);
   const meta = requestMeta(request);
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("execute_draw", {
+  const { data, error } = await admin.rpc("admin_execute_draw_with_ticket", {
     p_draw_id: id,
     p_participant_id: parsed.data.participantId,
     p_admin_id: guard.auth.userId,

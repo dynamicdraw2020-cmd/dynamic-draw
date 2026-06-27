@@ -405,3 +405,23 @@ img { max-width: 100%; }
   .roulette-result-panel { min-height: 86px; padding: 14px; }
   .live-roulette-machine { width: min(83vmin, 360px); }
 }
+
+/* v1.2.0 optimized roulette + ticket/currency system */
+.roulette-wheel.optimized { transform: translateZ(0) rotate(var(--spin-rotation, 0deg)); will-change: transform; backface-visibility: hidden; contain: layout paint; }
+.roulette-wheel.optimized.is-spinning { transition: transform var(--spin-duration, 4000ms) cubic-bezier(.08,.72,.13,1); }
+.optimized-glow { animation: dd-soft-pulse .8s ease-out both; will-change: opacity, transform; }
+@keyframes dd-soft-pulse { from { opacity: 0; transform: scale(.72); } 55% { opacity: .7; transform: scale(1.05); } to { opacity: 0; transform: scale(1.22); } }
+.currency-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.currency-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.045); border-radius: 999px; padding: 7px 10px; font-size: 12px; color: var(--muted); }
+.draw-play-hero .ticket-summary { min-width: 170px; }
+@media (max-width: 640px) {
+  .roulette-overlay { padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  .roulette-fullscreen-card { width: 100%; min-height: calc(100svh - 20px); grid-template-rows: auto auto minmax(300px,1fr) auto; }
+  .roulette-machine { width: min(92svw, 92svh, 430px); }
+  .roulette-title p { font-size: 13px; }
+  .roulette-result-panel strong { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roulette-wheel.optimized.is-spinning { transition-duration: 400ms; }
+  .optimized-glow { animation: none; }
+}

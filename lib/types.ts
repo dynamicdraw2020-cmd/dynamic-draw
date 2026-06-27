@@ -54,6 +54,52 @@ export interface UserDrawTicket {
   quantity: number;
 }
 
+export interface VirtualCurrency {
+  id: string;
+  name: string;
+  code: string;
+  symbol: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface UserCurrencyBalance {
+  currency: VirtualCurrency;
+  balance: number;
+}
+
+export interface AdminCurrencyBalance {
+  profile_id: string;
+  currency_id: string;
+  balance: number;
+  profile_name: string;
+  profile_email: string;
+  member_code: string | null;
+  currency_name: string;
+  currency_symbol: string;
+  updated_at: string | null;
+}
+
+export interface TicketExchangeRate {
+  id: string;
+  draw_id: string;
+  currency_id: string;
+  currency_cost: number;
+  ticket_quantity: number;
+  is_active: boolean;
+  sort_order: number;
+  draw?: Draw | Draw[] | null;
+  currency?: VirtualCurrency | VirtualCurrency[] | null;
+}
+
+export interface UserTicketExchangeRate {
+  id: string;
+  draw: Draw;
+  currency: VirtualCurrency;
+  currencyCost: number;
+  ticketQuantity: number;
+}
+
 export interface AdminTicketBalance {
   profile_id: string;
   draw_id: string;

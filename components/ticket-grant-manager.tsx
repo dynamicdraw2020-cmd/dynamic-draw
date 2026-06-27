@@ -1,106 +1,50 @@
 "use client";
 
-import { LoaderCircle, Plus, Ticket, UserRound } from "lucide-react";
+import { Coins, LoaderCircle, Plus, Repeat2, Ticket, UserRound, WalletCards } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
-import type { AdminTicketBalance, Draw, Profile } from "@/lib/types";
+import type { AdminCurrencyBalance, AdminTicketBalance, Draw, Profile, TicketExchangeRate, VirtualCurrency } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
 async function jsonRequest(url: string, body: unknown) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error?.message ?? "요청을 처리하지 못했습니다.");
   return data;
 }
 
-export function TicketGrantManager({ draws, members, balances }: { draws: Draw[]; members: Profile[]; balances: AdminTicketBalance[] }) {
+export function TicketGrantManager({ draws, members, balances, currencies, currencyBalances, exchangeRates }: { draws: Draw[]; members: Profile[]; balances: AdminTicketBalance[]; currencies: VirtualCurrency[]; currencyBalances: AdminCurrencyBalance[]; exchangeRates: Array<TicketExchangeRate & { draw_name?: string; currency_name?: string; currency_symbol?: string }> }) {
   const router = useRouter();
   const activeDraws = draws.filter((draw) => draw.status === "ACTIVE");
   const approvedMembers = members.filter((member) => member.status === "APPROVED" && member.role === "USER");
+  const activeCurrencies = currencies.filter((currency) => currency.is_active);
   const [drawId, setDrawId] = useState(activeDraws[0]?.id ?? "");
   const [profileId, setProfileId] = useState(approvedMembers[0]?.id ?? "");
   const [quantity, setQuantity] = useState(1);
   const [memo, setMemo] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const currentBalance = useMemo(() => {
-    return balances.find((balance) => balance.draw_id === drawId && balance.profile_id === profileId)?.quantity ?? 0;
-  }, [balances, drawId, profileId]);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!drawId || !profileId) return window.alert("뽑기와 회원을 선택해 주세요.");
-    setLoading(true);
-    try {
-      const body = await jsonRequest("/api/admin/tickets", { drawId, profileId, quantity, memo });
-      window.alert(`추첨권 지급 완료 · 현재 보유 ${body.data?.quantity ?? "갱신"}장`);
-      setMemo("");
-      router.refresh();
-    } catch (error) {
-      window.alert((error as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="grid">
-      <form className="panel panel-pad form-grid" onSubmit={submit}>
-        <div>
-          <div className="flex items-center gap-1"><Ticket size={19} className="text-gold" /><h2 className="panel-title mb-0">회원에게 추첨권 지급</h2></div>
-          <p className="panel-description mt-1">회원은 지급받은 추첨권으로 직접 룰렛 뽑기를 실행할 수 있습니다. 지급 내역은 관리자 로그에 남습니다.</p>
-        </div>
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="ticket-draw">뽑기</label>
-            <select id="ticket-draw" className="select" value={drawId} onChange={(event) => setDrawId(event.target.value)} required>
-              {activeDraws.map((draw) => <option key={draw.id} value={draw.id}>{draw.name}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="ticket-member">회원</label>
-            <select id="ticket-member" className="select" value={profileId} onChange={(event) => setProfileId(event.target.value)} required>
-              {approvedMembers.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {member.member_code ?? member.email}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="ticket-quantity">지급 수량</label>
-            <input id="ticket-quantity" className="input" type="number" min="1" max="1000" value={quantity} onChange={(event) => setQuantity(Number(event.target.value || 1))} />
-          </div>
-          <div className="field">
-            <label htmlFor="ticket-memo">메모</label>
-            <input id="ticket-memo" className="input" maxLength={200} value={memo} onChange={(event) => setMemo(event.target.value)} placeholder="예: 이벤트 참여 보상" />
-          </div>
-        </div>
-        <div className="note-box"><UserRound size={15} style={{ verticalAlign: -3 }} /> 선택 회원의 현재 보유 추첨권: <strong>{currentBalance.toLocaleString()}장</strong></div>
-        <button className="btn btn-primary btn-lg" type="submit" disabled={loading || !activeDraws.length || !approvedMembers.length}>{loading ? <LoaderCircle size={18} className="spin" /> : <Plus size={18} />} 추첨권 지급</button>
-      </form>
-
-      <section className="panel panel-pad">
-        <h2 className="panel-title">추첨권 보유 현황</h2>
-        <p className="panel-description">현재 1장 이상 보유한 회원만 표시됩니다.</p>
-        <div className="table-wrap mt-3">
-          <table className="table">
-            <thead><tr><th>회원</th><th>뽑기</th><th>보유 추첨권</th><th>최근 갱신</th></tr></thead>
-            <tbody>
-              {balances.length ? balances.map((balance) => (
-                <tr key={`${balance.profile_id}-${balance.draw_id}`}>
-                  <td><strong>{balance.profile_name}</strong><div className="text-muted text-small">{balance.member_code ?? "고유 ID 없음"} · {balance.profile_email}</div></td>
-                  <td>{balance.draw_name}</td>
-                  <td><span className="ticket-count">{balance.quantity.toLocaleString()}장</span></td>
-                  <td className="muted">{balance.updated_at ? formatDateTime(balance.updated_at) : "-"}</td>
-                </tr>
-              )) : <tr><td colSpan={4}><div className="empty">아직 지급된 추첨권이 없습니다.</div></td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
+  const [currencyId, setCurrencyId] = useState(activeCurrencies[0]?.id ?? "");
+  const [currencyAmount, setCurrencyAmount] = useState(100);
+  const [currencyMemo, setCurrencyMemo] = useState("");
+  const [newCurrencyName, setNewCurrencyName] = useState("이벤트 코인");
+  const [newCurrencyCode, setNewCurrencyCode] = useState("EVENT_COIN");
+  const [newCurrencySymbol, setNewCurrencySymbol] = useState("EC");
+  const [rateDrawId, setRateDrawId] = useState(activeDraws[0]?.id ?? "");
+  const [rateCurrencyId, setRateCurrencyId] = useState(activeCurrencies[0]?.id ?? "");
+  const [currencyCost, setCurrencyCost] = useState(100);
+  const [ticketQuantity, setTicketQuantity] = useState(1);
+  const [loading, setLoading] = useState<string | null>(null);
+  const currentBalance = useMemo(() => balances.find((balance) => balance.draw_id === drawId && balance.profile_id === profileId)?.quantity ?? 0, [balances, drawId, profileId]);
+  async function submitTickets(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!drawId || !profileId) return window.alert("뽑기와 회원을 선택해 주세요."); setLoading("tickets"); try { const body = await jsonRequest("/api/admin/tickets", { drawId, profileId, quantity, memo }); window.alert(`추첨권 지급 완료 · 현재 보유 ${body.data?.quantity ?? "갱신"}장`); setMemo(""); router.refresh(); } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); } }
+  async function submitCurrency(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!currencyId || !profileId) return window.alert("화폐와 회원을 선택해 주세요."); setLoading("currency"); try { const body = await jsonRequest("/api/admin/currency-grants", { currencyId, profileId, amount: currencyAmount, memo: currencyMemo }); window.alert(`화폐 지급 완료 · 현재 보유 ${body.data?.balance ?? "갱신"}`); setCurrencyMemo(""); router.refresh(); } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); } }
+  async function createCurrency(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setLoading("create-currency"); try { await jsonRequest("/api/admin/currencies", { name: newCurrencyName, code: newCurrencyCode.trim().toUpperCase(), symbol: newCurrencySymbol }); window.alert("화폐가 생성되었습니다."); router.refresh(); } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); } }
+  async function createRate(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!rateDrawId || !rateCurrencyId) return window.alert("뽑기와 화폐를 선택해 주세요."); setLoading("rate"); try { await jsonRequest("/api/admin/ticket-exchange-rates", { drawId: rateDrawId, currencyId: rateCurrencyId, currencyCost, ticketQuantity }); window.alert("화폐 → 추첨권 교환 비율이 생성되었습니다."); router.refresh(); } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); } }
+  return <div className="grid">
+    <div className="grid grid-2">
+      <form className="panel panel-pad form-grid" onSubmit={submitTickets}><div><div className="flex items-center gap-1"><Ticket size={19} className="text-gold" /><h2 className="panel-title mb-0">회원에게 추첨권 지급</h2></div><p className="panel-description mt-1">회원 직접 뽑기와 관리자 현장 추첨 모두 이 추첨권을 사용합니다.</p></div><div className="form-row"><div className="field"><label htmlFor="ticket-draw">뽑기</label><select id="ticket-draw" className="select" value={drawId} onChange={(event) => setDrawId(event.target.value)} required>{activeDraws.map((draw) => <option key={draw.id} value={draw.id}>{draw.name}</option>)}</select></div><div className="field"><label htmlFor="ticket-member">회원</label><select id="ticket-member" className="select" value={profileId} onChange={(event) => setProfileId(event.target.value)} required>{approvedMembers.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {member.member_code ?? member.email}</option>)}</select></div></div><div className="form-row"><div className="field"><label htmlFor="ticket-quantity">지급 수량</label><input id="ticket-quantity" className="input" type="number" min="1" max="1000" value={quantity} onChange={(event) => setQuantity(Number(event.target.value || 1))} /></div><div className="field"><label htmlFor="ticket-memo">메모</label><input id="ticket-memo" className="input" maxLength={200} value={memo} onChange={(event) => setMemo(event.target.value)} placeholder="예: 이벤트 참여 보상" /></div></div><div className="note-box"><UserRound size={15} style={{ verticalAlign: -3 }} /> 선택 회원의 현재 보유 추첨권: <strong>{currentBalance.toLocaleString()}장</strong></div><button className="btn btn-primary btn-lg" type="submit" disabled={loading === "tickets" || !activeDraws.length || !approvedMembers.length}>{loading === "tickets" ? <LoaderCircle size={18} className="spin" /> : <Plus size={18} />} 추첨권 지급</button></form>
+      <form className="panel panel-pad form-grid" onSubmit={submitCurrency}><div><div className="flex items-center gap-1"><Coins size={19} className="text-gold" /><h2 className="panel-title mb-0">회원에게 이벤트 화폐 지급</h2></div><p className="panel-description mt-1">현실 돈이 아닌 운영용 포인트입니다. 회원은 직접 뽑기 화면에서 추첨권으로 교환할 수 있습니다.</p></div><div className="form-row"><div className="field"><label htmlFor="currency-select">화폐</label><select id="currency-select" className="select" value={currencyId} onChange={(event) => setCurrencyId(event.target.value)} required>{activeCurrencies.map((currency) => <option key={currency.id} value={currency.id}>{currency.name} · {currency.symbol}</option>)}</select></div><div className="field"><label htmlFor="currency-member">회원</label><select id="currency-member" className="select" value={profileId} onChange={(event) => setProfileId(event.target.value)} required>{approvedMembers.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {member.member_code ?? member.email}</option>)}</select></div></div><div className="form-row"><div className="field"><label htmlFor="currency-amount">지급 수량</label><input id="currency-amount" className="input" type="number" min="1" max="1000000" value={currencyAmount} onChange={(event) => setCurrencyAmount(Number(event.target.value || 1))} /></div><div className="field"><label htmlFor="currency-memo">메모</label><input id="currency-memo" className="input" maxLength={200} value={currencyMemo} onChange={(event) => setCurrencyMemo(event.target.value)} placeholder="예: 출석 이벤트" /></div></div><button className="btn btn-secondary btn-lg" type="submit" disabled={loading === "currency" || !activeCurrencies.length || !approvedMembers.length}>{loading === "currency" ? <LoaderCircle size={18} className="spin" /> : <WalletCards size={18} />} 이벤트 화폐 지급</button></form>
     </div>
-  );
+    <div className="grid grid-2"><form className="panel panel-pad form-grid" onSubmit={createCurrency}><h2 className="panel-title">화폐 만들기</h2><p className="panel-description">운영자가 원하는 이름의 이벤트 화폐를 만들 수 있습니다.</p><div className="form-row"><div className="field"><label htmlFor="new-currency-name">화폐명</label><input id="new-currency-name" className="input" value={newCurrencyName} onChange={(event) => setNewCurrencyName(event.target.value)} /></div><div className="field"><label htmlFor="new-currency-symbol">표기</label><input id="new-currency-symbol" className="input" value={newCurrencySymbol} onChange={(event) => setNewCurrencySymbol(event.target.value)} /></div></div><div className="field"><label htmlFor="new-currency-code">코드</label><input id="new-currency-code" className="input" value={newCurrencyCode} onChange={(event) => setNewCurrencyCode(event.target.value.toUpperCase())} placeholder="EVENT_COIN" /></div><button className="btn btn-secondary" type="submit" disabled={loading === "create-currency"}>{loading === "create-currency" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} 화폐 만들기</button></form><form className="panel panel-pad form-grid" onSubmit={createRate}><h2 className="panel-title">화폐 → 추첨권 교환 비율</h2><p className="panel-description">회원이 직접 뽑기 화면에서 화폐를 추첨권으로 바꾸는 규칙입니다.</p><div className="form-row"><div className="field"><label htmlFor="rate-draw">대상 뽑기</label><select id="rate-draw" className="select" value={rateDrawId} onChange={(event) => setRateDrawId(event.target.value)}>{activeDraws.map((draw) => <option key={draw.id} value={draw.id}>{draw.name}</option>)}</select></div><div className="field"><label htmlFor="rate-currency">사용 화폐</label><select id="rate-currency" className="select" value={rateCurrencyId} onChange={(event) => setRateCurrencyId(event.target.value)}>{activeCurrencies.map((currency) => <option key={currency.id} value={currency.id}>{currency.name}</option>)}</select></div></div><div className="form-row"><div className="field"><label htmlFor="currency-cost">차감 화폐</label><input id="currency-cost" className="input" type="number" min="1" value={currencyCost} onChange={(event) => setCurrencyCost(Number(event.target.value || 1))} /></div><div className="field"><label htmlFor="ticket-quantity-rate">지급 추첨권</label><input id="ticket-quantity-rate" className="input" type="number" min="1" value={ticketQuantity} onChange={(event) => setTicketQuantity(Number(event.target.value || 1))} /></div></div><button className="btn btn-secondary" type="submit" disabled={loading === "rate"}>{loading === "rate" ? <LoaderCircle size={17} className="spin" /> : <Repeat2 size={17} />} 교환 비율 만들기</button></form></div>
+    <section className="panel panel-pad"><h2 className="panel-title">교환 비율 현황</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>뽑기</th><th>화폐</th><th>비율</th><th>상태</th></tr></thead><tbody>{exchangeRates.length ? exchangeRates.map((rate) => <tr key={rate.id}><td>{rate.draw_name ?? rate.draw_id}</td><td>{rate.currency_name ?? rate.currency_id}</td><td>{rate.currency_cost.toLocaleString()}{rate.currency_symbol ? ` ${rate.currency_symbol}` : ""} → {rate.ticket_quantity.toLocaleString()}장</td><td>{rate.is_active ? "사용 중" : "꺼짐"}</td></tr>) : <tr><td colSpan={4}><div className="empty">아직 교환 비율이 없습니다.</div></td></tr>}</tbody></table></div></section>
+    <div className="grid grid-2"><section className="panel panel-pad"><h2 className="panel-title">추첨권 보유 현황</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>회원</th><th>뽑기</th><th>보유 추첨권</th><th>최근 갱신</th></tr></thead><tbody>{balances.length ? balances.map((balance) => <tr key={`${balance.profile_id}-${balance.draw_id}`}><td><strong>{balance.profile_name}</strong><div className="text-muted text-small">{balance.member_code ?? "고유 ID 없음"} · {balance.profile_email}</div></td><td>{balance.draw_name}</td><td><span className="ticket-count">{balance.quantity.toLocaleString()}장</span></td><td className="muted">{balance.updated_at ? formatDateTime(balance.updated_at) : "-"}</td></tr>) : <tr><td colSpan={4}><div className="empty">아직 지급된 추첨권이 없습니다.</div></td></tr>}</tbody></table></div></section><section className="panel panel-pad"><h2 className="panel-title">화폐 보유 현황</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>회원</th><th>화폐</th><th>보유량</th><th>최근 갱신</th></tr></thead><tbody>{currencyBalances.length ? currencyBalances.map((balance) => <tr key={`${balance.profile_id}-${balance.currency_id}`}><td><strong>{balance.profile_name}</strong><div className="text-muted text-small">{balance.member_code ?? "고유 ID 없음"} · {balance.profile_email}</div></td><td>{balance.currency_name}</td><td><span className="ticket-count">{balance.balance.toLocaleString()} {balance.currency_symbol}</span></td><td className="muted">{balance.updated_at ? formatDateTime(balance.updated_at) : "-"}</td></tr>) : <tr><td colSpan={4}><div className="empty">아직 지급된 화폐가 없습니다.</div></td></tr>}</tbody></table></div></section></div>
+  </div>;
 }

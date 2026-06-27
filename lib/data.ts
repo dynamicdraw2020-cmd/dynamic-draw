@@ -13,7 +13,12 @@ import type {
   DrawResult,
   DrawTicket,
   UserDrawTicket,
+  UserCurrencyBalance,
+  UserTicketExchangeRate,
   AdminTicketBalance,
+  AdminCurrencyBalance,
+  TicketExchangeRate,
+  VirtualCurrency,
   ExchangeRule,
   InventoryItem,
   Profile,
@@ -187,6 +192,40 @@ export async function getUserDrawTickets(profileId: string): Promise<UserDrawTic
     .filter((row): row is UserDrawTicket => Boolean(row));
 }
 
+
+export async function getUserCurrencyBalances(profileId: string): Promise<UserCurrencyBalance[]> {
+  if (demoMode) return [{ currency: { id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }, balance: 500 }];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("currency_balances")
+    .select("profile_id,currency_id,balance,updated_at,currency:virtual_currencies(id,name,code,symbol,is_active,sort_order)")
+    .eq("profile_id", profileId)
+    .gt("balance", 0)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return (data as Array<{ balance: number; currency: VirtualCurrency | VirtualCurrency[] | null }>)
+    .map((row) => { const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency; return currency ? { currency, balance: row.balance } : null; })
+    .filter((row): row is UserCurrencyBalance => Boolean(row));
+}
+
+export async function getUserTicketExchangeRates(): Promise<UserTicketExchangeRate[]> {
+  if (demoMode) return [{ id: "rate-demo", draw: mockDraw, currency: { id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }, currencyCost: 100, ticketQuantity: 1 }];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ticket_exchange_rates")
+    .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,draw:draws(id,name,slug,description,status,animation_ms,is_public,created_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order)),currency:virtual_currencies(id,name,code,symbol,is_active,sort_order)")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return (data as TicketExchangeRate[])
+    .map((row) => {
+      const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
+      const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
+      return draw && currency && draw.status === "ACTIVE" && currency.is_active ? { id: row.id, draw, currency, currencyCost: row.currency_cost, ticketQuantity: row.ticket_quantity } : null;
+    })
+    .filter((row): row is UserTicketExchangeRate => Boolean(row));
+}
+
 export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
   if (demoMode) {
     return [{
@@ -220,6 +259,36 @@ export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
       draw_name: draw?.name ?? "뽑기",
       updated_at: row.updated_at ?? null,
     };
+  });
+}
+
+
+export async function getVirtualCurrencies(): Promise<VirtualCurrency[]> {
+  if (demoMode) return [{ id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }];
+  const admin = createAdminClient();
+  const { data } = await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order").order("sort_order", { ascending: true });
+  return (data as VirtualCurrency[] | null) ?? [];
+}
+
+export async function getAdminCurrencyBalances(): Promise<AdminCurrencyBalance[]> {
+  if (demoMode) return [{ profile_id: "approved-1", currency_id: "coin-demo", balance: 500, profile_name: "승인 회원", profile_email: "member@example.com", member_code: "DD-2026-000432", currency_name: "이벤트 코인", currency_symbol: "EC", updated_at: new Date().toISOString() }];
+  const admin = createAdminClient();
+  const { data } = await admin.from("currency_balances").select("profile_id,currency_id,balance,updated_at,profiles(display_name,email,member_code),currency:virtual_currencies(name,symbol)").gt("balance", 0).order("updated_at", { ascending: false }).limit(500);
+  return (data ?? []).map((row) => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
+    return { profile_id: row.profile_id, currency_id: row.currency_id, balance: row.balance, profile_name: profile?.display_name ?? "회원", profile_email: profile?.email ?? "-", member_code: profile?.member_code ?? null, currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "", updated_at: row.updated_at ?? null };
+  });
+}
+
+export async function getAdminTicketExchangeRates(): Promise<Array<TicketExchangeRate & { draw_name?: string; currency_name?: string; currency_symbol?: string }>> {
+  if (demoMode) return [{ id: "rate-demo", draw_id: mockDraw.id, currency_id: "coin-demo", currency_cost: 100, ticket_quantity: 1, is_active: true, sort_order: 10, draw_name: mockDraw.name, currency_name: "이벤트 코인", currency_symbol: "EC" }];
+  const admin = createAdminClient();
+  const { data } = await admin.from("ticket_exchange_rates").select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,draw:draws(name),currency:virtual_currencies(name,symbol)").order("sort_order", { ascending: true });
+  return (data ?? []).map((row) => {
+    const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
+    const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
+    return { id: row.id, draw_id: row.draw_id, currency_id: row.currency_id, currency_cost: row.currency_cost, ticket_quantity: row.ticket_quantity, is_active: row.is_active, sort_order: row.sort_order, draw_name: draw?.name ?? "뽑기", currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "" };
   });
 }
 

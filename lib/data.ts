@@ -31,6 +31,7 @@ import type {
   UserResultRow,
   AdminUserActivityData,
   UserActivityEntry,
+  ProductCatalogItem,
 } from "@/lib/types";
 
 const emptyStats: PublicStats = {
@@ -67,8 +68,9 @@ export async function getPublicDraws(): Promise<Draw[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("draws")
-    .select("id,name,slug,description,status,animation_ms,is_public,created_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order)")
+    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,product_catalog_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)")
     .eq("is_public", true)
+    .is("deleted_at", null)
     .in("status", ["ACTIVE", "PAUSED"])
     .order("created_at", { ascending: false })
     .order("sort_order", { referencedTable: "rewards", ascending: true });
@@ -99,6 +101,28 @@ export async function getPublicStats(): Promise<PublicStats> {
   const { data, error } = await supabase.rpc("get_public_stats");
   if (error || !data) return emptyStats;
   return data as PublicStats;
+}
+
+export type PublicStatsByDrawRow = { drawId: string; drawName: string; total: number; rewards: Array<{ rewardId: string; name: string; color: string; count: number }> };
+
+export async function getPublicStatsByDraw(): Promise<PublicStatsByDrawRow[]> {
+  const [draws, results] = await Promise.all([getPublicDraws(), getPublicResults(300)]);
+  return draws.map((draw) => {
+    const drawResults = results.filter((result) => result.draw_id === draw.id);
+    const knownRewards = (draw.rewards ?? []).map((reward) => ({ rewardId: reward.id, name: reward.name, color: reward.color, count: drawResults.filter((result) => result.reward_id === reward.id).length }));
+    const extraRewards = drawResults.filter((result) => !(draw.rewards ?? []).some((reward) => reward.id === result.reward_id)).reduce<Array<{ rewardId: string; name: string; color: string; count: number }>>((acc, result) => {
+      const existing = acc.find((item) => item.rewardId === result.reward_id);
+      if (existing) existing.count += 1;
+      else acc.push({ rewardId: result.reward_id, name: result.reward_name, color: result.reward_color, count: 1 });
+      return acc;
+    }, []);
+    return { drawId: draw.id, drawName: draw.name, total: drawResults.length, rewards: [...knownRewards, ...extraRewards] };
+  });
+}
+
+export async function getPublicDashboardData() {
+  const [stats, draws, results, byDraw] = await Promise.all([getPublicStats(), getPublicDraws(), getPublicResults(160), getPublicStatsByDraw()]);
+  return { stats, draws, results, recent: results, byDraw };
 }
 
 export async function getAdminStats(): Promise<PublicStats> {
@@ -272,7 +296,7 @@ export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
 export async function getVirtualCurrencies(): Promise<VirtualCurrency[]> {
   if (demoMode) return [{ id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }];
   const admin = createAdminClient();
-  const { data } = await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order").order("sort_order", { ascending: true });
+  const { data } = await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true });
   return (data as VirtualCurrency[] | null) ?? [];
 }
 
@@ -290,11 +314,11 @@ export async function getAdminCurrencyBalances(): Promise<AdminCurrencyBalance[]
 export async function getAdminTicketExchangeRates(): Promise<Array<TicketExchangeRate & { draw_name?: string; currency_name?: string; currency_symbol?: string }>> {
   if (demoMode) return [{ id: "rate-demo", draw_id: mockDraw.id, currency_id: "coin-demo", currency_cost: 100, ticket_quantity: 1, is_active: true, sort_order: 10, draw_name: mockDraw.name, currency_name: "이벤트 코인", currency_symbol: "EC" }];
   const admin = createAdminClient();
-  const { data } = await admin.from("ticket_exchange_rates").select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,draw:draws(name),currency:virtual_currencies(name,symbol)").order("sort_order", { ascending: true });
+  const { data } = await admin.from("ticket_exchange_rates").select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at,draw:draws(name),currency:virtual_currencies(name,symbol)").is("deleted_at", null).order("sort_order", { ascending: true });
   return (data ?? []).map((row) => {
     const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
     const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
-    return { id: row.id, draw_id: row.draw_id, currency_id: row.currency_id, currency_cost: row.currency_cost, ticket_quantity: row.ticket_quantity, is_active: row.is_active, sort_order: row.sort_order, draw_name: draw?.name ?? "뽑기", currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "" };
+    return { id: row.id, draw_id: row.draw_id, currency_id: row.currency_id, currency_cost: row.currency_cost, ticket_quantity: row.ticket_quantity, is_active: row.is_active, sort_order: row.sort_order, deleted_at: row.deleted_at ?? null, draw_name: draw?.name ?? "뽑기", currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "" };
   });
 }
 
@@ -434,8 +458,15 @@ export async function getAdminMembers(): Promise<Profile[]> {
     ];
   }
   const admin = createAdminClient();
-  const { data } = await admin.from("profiles").select("*").order("created_at", { ascending: false });
+  const { data } = await admin.from("profiles").select("*").neq("status", "DELETED").order("created_at", { ascending: false });
   return (data as Profile[] | null) ?? [];
+}
+
+export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
+  if (demoMode) return [{ id: "product-demo", name: "Dynamic 입장권", description: "전체 상품 보관함 예시", image_url: null, color: "#111111", default_stock: null, is_inventory_item: true, is_exchange_material: false, is_active: true, sort_order: 10 }];
+  const admin = createAdminClient();
+  const { data } = await admin.from("product_catalog").select("id,name,description,image_url,color,default_stock,is_inventory_item,is_exchange_material,is_active,sort_order,created_at,updated_at,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+  return (data as ProductCatalogItem[] | null) ?? [];
 }
 
 export async function getAdminDraws(): Promise<Draw[]> {
@@ -444,6 +475,7 @@ export async function getAdminDraws(): Promise<Draw[]> {
   const { data } = await admin
     .from("draws")
     .select("*, rewards(*)")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .order("sort_order", { referencedTable: "rewards", ascending: true });
   return (data as Draw[] | null) ?? [];

@@ -1,4 +1,4 @@
-export type ProfileStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+export type ProfileStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED" | "DELETED";
 export type UserRole = "USER" | "VIEWER" | "MANAGER" | "SUPER_ADMIN";
 export type DrawStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ENDED";
 
@@ -18,6 +18,7 @@ export interface Profile {
 export interface Reward {
   id: string;
   draw_id: string;
+  product_catalog_id?: string | null;
   name: string;
   description: string | null;
   probability_units: number;
@@ -28,6 +29,24 @@ export interface Reward {
   is_exchange_material: boolean;
   is_active: boolean;
   sort_order: number;
+  deleted_at?: string | null;
+}
+
+
+export interface ProductCatalogItem {
+  id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  color: string;
+  default_stock: number | null;
+  is_inventory_item: boolean;
+  is_exchange_material: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+  deleted_at?: string | null;
 }
 
 export interface Draw {
@@ -40,6 +59,7 @@ export interface Draw {
   is_public: boolean;
   rewards?: Reward[];
   created_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface DrawTicket {
@@ -62,6 +82,7 @@ export interface VirtualCurrency {
   symbol: string;
   is_active: boolean;
   sort_order: number;
+  deleted_at?: string | null;
 }
 
 export interface UserCurrencyBalance {
@@ -90,6 +111,7 @@ export interface TicketExchangeRate {
   ticket_quantity: number;
   is_active: boolean;
   sort_order: number;
+  deleted_at?: string | null;
   draw?: Draw | Draw[] | null;
   currency?: VirtualCurrency | VirtualCurrency[] | null;
 }

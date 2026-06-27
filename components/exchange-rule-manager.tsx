@@ -27,6 +27,7 @@ function relationName(value: RuleRow["source"], fallback?: string) {
 export function ExchangeRuleManager({ rules, rewards }: { rules: RuleRow[]; rewards: Reward[] }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [formVersion, setFormVersion] = useState(0);
 
   async function request(url: string, method: string, body?: unknown) {
     const response = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
@@ -48,7 +49,7 @@ export function ExchangeRuleManager({ rules, rewards }: { rules: RuleRow[]; rewa
         targetRewardId: form.get("targetRewardId"),
         targetQuantity: Number(form.get("targetQuantity")),
       });
-      formElement.reset();
+      setFormVersion((version) => version + 1);
     } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); }
   }
 
@@ -67,7 +68,7 @@ export function ExchangeRuleManager({ rules, rewards }: { rules: RuleRow[]; rewa
 
   return (
     <div className="grid">
-      <form className="panel panel-pad form-grid" onSubmit={createRule}>
+      <form key={`exchange-rule-form-${formVersion}`} className="panel panel-pad form-grid" onSubmit={createRule}>
         <div><h2 className="panel-title">새 교환 규칙</h2><p className="panel-description">찢어진 입장권뿐 아니라 관리자가 만든 어떤 보관 상품도 교환 재료로 사용할 수 있습니다.</p></div>
         <div className="field"><label>규칙 이름</label><input className="input" name="name" required maxLength={80} placeholder="예: 입장권 5개로 DwX 교환" /></div>
         <div className="form-row">

@@ -11,6 +11,7 @@ const navLinks = [
   { href: "/raffles", label: "전체 추첨" },
   { href: "/play", label: "직접 참여" },
   { href: "/probabilities", label: "운영 안내" },
+  { href: "/dashboard", label: "대시보드" },
 ];
 
 export async function SiteHeader() {

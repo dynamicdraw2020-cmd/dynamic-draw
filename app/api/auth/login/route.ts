@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
+import { credentialToAuthEmail } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const schema = z.object({
-  email: z.email().transform((value) => value.toLowerCase()),
+  loginId: z.string().trim().min(1),
   password: z.string().min(1),
   nextPath: z.string().optional(),
 });
@@ -15,15 +16,15 @@ export async function POST(request: Request) {
   const csrf = enforceSameOrigin(request);
   if (csrf) return csrf;
   const meta = requestMeta(request);
-  const limited = await enforceRateLimit(`login:${meta.ip}`, 10, 60 * 10);
+  const limited = await enforceRateLimit(`login:v130:${meta.ip}`, 10, 60 * 10);
   if (limited) return limited;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return fail("이메일과 비밀번호를 확인해 주세요.", 422, "VALIDATION_ERROR");
+  if (!parsed.success) return fail("아이디와 비밀번호를 확인해 주세요.", 422, "VALIDATION_ERROR");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
-  if (error || !data.user) return fail("이메일 또는 비밀번호가 올바르지 않습니다.", 401, "INVALID_CREDENTIALS");
+  const { data, error } = await supabase.auth.signInWithPassword({ email: credentialToAuthEmail(parsed.data.loginId), password: parsed.data.password });
+  if (error || !data.user) return fail("아이디 또는 비밀번호가 올바르지 않습니다.", 401, "INVALID_CREDENTIALS");
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
       p_action: "ADMIN_LOGIN",
       p_target_table: "profiles",
       p_target_id: profile.id,
-      p_details: { email: profile.email },
+      p_details: { loginId: profile.username ?? profile.email },
       p_ip: meta.ip,
       p_user_agent: meta.userAgent,
     });

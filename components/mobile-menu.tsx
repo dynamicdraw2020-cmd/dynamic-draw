@@ -9,6 +9,8 @@ const links = [
   ["직접 뽑기", "/play"],
   ["실시간 결과", "/live"],
   ["확률표", "/probabilities"],
+  ["공지", "/notices"],
+  ["이벤트", "/events"],
   ["최근 당첨", "/results"],
   ["통계", "/stats"],
 ];

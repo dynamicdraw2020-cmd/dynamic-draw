@@ -23,7 +23,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!new Set(["approve", "reject", "suspend", "restore"]).has(action)) return fail("지원하지 않는 회원 처리입니다.", 404);
 
   const admin = createAdminClient();
-  const { data: target } = await admin.from("profiles").select("id,email,display_name,member_code,role,status").eq("id", id).maybeSingle();
+  const { data: target } = await admin.from("profiles").select("id,email,username,display_name,member_code,role,status").eq("id", id).maybeSingle();
   if (!target) return fail("회원을 찾을 수 없습니다.", 404);
   if (target.id === guard.auth.userId && ["reject", "suspend"].includes(action)) {
     return fail("현재 로그인한 본인 계정은 반려하거나 정지할 수 없습니다.", 409, "SELF_STATUS_CHANGE_BLOCKED");
@@ -70,7 +70,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     logAction = "MEMBER_RESTORED";
   }
 
-  const { data, error } = await admin.from("profiles").update(update).eq("id", id).select("id,email,display_name,member_code,role,status").single();
+  const { data, error } = await admin.from("profiles").update(update).eq("id", id).select("id,email,username,display_name,member_code,role,status").single();
   if (error) {
     if (error.code === "23505") return fail("이미 사용 중인 고유 ID입니다.", 409, "MEMBER_CODE_DUPLICATE");
     return fail("회원 상태를 변경하지 못했습니다.", 400, "MEMBER_UPDATE_FAILED", error.message);

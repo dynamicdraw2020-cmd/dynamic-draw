@@ -24,6 +24,8 @@ import type {
   Profile,
   PublicStats,
   PublicSettings,
+  Notice,
+  EventPost,
   UserResultRow,
 } from "@/lib/types";
 
@@ -39,8 +41,8 @@ const emptyStats: PublicStats = {
 export async function getPublicSettings(): Promise<PublicSettings> {
   const fallback = {
     siteName: "Dynamic Draw",
-    heroTitle: "결과는 짜릿하게, 운영은 투명하게.",
-    heroDescription: "확률과 결과를 실시간으로 공개하는 이벤트 추첨 시스템",
+    heroTitle: "투명한 이벤트 추첨 운영",
+    heroDescription: "공지, 이벤트, 추첨권, 결과 공개를 한곳에서 관리하는 운영형 추첨 플랫폼",
     publicStats: true,
   };
   if (!supabaseConfigured) return fallback;
@@ -233,7 +235,7 @@ export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
       draw_id: mockDraw.id,
       quantity: 3,
       profile_name: "승인 회원",
-      profile_email: "member@example.com",
+      profile_email: "member01",
       member_code: "DD-2026-000432",
       draw_name: mockDraw.name,
       updated_at: new Date().toISOString(),
@@ -242,7 +244,7 @@ export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("draw_tickets")
-    .select("profile_id,draw_id,quantity,updated_at,profiles(display_name,email,member_code),draws(name)")
+    .select("profile_id,draw_id,quantity,updated_at,profiles(display_name,email,username,member_code),draws(name)")
     .gt("quantity", 0)
     .order("updated_at", { ascending: false })
     .limit(500);
@@ -254,7 +256,7 @@ export async function getAdminTicketBalances(): Promise<AdminTicketBalance[]> {
       draw_id: row.draw_id,
       quantity: row.quantity,
       profile_name: profile?.display_name ?? "회원",
-      profile_email: profile?.email ?? "-",
+      profile_email: profile?.username ?? profile?.email ?? "-",
       member_code: profile?.member_code ?? null,
       draw_name: draw?.name ?? "뽑기",
       updated_at: row.updated_at ?? null,
@@ -271,13 +273,13 @@ export async function getVirtualCurrencies(): Promise<VirtualCurrency[]> {
 }
 
 export async function getAdminCurrencyBalances(): Promise<AdminCurrencyBalance[]> {
-  if (demoMode) return [{ profile_id: "approved-1", currency_id: "coin-demo", balance: 500, profile_name: "승인 회원", profile_email: "member@example.com", member_code: "DD-2026-000432", currency_name: "이벤트 코인", currency_symbol: "EC", updated_at: new Date().toISOString() }];
+  if (demoMode) return [{ profile_id: "approved-1", currency_id: "coin-demo", balance: 500, profile_name: "승인 회원", profile_email: "member01", member_code: "DD-2026-000432", currency_name: "이벤트 코인", currency_symbol: "EC", updated_at: new Date().toISOString() }];
   const admin = createAdminClient();
-  const { data } = await admin.from("currency_balances").select("profile_id,currency_id,balance,updated_at,profiles(display_name,email,member_code),currency:virtual_currencies(name,symbol)").gt("balance", 0).order("updated_at", { ascending: false }).limit(500);
+  const { data } = await admin.from("currency_balances").select("profile_id,currency_id,balance,updated_at,profiles(display_name,email,username,member_code),currency:virtual_currencies(name,symbol)").gt("balance", 0).order("updated_at", { ascending: false }).limit(500);
   return (data ?? []).map((row) => {
     const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
     const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
-    return { profile_id: row.profile_id, currency_id: row.currency_id, balance: row.balance, profile_name: profile?.display_name ?? "회원", profile_email: profile?.email ?? "-", member_code: profile?.member_code ?? null, currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "", updated_at: row.updated_at ?? null };
+    return { profile_id: row.profile_id, currency_id: row.currency_id, balance: row.balance, profile_name: profile?.display_name ?? "회원", profile_email: profile?.username ?? profile?.email ?? "-", member_code: profile?.member_code ?? null, currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "", updated_at: row.updated_at ?? null };
   });
 }
 
@@ -290,6 +292,54 @@ export async function getAdminTicketExchangeRates(): Promise<Array<TicketExchang
     const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
     return { id: row.id, draw_id: row.draw_id, currency_id: row.currency_id, currency_cost: row.currency_cost, ticket_quantity: row.ticket_quantity, is_active: row.is_active, sort_order: row.sort_order, draw_name: draw?.name ?? "뽑기", currency_name: currency?.name ?? "화폐", currency_symbol: currency?.symbol ?? "" };
   });
+}
+
+
+
+export async function getPublicNotices(limit = 5): Promise<Notice[]> {
+  if (demoMode) return [{ id: "notice-demo", title: "운영 안내", body: "모든 추첨 결과는 서버에서 먼저 결정되며, 화면의 룰렛은 연출용입니다.", is_pinned: true, is_public: true, starts_at: null, ends_at: null, created_at: new Date().toISOString() }];
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("notices")
+    .select("id,title,body,is_pinned,is_public,starts_at,ends_at,created_at,updated_at")
+    .eq("is_public", true)
+    .or(`starts_at.is.null,starts_at.lte.${now}`)
+    .or(`ends_at.is.null,ends_at.gte.${now}`)
+    .order("is_pinned", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as Notice[];
+}
+
+export async function getPublicEvents(limit = 12): Promise<EventPost[]> {
+  if (demoMode) return [{ id: "event-demo", title: "입장권 교환 이벤트", slug: "ticket-event", summary: "추첨권으로 룰렛을 돌리고, 모은 입장권을 상품으로 교환하세요.", body: "이벤트 화폐와 추첨권은 실제 결제가 아닌 운영용 포인트입니다.", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, sort_order: 10, created_at: new Date().toISOString() }];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id,title,slug,summary,body,status,is_public,starts_at,ends_at,sort_order,created_at,updated_at")
+    .eq("is_public", true)
+    .in("status", ["ACTIVE", "ENDED"])
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as EventPost[];
+}
+
+export async function getAdminNotices(): Promise<Notice[]> {
+  if (demoMode) return [{ id: "notice-demo", title: "운영 안내", body: "공지 예시입니다.", is_pinned: true, is_public: true, starts_at: null, ends_at: null, created_at: new Date().toISOString() }];
+  const admin = createAdminClient();
+  const { data } = await admin.from("notices").select("id,title,body,is_pinned,is_public,starts_at,ends_at,created_at,updated_at").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }).limit(200);
+  return (data as Notice[] | null) ?? [];
+}
+
+export async function getAdminEvents(): Promise<EventPost[]> {
+  if (demoMode) return [{ id: "event-demo", title: "입장권 교환 이벤트", slug: "ticket-event", summary: "이벤트 예시입니다.", body: "상세 설명", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, sort_order: 10, created_at: new Date().toISOString() }];
+  const admin = createAdminClient();
+  const { data } = await admin.from("events").select("id,title,slug,summary,body,status,is_public,starts_at,ends_at,sort_order,created_at,updated_at").order("sort_order", { ascending: true }).order("created_at", { ascending: false }).limit(200);
+  return (data as EventPost[] | null) ?? [];
 }
 
 export async function getAdminDashboardData() {
@@ -336,9 +386,10 @@ export async function getAdminMembers(): Promise<Profile[]> {
     return [
       {
         id: "pending-1",
-        email: "newuser@example.com",
+        email: "pending@dynamicdraw.local",
+        username: "pending_user",
         display_name: "가입 대기 회원",
-        phone: "010-1234-5678",
+        phone: null,
         role: "USER",
         status: "PENDING",
         member_code: null,
@@ -346,9 +397,10 @@ export async function getAdminMembers(): Promise<Profile[]> {
       },
       {
         id: "approved-1",
-        email: "member@example.com",
+        email: "demo@dynamicdraw.local",
+        username: "demo",
         display_name: "승인 회원",
-        phone: "010-9876-5432",
+        phone: null,
         role: "USER",
         status: "APPROVED",
         member_code: "DD-2026-000432",
@@ -405,7 +457,7 @@ export async function getAdminLogs(limit = 100) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("admin_logs")
-    .select("*, profiles!admin_logs_admin_id_fkey(display_name,email)")
+    .select("*, profiles!admin_logs_admin_id_fkey(display_name,username,email)")
     .order("created_at", { ascending: false })
     .limit(limit);
   return data ?? [];

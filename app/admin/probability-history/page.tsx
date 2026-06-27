@@ -31,7 +31,7 @@ export default async function ProbabilityHistoryPage({ searchParams }: { searchP
     <form className="panel panel-pad form-grid mt-3" method="get">
       <div className="form-row">
         <div className="field"><label htmlFor="history-draw">뽑기</label><select className="select" id="history-draw" name="draw" defaultValue={drawId}><option value="">전체 뽑기</option>{draws.map((draw) => <option key={draw.id} value={draw.id}>{draw.name}</option>)}</select></div>
-        <div className="field"><label htmlFor="history-admin">관리자</label><select className="select" id="history-admin" name="admin" defaultValue={adminId}><option value="">전체 관리자</option>{admins.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {member.email}</option>)}</select></div>
+        <div className="field"><label htmlFor="history-admin">관리자</label><select className="select" id="history-admin" name="admin" defaultValue={adminId}><option value="">전체 관리자</option>{admins.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {member.username ?? member.email}</option>)}</select></div>
       </div>
       <div className="form-row">
         <div className="field"><label htmlFor="history-from">시작일</label><input className="input" id="history-from" name="from" type="date" defaultValue={from} /></div>

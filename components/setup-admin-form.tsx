@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowRight, LoaderCircle, LockKeyhole, Mail, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, IdCard, LoaderCircle, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 export function SetupAdminForm({ disabledReason }: { disabledReason?: string | null }) {
   const [loading, setLoading] = useState(false);
+  const [formVersion, setFormVersion] = useState(0);
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(
     disabledReason ? { type: "info", text: disabledReason } : null,
   );
@@ -12,8 +13,7 @@ export function SetupAdminForm({ disabledReason }: { disabledReason?: string | n
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabledReason) return;
-    const form = event.currentTarget;
-    const values = new FormData(form);
+    const values = new FormData(event.currentTarget);
     const password = String(values.get("password") ?? "");
     const passwordConfirm = String(values.get("passwordConfirm") ?? "");
     if (password !== passwordConfirm) {
@@ -29,7 +29,7 @@ export function SetupAdminForm({ disabledReason }: { disabledReason?: string | n
       body: JSON.stringify({
         setupSecret: values.get("setupSecret"),
         displayName: values.get("displayName"),
-        email: values.get("email"),
+        loginId: values.get("loginId"),
         password,
       }),
     });
@@ -41,57 +41,34 @@ export function SetupAdminForm({ disabledReason }: { disabledReason?: string | n
       return;
     }
 
-    form.reset();
-    setMessage({
-      type: "success",
-      text: "최고 관리자 계정이 만들어졌습니다. 이제 로그인 페이지에서 관리자 이메일과 비밀번호로 로그인하세요.",
-    });
+    setFormVersion((version) => version + 1);
+    setMessage({ type: "success", text: "최고 관리자 계정이 만들어졌습니다. 이제 로그인 페이지에서 관리자 아이디와 비밀번호로 로그인하세요." });
   }
 
   return (
-    <form className="form-grid" onSubmit={submit}>
+    <form key={`setup-admin-form-${formVersion}`} className="form-grid" onSubmit={submit}>
       <div className="field">
         <label htmlFor="setupSecret">설치용 비밀문자</label>
         <div style={{ position: "relative" }}>
-          <ShieldCheck size={17} style={{ position: "absolute", left: 13, top: 14, color: "#71839a" }} />
-          <input
-            className="input"
-            id="setupSecret"
-            name="setupSecret"
-            type="password"
-            minLength={32}
-            required
-            autoComplete="off"
-            placeholder="Vercel의 ADMIN_SETUP_SECRET 값"
-            style={{ paddingLeft: 40 }}
-            disabled={Boolean(disabledReason)}
-          />
+          <ShieldCheck size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} />
+          <input className="input" id="setupSecret" name="setupSecret" type="password" minLength={32} required autoComplete="off" placeholder="Vercel의 ADMIN_SETUP_SECRET 값" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} />
         </div>
         <small>Vercel 환경변수에 넣은 32자 이상의 값을 그대로 입력합니다.</small>
       </div>
 
       <div className="field">
         <label htmlFor="displayName">관리자 이름</label>
-        <div style={{ position: "relative" }}>
-          <UserRound size={17} style={{ position: "absolute", left: 13, top: 14, color: "#71839a" }} />
-          <input className="input" id="displayName" name="displayName" minLength={2} maxLength={30} required placeholder="Dynamic 관리자" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} />
-        </div>
+        <div style={{ position: "relative" }}><UserRound size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="displayName" name="displayName" minLength={2} maxLength={30} required placeholder="운영자 이름" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} /></div>
       </div>
 
       <div className="field">
-        <label htmlFor="email">관리자 이메일</label>
-        <div style={{ position: "relative" }}>
-          <Mail size={17} style={{ position: "absolute", left: 13, top: 14, color: "#71839a" }} />
-          <input className="input" id="email" name="email" type="email" required autoComplete="email" placeholder="admin@example.com" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} />
-        </div>
+        <label htmlFor="loginId">관리자 아이디</label>
+        <div style={{ position: "relative" }}><IdCard size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="loginId" name="loginId" required minLength={4} maxLength={24} autoComplete="username" placeholder="admin2026" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} /></div>
       </div>
 
       <div className="field">
         <label htmlFor="password">관리자 비밀번호</label>
-        <div style={{ position: "relative" }}>
-          <LockKeyhole size={17} style={{ position: "absolute", left: 13, top: 14, color: "#71839a" }} />
-          <input className="input" id="password" name="password" type="password" minLength={10} maxLength={72} required autoComplete="new-password" placeholder="10자 이상" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} />
-        </div>
+        <div style={{ position: "relative" }}><LockKeyhole size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="password" name="password" type="password" minLength={10} maxLength={72} required autoComplete="new-password" placeholder="10자 이상" style={{ paddingLeft: 40 }} disabled={Boolean(disabledReason)} /></div>
       </div>
 
       <div className="field">

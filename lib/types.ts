@@ -5,6 +5,7 @@ export type DrawStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ENDED";
 export interface Profile {
   id: string;
   email: string;
+  username?: string | null;
   display_name: string;
   phone: string | null;
   role: UserRole;
@@ -74,6 +75,7 @@ export interface AdminCurrencyBalance {
   balance: number;
   profile_name: string;
   profile_email: string;
+  profile_username?: string | null;
   member_code: string | null;
   currency_name: string;
   currency_symbol: string;
@@ -106,6 +108,7 @@ export interface AdminTicketBalance {
   quantity: number;
   profile_name: string;
   profile_email: string;
+  profile_username?: string | null;
   member_code: string | null;
   draw_name: string;
   updated_at: string | null;
@@ -185,4 +188,31 @@ export interface PublicSettings {
   heroTitle: string;
   heroDescription: string;
   publicStats: boolean;
+}
+
+export interface Notice {
+  id: string;
+  title: string;
+  body: string;
+  is_pinned: boolean;
+  is_public: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface EventPost {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string | null;
+  body: string | null;
+  status: "DRAFT" | "ACTIVE" | "ENDED" | "ARCHIVED";
+  is_public: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at?: string | null;
 }

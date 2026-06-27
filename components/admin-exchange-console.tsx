@@ -3,6 +3,7 @@
 import { ArrowRightLeft, LoaderCircle, Search, UserRound } from "lucide-react";
 import { FormEvent, useState } from "react";
 import type { ExchangeRule, Profile } from "@/lib/types";
+import { displayLoginId } from "@/lib/identity";
 
 export function AdminExchangeConsole({ members, rules }: { members: Profile[]; rules: ExchangeRule[] }) {
   const [loading, setLoading] = useState(false);
@@ -52,7 +53,7 @@ export function AdminExchangeConsole({ members, rules }: { members: Profile[]; r
             <input className="input" id="admin-exchange-member" name="memberCode" list="member-code-list" required placeholder="DD-2026-001001" autoComplete="off" style={{ paddingLeft: 39 }} />
           </div>
           <datalist id="member-code-list">
-            {approved.map((member) => <option key={member.id} value={member.member_code ?? ""}>{member.display_name} · {member.email}</option>)}
+            {approved.map((member) => <option key={member.id} value={member.member_code ?? ""}>{member.display_name} · {displayLoginId(member)}</option>)}
           </datalist>
           <small><UserRound size={12} style={{ verticalAlign: -2 }} /> 회원 관리 화면에서 발급된 ID를 입력합니다.</small>
         </div>

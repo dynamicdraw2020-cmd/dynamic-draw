@@ -14,11 +14,11 @@ export async function SiteHeader() {
           <span className="brand-text">Dynamic <span>Draw</span></span>
         </Link>
         <nav className="nav" aria-label="주 메뉴">
-          <Link href="/draws">진행 중인 뽑기</Link>
+          <Link href="/events">이벤트</Link>
+          <Link href="/notices">공지</Link>
           <Link href="/play">직접 뽑기</Link>
-          <Link href="/live">실시간 결과</Link>
           <Link href="/probabilities">확률표</Link>
-          <Link href="/results">최근 당첨</Link>
+          <Link href="/results">최근 결과</Link>
           <Link href="/stats">통계</Link>
         </nav>
         <div className="header-actions">

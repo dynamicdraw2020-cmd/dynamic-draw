@@ -15,7 +15,7 @@ export default async function AdminUserActivityPage({ searchParams }: { searchPa
   await requireAdmin("VIEWER");
   const params = await searchParams;
   const memberId = first(params.memberId);
-  const members = (await getAdminMembers()).filter((member) => member.role === "USER");
+  const members = (await getAdminMembers()).filter((member) => member.status === "APPROVED");
   const selectedMemberId = memberId || members[0]?.id || "";
   const data = await getAdminUserActivityData(selectedMemberId);
   return <>

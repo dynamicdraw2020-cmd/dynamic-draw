@@ -60,7 +60,7 @@ export function ExchangeRuleManager({ rules, rewards }: { rules: RuleRow[]; rewa
   }
 
   async function remove(rule: RuleRow) {
-    if (!window.confirm(`“${rule.name}” 규칙을 비활성화할까요? 기존 교환 기록은 남습니다.`)) return;
+    if (!window.confirm(`“${rule.name}” 규칙을 완전히 삭제할까요? 기존 교환 기록은 규칙 없이 기록으로만 남습니다.`)) return;
     setLoading(rule.id);
     try { await request(`/api/admin/exchange-rules/${rule.id}`, "DELETE"); }
     catch (error) { window.alert((error as Error).message); } finally { setLoading(null); }

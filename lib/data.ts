@@ -78,6 +78,11 @@ export async function getPublicDraws(): Promise<Draw[]> {
   return data as Draw[];
 }
 
+export async function getPlayableDraws(): Promise<Draw[]> {
+  const draws = await getPublicDraws();
+  return draws.filter((draw) => draw.status === "ACTIVE");
+}
+
 export async function getActiveDraw(): Promise<Draw | null> {
   const draws = await getPublicDraws();
   return draws.find((draw) => draw.status === "ACTIVE") ?? draws[0] ?? null;
@@ -209,15 +214,16 @@ export async function getUserDrawTickets(profileId: string): Promise<UserDrawTic
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("draw_tickets")
-    .select("profile_id,draw_id,quantity,updated_at,draws(id,name,slug,description,status,animation_ms,is_public,created_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order))")
+    .select("profile_id,draw_id,quantity,updated_at,draws(id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at))")
     .eq("profile_id", profileId)
     .gt("quantity", 0)
     .order("updated_at", { ascending: false });
   if (error || !data) return [];
   return (data as DrawTicket[])
-    .map((row) => {
+    .map((row): UserDrawTicket | null => {
       const draw = Array.isArray(row.draws) ? row.draws[0] : row.draws;
-      return draw ? { draw, quantity: row.quantity } : null;
+      if (!draw || draw.deleted_at || !draw.is_public) return null;
+      return { draw: { ...draw, rewards: (draw.rewards ?? []).filter((reward) => reward.is_active && !reward.deleted_at) }, quantity: row.quantity };
     })
     .filter((row): row is UserDrawTicket => Boolean(row));
 }
@@ -243,15 +249,17 @@ export async function getUserTicketExchangeRates(): Promise<UserTicketExchangeRa
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ticket_exchange_rates")
-    .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,draw:draws(id,name,slug,description,status,animation_ms,is_public,created_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order)),currency:virtual_currencies(id,name,code,symbol,is_active,sort_order)")
+    .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at,draw:draws(id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)),currency:virtual_currencies(id,name,code,symbol,is_active,sort_order,deleted_at)")
     .eq("is_active", true)
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
   return (data as TicketExchangeRate[])
-    .map((row) => {
+    .map((row): UserTicketExchangeRate | null => {
       const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
       const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
-      return draw && currency && draw.status === "ACTIVE" && currency.is_active ? { id: row.id, draw, currency, currencyCost: row.currency_cost, ticketQuantity: row.ticket_quantity } : null;
+      if (!draw || !currency || draw.deleted_at || currency.deleted_at) return null;
+      return draw.status === "ACTIVE" && draw.is_public && currency.is_active ? { id: row.id, draw: { ...draw, rewards: (draw.rewards ?? []).filter((reward) => reward.is_active && !reward.deleted_at) }, currency, currencyCost: row.currency_cost, ticketQuantity: row.ticket_quantity } : null;
     })
     .filter((row): row is UserTicketExchangeRate => Boolean(row));
 }
@@ -588,10 +596,15 @@ export async function getPublicEventBySlug(slug: string): Promise<EventPost | nu
 function activityLabel(action: string, details: Record<string, unknown>) {
   const drawName = typeof details.drawName === "string" ? details.drawName : "이벤트";
   const currencyName = typeof details.currencyName === "string" ? details.currencyName : "화폐";
-  if (action === "DRAW_TICKETS_GRANTED") return { title: "추첨권 지급", description: `${drawName} 추첨권 ${(details.quantityAdded ?? "")}장 지급` };
+  const rewardName = typeof details.rewardName === "string" ? details.rewardName : "상품";
+  if (action === "DRAW_TICKETS_GRANTED") return { title: "추첨권 지급", description: `${drawName} 추첨권 ${details.quantityAdded ?? ""}장 지급` };
+  if (action === "DRAW_TICKETS_BULK_GRANTED") return { title: "추첨권 전체 지급", description: `${drawName} 추첨권을 전체 승인 계정에 지급` };
   if (action === "ADMIN_DRAW_TICKET_CONSUMED" || action === "USER_SELF_DRAW_EXECUTED") return { title: "추첨권 사용", description: `${drawName} 추첨권 1장 사용` };
-  if (action === "VIRTUAL_CURRENCY_GRANTED") return { title: "화폐 지급", description: `${currencyName} ${(details.amountAdded ?? "")} 지급` };
-  if (action === "USER_EXCHANGED_CURRENCY_TO_TICKETS") return { title: "화폐 교환", description: `${currencyName} 사용 후 ${drawName} 추첨권 ${(details.ticketsAdded ?? "")}장 교환` };
+  if (action === "VIRTUAL_CURRENCY_GRANTED") return { title: "화폐 지급", description: `${currencyName} ${details.amountAdded ?? ""} 지급` };
+  if (action === "VIRTUAL_CURRENCY_BULK_GRANTED") return { title: "화폐 전체 지급", description: `${currencyName}을 전체 승인 계정에 지급` };
+  if (action === "USER_EXCHANGED_CURRENCY_TO_TICKETS") return { title: "화폐 교환", description: `${currencyName} 사용 후 ${drawName} 추첨권 ${details.ticketsAdded ?? ""}장 교환` };
+  if (action === "EXCHANGE_COMPLETED") return { title: "상품 교환", description: `${rewardName} 교환 처리` };
+  if (action === "DRAW_RESULT") return { title: "추첨 결과", description: `${drawName}에서 ${rewardName} 결과 공개` };
   if (action === "MEMBER_BULK_APPROVED" || action === "MEMBER_APPROVED") return { title: "회원 승인", description: "관리자가 회원가입을 승인했습니다." };
   return { title: action, description: "운영 로그" };
 }
@@ -599,24 +612,60 @@ function activityLabel(action: string, details: Record<string, unknown>) {
 type ActivityTicketRow = { profile_id: string; draw_id: string; quantity: number; updated_at: string | null; profiles?: { display_name?: string | null; email?: string | null; username?: string | null; member_code?: string | null } | Array<{ display_name?: string | null; email?: string | null; username?: string | null; member_code?: string | null }> | null; draws?: { name?: string | null } | Array<{ name?: string | null }> | null };
 type ActivityCurrencyRow = { profile_id: string; currency_id: string; balance: number; updated_at: string | null; profiles?: { display_name?: string | null; email?: string | null; username?: string | null; member_code?: string | null } | Array<{ display_name?: string | null; email?: string | null; username?: string | null; member_code?: string | null }> | null; currency?: { name?: string | null; symbol?: string | null } | Array<{ name?: string | null; symbol?: string | null }> | null };
 type ActivityInventoryRow = { reward_id: string; quantity: number; rewards?: { name?: string | null; color?: string | null; is_exchange_material?: boolean | null } | Array<{ name?: string | null; color?: string | null; is_exchange_material?: boolean | null }> | null };
-type ActivityLogRow = { id: string; action: string; target_id: string | null; details: Record<string, unknown> | null; created_at: string };
+type ActivityLogRow = { id: string; action: string; target_table?: string | null; target_id: string | null; details: Record<string, unknown> | null; created_at: string };
+type ActivityCurrencyLogRow = { id: string; action: string; amount: number; memo: string | null; balance_after: number; created_at: string; currency?: { name?: string | null; symbol?: string | null } | Array<{ name?: string | null; symbol?: string | null }> | null };
+type ActivityExchangeLogRow = { id: string; source_quantity: number; target_quantity: number; created_at: string; source?: { name?: string | null } | Array<{ name?: string | null }> | null; target?: { name?: string | null } | Array<{ name?: string | null }> | null };
+type ActivityResultRow = { id: string; created_at: string; revealed_at: string | null; voided_at: string | null; draws?: { name?: string | null } | Array<{ name?: string | null }> | null; rewards?: { name?: string | null; color?: string | null } | Array<{ name?: string | null; color?: string | null }> | null };
+
+function detailMatchesProfile(details: Record<string, unknown>, profileId: string) {
+  const keys = ["profileId", "participantId", "targetProfileId", "winnerProfileId", "approvedProfileId"];
+  return keys.some((key) => details[key] === profileId);
+}
 
 export async function getAdminUserActivityData(profileId?: string): Promise<AdminUserActivityData> {
   if (demoMode) return { profile: null, tickets: [], currencies: [], inventory: mockInventory, activities: [] };
   if (!profileId) return { profile: null, tickets: [], currencies: [], inventory: [], activities: [] };
   const admin = createAdminClient();
-  const [profileResult, ticketResult, currencyResult, inventoryResult, logResult] = await Promise.all([
+  const [profileResult, ticketResult, currencyResult, inventoryResult, logResult, currencyLogResult, exchangeLogResult, resultResult] = await Promise.all([
     admin.from("profiles").select("*").eq("id", profileId).maybeSingle(),
     admin.from("draw_tickets").select("profile_id,draw_id,quantity,updated_at,profiles(display_name,email,username,member_code),draws(name)").eq("profile_id", profileId).order("updated_at", { ascending: false }),
     admin.from("currency_balances").select("profile_id,currency_id,balance,updated_at,profiles(display_name,email,username,member_code),currency:virtual_currencies(name,symbol)").eq("profile_id", profileId).order("updated_at", { ascending: false }),
     admin.from("participant_items").select("reward_id,quantity,rewards(name,color,is_exchange_material)").eq("profile_id", profileId).gt("quantity", 0),
-    admin.from("admin_logs").select("id,action,target_id,details,created_at").order("created_at", { ascending: false }).limit(300),
+    admin.from("admin_logs").select("id,action,target_table,target_id,details,created_at").order("created_at", { ascending: false }).limit(600),
+    admin.from("currency_logs").select("id,action,amount,memo,balance_after,created_at,currency:virtual_currencies(name,symbol)").eq("profile_id", profileId).order("created_at", { ascending: false }).limit(160),
+    admin.from("exchange_logs").select("id,source_quantity,target_quantity,created_at,source:rewards!exchange_logs_source_reward_id_fkey(name),target:rewards!exchange_logs_target_reward_id_fkey(name)").eq("profile_id", profileId).order("created_at", { ascending: false }).limit(160),
+    admin.from("results").select("id,created_at,revealed_at,voided_at,draws(name),rewards(name,color)").eq("participant_id", profileId).order("created_at", { ascending: false }).limit(160),
   ]);
 
   const profile = (profileResult.data as Profile | null) ?? null;
-  const tickets = ((ticketResult.data ?? []) as ActivityTicketRow[]).map((row) => { const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const d = Array.isArray(row.draws) ? row.draws[0] : row.draws; return { profile_id: row.profile_id, draw_id: row.draw_id, quantity: row.quantity, profile_name: p?.display_name ?? "회원", profile_email: p?.email ?? "", profile_username: p?.username ?? null, member_code: p?.member_code ?? null, draw_name: d?.name ?? "뽑기", updated_at: row.updated_at ?? null }; }) as AdminTicketBalance[];
-  const currencies = ((currencyResult.data ?? []) as ActivityCurrencyRow[]).map((row) => { const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const c = Array.isArray(row.currency) ? row.currency[0] : row.currency; return { profile_id: row.profile_id, currency_id: row.currency_id, balance: row.balance, profile_name: p?.display_name ?? "회원", profile_email: p?.email ?? "", profile_username: p?.username ?? null, member_code: p?.member_code ?? null, currency_name: c?.name ?? "화폐", currency_symbol: c?.symbol ?? "", updated_at: row.updated_at ?? null }; }) as AdminCurrencyBalance[];
+  const tickets = ((ticketResult.data ?? []) as ActivityTicketRow[]).map((row) => { const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const d = Array.isArray(row.draws) ? row.draws[0] : row.draws; return { profile_id: row.profile_id, draw_id: row.draw_id, quantity: row.quantity, profile_name: p?.display_name ?? "회원", profile_email: p?.username ?? p?.email ?? "", profile_username: p?.username ?? null, member_code: p?.member_code ?? null, draw_name: d?.name ?? "뽑기", updated_at: row.updated_at ?? null }; }) as AdminTicketBalance[];
+  const currencies = ((currencyResult.data ?? []) as ActivityCurrencyRow[]).map((row) => { const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const c = Array.isArray(row.currency) ? row.currency[0] : row.currency; return { profile_id: row.profile_id, currency_id: row.currency_id, balance: row.balance, profile_name: p?.display_name ?? "회원", profile_email: p?.username ?? p?.email ?? "", profile_username: p?.username ?? null, member_code: p?.member_code ?? null, currency_name: c?.name ?? "화폐", currency_symbol: c?.symbol ?? "", updated_at: row.updated_at ?? null }; }) as AdminCurrencyBalance[];
   const inventory = ((inventoryResult.data ?? []) as ActivityInventoryRow[]).map((row) => { const r = Array.isArray(row.rewards) ? row.rewards[0] : row.rewards; return { reward_id: row.reward_id, reward_name: r?.name ?? "상품", reward_color: r?.color ?? "#94a3b8", quantity: row.quantity, is_exchange_material: Boolean(r?.is_exchange_material) }; }) as InventoryItem[];
-  const activities = ((logResult.data ?? []) as ActivityLogRow[]).filter((row) => { const details = (row.details ?? {}) as Record<string, unknown>; return row.target_id === profileId || details.profileId === profileId || details.participantId === profileId; }).slice(0,80).map((row) => { const details = (row.details ?? {}) as Record<string, unknown>; const label = activityLabel(row.action, details); return { id: row.id, created_at: row.created_at, action: row.action, title: label.title, description: label.description, amount: typeof details.quantityAdded === "number" ? details.quantityAdded : typeof details.amountAdded === "number" ? details.amountAdded : null }; }) as UserActivityEntry[];
+
+  const adminActivities = ((logResult.data ?? []) as ActivityLogRow[])
+    .filter((row) => { const details = (row.details ?? {}) as Record<string, unknown>; return row.target_id === profileId || detailMatchesProfile(details, profileId); })
+    .map((row) => { const details = (row.details ?? {}) as Record<string, unknown>; const label = activityLabel(row.action, details); return { id: `admin-${row.id}`, created_at: row.created_at, action: row.action, title: label.title, description: label.description, amount: typeof details.quantityAdded === "number" ? details.quantityAdded : typeof details.amountAdded === "number" ? details.amountAdded : null }; }) as UserActivityEntry[];
+
+  const currencyActivities = ((currencyLogResult.data ?? []) as ActivityCurrencyLogRow[]).map((row) => {
+    const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
+    const sign = row.amount >= 0 ? "+" : "";
+    return { id: `currency-${row.id}`, created_at: row.created_at, action: row.action, title: row.amount >= 0 ? "화폐 지급" : "화폐 사용", description: `${currency?.name ?? "화폐"} ${sign}${row.amount.toLocaleString()}${currency?.symbol ?? ""} · 잔액 ${row.balance_after.toLocaleString()}${currency?.symbol ?? ""}${row.memo ? ` · ${row.memo}` : ""}`, amount: row.amount };
+  }) as UserActivityEntry[];
+
+  const exchangeActivities = ((exchangeLogResult.data ?? []) as ActivityExchangeLogRow[]).map((row) => {
+    const source = Array.isArray(row.source) ? row.source[0] : row.source;
+    const target = Array.isArray(row.target) ? row.target[0] : row.target;
+    return { id: `exchange-${row.id}`, created_at: row.created_at, action: "EXCHANGE_COMPLETED", title: "상품 교환", description: `${source?.name ?? "재료 상품"} ${row.source_quantity.toLocaleString()}개 → ${target?.name ?? "교환 상품"} ${row.target_quantity.toLocaleString()}개`, amount: row.target_quantity };
+  }) as UserActivityEntry[];
+
+  const resultActivities = ((resultResult.data ?? []) as ActivityResultRow[]).map((row) => {
+    const draw = Array.isArray(row.draws) ? row.draws[0] : row.draws;
+    const reward = Array.isArray(row.rewards) ? row.rewards[0] : row.rewards;
+    return { id: `result-${row.id}`, created_at: row.revealed_at ?? row.created_at, action: "DRAW_RESULT", title: row.voided_at ? "추첨 결과 무효" : "추첨 결과", description: `${draw?.name ?? "이벤트"} · ${reward?.name ?? "상품"}${row.voided_at ? " · 무효 처리" : ""}`, amount: null };
+  }) as UserActivityEntry[];
+
+  const activities = [...adminActivities, ...currencyActivities, ...exchangeActivities, ...resultActivities]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 160);
   return { profile, tickets, currencies, inventory, activities };
 }

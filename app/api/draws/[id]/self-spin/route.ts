@@ -8,7 +8,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const demo = rejectDemoMutation(); if (demo) return demo;
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiUser(); if ("error" in guard) return guard.error;
-  if (guard.auth.profile.role !== "USER") return fail("일반 회원만 직접 뽑기를 실행할 수 있습니다.", 403, "USER_ROLE_REQUIRED");
   const limited = await enforceRateLimit(`self-spin:${guard.auth.userId}`, 20, 60); if (limited) return limited;
 
   const { id } = await context.params;

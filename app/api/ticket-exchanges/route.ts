@@ -4,7 +4,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const schema = z.object({ rateId: z.uuid(), bundleCount: z.number().int().min(1).max(100), idempotencyKey: z.uuid() });
 export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo; const csrf = enforceSameOrigin(request); if (csrf) return csrf; const guard = await requireApiUser(); if ("error" in guard) return guard.error;
-  if (guard.auth.profile.role !== "USER") return fail("일반 회원만 추첨권으로 교환할 수 있습니다.", 403, "USER_ROLE_REQUIRED");
   const limited = await enforceRateLimit(`ticket-exchange:${guard.auth.userId}`, 20, 60); if (limited) return limited;
   const parsed = schema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return fail("교환 요청을 확인해 주세요.", 422);
   const meta = requestMeta(request); const admin = createAdminClient(); const { data, error } = await admin.rpc("user_exchange_currency_for_tickets", { p_rate_id: parsed.data.rateId, p_profile_id: guard.auth.userId, p_bundle_count: parsed.data.bundleCount, p_idempotency_key: parsed.data.idempotencyKey, p_ip: meta.ip, p_user_agent: meta.userAgent });

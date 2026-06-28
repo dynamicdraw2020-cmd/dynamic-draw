@@ -14,8 +14,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const demo = rejectDemoMutation(); if (demo) return demo; const csrf = enforceSameOrigin(request); if (csrf) return csrf; const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id } = await context.params; const admin = createAdminClient();
-  const { error } = await admin.from("ticket_exchange_rates").update({ is_active: false, deleted_at: new Date().toISOString() }).eq("id", id);
+  const { data: rate } = await admin.from("ticket_exchange_rates").select("id,draw_id,currency_id,currency_cost,ticket_quantity").eq("id", id).maybeSingle();
+  if (!rate) return fail("교환비를 찾을 수 없습니다.", 404, "TICKET_RATE_NOT_FOUND");
+  const { error } = await admin.from("ticket_exchange_rates").delete().eq("id", id);
   if (error) return fail("교환비를 삭제하지 못했습니다.", 400, "TICKET_RATE_DELETE_FAILED", error.message);
-  const meta = requestMeta(request); await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "TICKET_EXCHANGE_RATE_DELETED", p_target_table: "ticket_exchange_rates", p_target_id: id, p_details: {}, p_ip: meta.ip, p_user_agent: meta.userAgent });
+  const meta = requestMeta(request); await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "TICKET_EXCHANGE_RATE_DELETED", p_target_table: "ticket_exchange_rates", p_target_id: id, p_details: rate, p_ip: meta.ip, p_user_agent: meta.userAgent });
   return ok({ id, deleted: true });
 }

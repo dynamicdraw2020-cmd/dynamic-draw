@@ -42,9 +42,11 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id } = await context.params;
   const admin = createAdminClient();
-  const { error } = await admin.from("exchange_rules").update({ is_active: false }).eq("id", id);
-  if (error) return fail("교환 규칙을 비활성화하지 못했습니다.", 400);
+  const { data: rule } = await admin.from("exchange_rules").select("*").eq("id", id).maybeSingle();
+  if (!rule) return fail("교환 규칙을 찾을 수 없습니다.", 404, "EXCHANGE_RULE_NOT_FOUND");
+  const { error } = await admin.from("exchange_rules").delete().eq("id", id);
+  if (error) return fail("교환 규칙을 삭제하지 못했습니다.", 400, "EXCHANGE_RULE_DELETE_FAILED", error.message);
   const meta = requestMeta(request);
-  await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "EXCHANGE_RULE_DEACTIVATED", p_target_table: "exchange_rules", p_target_id: id, p_details: {}, p_ip: meta.ip, p_user_agent: meta.userAgent });
-  return ok({ id, deactivated: true });
+  await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "EXCHANGE_RULE_DELETED", p_target_table: "exchange_rules", p_target_id: id, p_details: rule, p_ip: meta.ip, p_user_agent: meta.userAgent });
+  return ok({ id, deleted: true });
 }

@@ -65,8 +65,10 @@ export async function getPublicSettings(): Promise<PublicSettings> {
 
 export async function getPublicDraws(): Promise<Draw[]> {
   if (!supabaseConfigured) return [mockDraw];
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  // 공개 페이지는 사용자가 볼 수 있는 활성/일시정지 뽑기만 노출합니다.
+  // Supabase의 컬럼 단위 권한이 꼬여도 공개 데이터가 비어 보이지 않도록 서버 전용 키로 조회합니다.
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("draws")
     .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,product_catalog_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)")
     .eq("is_public", true)
@@ -79,8 +81,21 @@ export async function getPublicDraws(): Promise<Draw[]> {
 }
 
 export async function getPlayableDraws(): Promise<Draw[]> {
-  const draws = await getPublicDraws();
-  return draws.filter((draw) => draw.status === "ACTIVE");
+  if (!supabaseConfigured) return [mockDraw];
+  // 직접 참여 화면은 “연동 확인”이 중요하므로 준비 중인 공개 뽑기도 보여줍니다.
+  // 단, 실제 추첨 실행은 UserRouletteDraw에서 ACTIVE 상태일 때만 가능합니다.
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("draws")
+    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,product_catalog_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)")
+    .eq("is_public", true)
+    .is("deleted_at", null)
+    .in("status", ["DRAFT", "ACTIVE", "PAUSED"])
+    .order("status", { ascending: true })
+    .order("created_at", { ascending: false })
+    .order("sort_order", { referencedTable: "rewards", ascending: true });
+  if (error || !data) return [];
+  return data as Draw[];
 }
 
 export async function getActiveDraw(): Promise<Draw | null> {
@@ -211,8 +226,8 @@ export async function getUserResults(profileId: string, limit = 20): Promise<Use
 
 export async function getUserDrawTickets(profileId: string): Promise<UserDrawTicket[]> {
   if (demoMode) return [{ draw: mockDraw, quantity: 3 }];
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("draw_tickets")
     .select("profile_id,draw_id,quantity,updated_at,draws(id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at))")
     .eq("profile_id", profileId)
@@ -231,23 +246,26 @@ export async function getUserDrawTickets(profileId: string): Promise<UserDrawTic
 
 export async function getUserCurrencyBalances(profileId: string): Promise<UserCurrencyBalance[]> {
   if (demoMode) return [{ currency: { id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }, balance: 500 }];
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("currency_balances")
-    .select("profile_id,currency_id,balance,updated_at,currency:virtual_currencies(id,name,code,symbol,is_active,sort_order)")
+    .select("profile_id,currency_id,balance,updated_at,currency:virtual_currencies(id,name,code,symbol,is_active,sort_order,deleted_at)")
     .eq("profile_id", profileId)
     .gt("balance", 0)
     .order("updated_at", { ascending: false });
   if (error || !data) return [];
   return (data as Array<{ balance: number; currency: VirtualCurrency | VirtualCurrency[] | null }>)
-    .map((row) => { const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency; return currency ? { currency, balance: row.balance } : null; })
+    .map((row) => {
+      const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
+      return currency && currency.is_active && !currency.deleted_at ? { currency, balance: row.balance } : null;
+    })
     .filter((row): row is UserCurrencyBalance => Boolean(row));
 }
 
 export async function getUserTicketExchangeRates(): Promise<UserTicketExchangeRate[]> {
   if (demoMode) return [{ id: "rate-demo", draw: mockDraw, currency: { id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }, currencyCost: 100, ticketQuantity: 1 }];
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("ticket_exchange_rates")
     .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at,draw:draws(id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)),currency:virtual_currencies(id,name,code,symbol,is_active,sort_order,deleted_at)")
     .eq("is_active", true)
@@ -259,7 +277,9 @@ export async function getUserTicketExchangeRates(): Promise<UserTicketExchangeRa
       const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
       const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
       if (!draw || !currency || draw.deleted_at || currency.deleted_at) return null;
-      return draw.status === "ACTIVE" && draw.is_public && currency.is_active ? { id: row.id, draw: { ...draw, rewards: (draw.rewards ?? []).filter((reward) => reward.is_active && !reward.deleted_at) }, currency, currencyCost: row.currency_cost, ticketQuantity: row.ticket_quantity } : null;
+      return draw.is_public && draw.status !== "ENDED" && currency.is_active
+        ? { id: row.id, draw: { ...draw, rewards: (draw.rewards ?? []).filter((reward) => reward.is_active && !reward.deleted_at) }, currency, currencyCost: row.currency_cost, ticketQuantity: row.ticket_quantity }
+        : null;
     })
     .filter((row): row is UserTicketExchangeRate => Boolean(row));
 }

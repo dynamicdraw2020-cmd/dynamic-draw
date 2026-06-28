@@ -42,6 +42,35 @@ const emptyStats: PublicStats = {
   dailyStats: [],
 };
 
+async function attachRewards(admin: ReturnType<typeof createAdminClient>, draws: Draw[]): Promise<Draw[]> {
+  const drawIds = draws.map((draw) => draw.id).filter(Boolean);
+  if (!drawIds.length) return draws.map((draw) => ({ ...draw, rewards: [] }));
+  const { data } = await admin
+    .from("rewards")
+    .select("id,draw_id,product_catalog_id,name,description,image_url,color,probability_units,stock,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at")
+    .in("draw_id", drawIds)
+    .order("sort_order", { ascending: true });
+  const rewardsByDraw = new Map<string, Draw["rewards"]>();
+  for (const reward of (data ?? []) as NonNullable<Draw["rewards"]>) {
+    if (reward.deleted_at || !reward.is_active) continue;
+    const list = rewardsByDraw.get(reward.draw_id) ?? [];
+    list.push(reward);
+    rewardsByDraw.set(reward.draw_id, list);
+  }
+  return draws.map((draw) => ({ ...draw, rewards: rewardsByDraw.get(draw.id) ?? [] }));
+}
+
+async function getDrawMap(admin: ReturnType<typeof createAdminClient>, drawIds: string[]): Promise<Map<string, Draw>> {
+  const uniqueIds = Array.from(new Set(drawIds.filter(Boolean)));
+  if (!uniqueIds.length) return new Map();
+  const { data } = await admin
+    .from("draws")
+    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at")
+    .in("id", uniqueIds);
+  const draws = await attachRewards(admin, ((data ?? []) as Draw[]).filter((draw) => !draw.deleted_at));
+  return new Map(draws.map((draw) => [draw.id, draw]));
+}
+
 
 export async function getPublicSettings(): Promise<PublicSettings> {
   const fallback = {
@@ -65,37 +94,32 @@ export async function getPublicSettings(): Promise<PublicSettings> {
 
 export async function getPublicDraws(): Promise<Draw[]> {
   if (!supabaseConfigured) return [mockDraw];
-  // 공개 페이지는 사용자가 볼 수 있는 활성/일시정지 뽑기만 노출합니다.
-  // Supabase의 컬럼 단위 권한이 꼬여도 공개 데이터가 비어 보이지 않도록 서버 전용 키로 조회합니다.
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("draws")
-    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,product_catalog_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)")
+    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at")
     .eq("is_public", true)
     .is("deleted_at", null)
     .in("status", ["ACTIVE", "PAUSED"])
-    .order("created_at", { ascending: false })
-    .order("sort_order", { referencedTable: "rewards", ascending: true });
+    .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return data as Draw[];
+  return attachRewards(admin, data as Draw[]);
 }
 
 export async function getPlayableDraws(): Promise<Draw[]> {
   if (!supabaseConfigured) return [mockDraw];
-  // 직접 참여 화면은 “연동 확인”이 중요하므로 준비 중인 공개 뽑기도 보여줍니다.
-  // 단, 실제 추첨 실행은 UserRouletteDraw에서 ACTIVE 상태일 때만 가능합니다.
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("draws")
-    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,product_catalog_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)")
+    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at")
     .eq("is_public", true)
     .is("deleted_at", null)
     .in("status", ["DRAFT", "ACTIVE", "PAUSED"])
-    .order("status", { ascending: true })
-    .order("created_at", { ascending: false })
-    .order("sort_order", { referencedTable: "rewards", ascending: true });
+    .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return data as Draw[];
+  const order: Record<Draw["status"], number> = { ACTIVE: 0, DRAFT: 1, PAUSED: 2, ENDED: 3 };
+  const draws = await attachRewards(admin, data as Draw[]);
+  return draws.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.name.localeCompare(b.name, "ko"));
 }
 
 export async function getActiveDraw(): Promise<Draw | null> {
@@ -229,16 +253,18 @@ export async function getUserDrawTickets(profileId: string): Promise<UserDrawTic
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("draw_tickets")
-    .select("profile_id,draw_id,quantity,updated_at,draws(id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at))")
+    .select("profile_id,draw_id,quantity,updated_at")
     .eq("profile_id", profileId)
     .gt("quantity", 0)
     .order("updated_at", { ascending: false });
   if (error || !data) return [];
-  return (data as DrawTicket[])
+  const ticketRows = data as DrawTicket[];
+  const drawMap = await getDrawMap(admin, ticketRows.map((row) => row.draw_id));
+  return ticketRows
     .map((row): UserDrawTicket | null => {
-      const draw = Array.isArray(row.draws) ? row.draws[0] : row.draws;
-      if (!draw || draw.deleted_at || !draw.is_public) return null;
-      return { draw: { ...draw, rewards: (draw.rewards ?? []).filter((reward) => reward.is_active && !reward.deleted_at) }, quantity: row.quantity };
+      const draw = drawMap.get(row.draw_id);
+      if (!draw || draw.deleted_at || !draw.is_public || draw.status === "ENDED") return null;
+      return { draw, quantity: row.quantity };
     })
     .filter((row): row is UserDrawTicket => Boolean(row));
 }
@@ -249,15 +275,24 @@ export async function getUserCurrencyBalances(profileId: string): Promise<UserCu
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("currency_balances")
-    .select("profile_id,currency_id,balance,updated_at,currency:virtual_currencies(id,name,code,symbol,is_active,sort_order,deleted_at)")
+    .select("profile_id,currency_id,balance,updated_at")
     .eq("profile_id", profileId)
     .gt("balance", 0)
     .order("updated_at", { ascending: false });
   if (error || !data) return [];
-  return (data as Array<{ balance: number; currency: VirtualCurrency | VirtualCurrency[] | null }>)
-    .map((row) => {
-      const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
-      return currency && currency.is_active && !currency.deleted_at ? { currency, balance: row.balance } : null;
+  const rows = data as Array<{ currency_id: string; balance: number }>;
+  const currencyIds = Array.from(new Set(rows.map((row) => row.currency_id).filter(Boolean)));
+  if (!currencyIds.length) return [];
+  const { data: currencies } = await admin
+    .from("virtual_currencies")
+    .select("id,name,code,symbol,is_active,sort_order,deleted_at")
+    .in("id", currencyIds);
+  const currencyMap = new Map(((currencies ?? []) as VirtualCurrency[]).map((currency) => [currency.id, currency]));
+  return rows
+    .map((row): UserCurrencyBalance | null => {
+      const currency = currencyMap.get(row.currency_id);
+      if (!currency || !currency.is_active || currency.deleted_at) return null;
+      return { currency, balance: row.balance };
     })
     .filter((row): row is UserCurrencyBalance => Boolean(row));
 }
@@ -267,19 +302,24 @@ export async function getUserTicketExchangeRates(): Promise<UserTicketExchangeRa
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("ticket_exchange_rates")
-    .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at,draw:draws(id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at,rewards(id,draw_id,name,description,image_url,color,probability_units,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at)),currency:virtual_currencies(id,name,code,symbol,is_active,sort_order,deleted_at)")
+    .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
-  return (data as TicketExchangeRate[])
-    .map((row): UserTicketExchangeRate | null => {
-      const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
-      const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
-      if (!draw || !currency || draw.deleted_at || currency.deleted_at) return null;
-      return draw.is_public && draw.status !== "ENDED" && currency.is_active
-        ? { id: row.id, draw: { ...draw, rewards: (draw.rewards ?? []).filter((reward) => reward.is_active && !reward.deleted_at) }, currency, currencyCost: row.currency_cost, ticketQuantity: row.ticket_quantity }
-        : null;
+  const rates = data as TicketExchangeRate[];
+  const drawMap = await getDrawMap(admin, rates.map((rate) => rate.draw_id));
+  const currencyIds = Array.from(new Set(rates.map((rate) => rate.currency_id).filter(Boolean)));
+  const { data: currencies } = currencyIds.length
+    ? await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order,deleted_at").in("id", currencyIds)
+    : { data: [] };
+  const currencyMap = new Map(((currencies ?? []) as VirtualCurrency[]).map((currency) => [currency.id, currency]));
+  return rates
+    .map((rate): UserTicketExchangeRate | null => {
+      const draw = drawMap.get(rate.draw_id);
+      const currency = currencyMap.get(rate.currency_id);
+      if (!draw || !currency || draw.deleted_at || !draw.is_public || draw.status === "ENDED" || currency.deleted_at || !currency.is_active) return null;
+      return { id: rate.id, draw, currency, currencyCost: rate.currency_cost, ticketQuantity: rate.ticket_quantity };
     })
     .filter((row): row is UserTicketExchangeRate => Boolean(row));
 }

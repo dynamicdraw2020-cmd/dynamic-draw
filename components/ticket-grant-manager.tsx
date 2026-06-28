@@ -56,12 +56,13 @@ export function TicketGrantManager({ draws, members, balances, currencies, curre
 
   async function submitCurrency(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!currencyId) return window.alert("화폐를 선택해 주세요.");
+    const effectiveCurrencyId = activeCurrencies.some((currency) => currency.id === currencyId) ? currencyId : activeCurrencies[0]?.id ?? "";
+    if (!effectiveCurrencyId) return window.alert("사용 가능한 화폐가 없습니다. 먼저 화폐를 만들거나 복구해 주세요.");
     if (currencyTargetMode === "ONE" && !profileId) return window.alert("회원을 선택해 주세요.");
     if (currencyTargetMode === "ALL" && !window.confirm(`승인된 계정 ${approvedMembers.length.toLocaleString()}명에게 각각 ${currencyAmount.toLocaleString()}개씩 지급할까요?`)) return;
     setLoading("currency");
     try {
-      const body = await jsonRequest("/api/admin/currency-grants", { currencyId, targetMode: currencyTargetMode, profileId: currencyTargetMode === "ALL" ? null : profileId, amount: currencyAmount, memo: currencyMemo });
+      const body = await jsonRequest("/api/admin/currency-grants", { currencyId: effectiveCurrencyId, targetMode: currencyTargetMode, profileId: currencyTargetMode === "ALL" ? null : profileId, amount: currencyAmount, memo: currencyMemo });
       window.alert(currencyTargetMode === "ALL" ? `전체 화폐 지급 완료 · ${body.data?.affectedCount ?? approvedMembers.length}명` : `화폐 지급 완료 · 현재 보유 ${body.data?.balance ?? "갱신"}`);
       setCurrencyMemo("");
       router.refresh();
@@ -80,10 +81,11 @@ export function TicketGrantManager({ draws, members, balances, currencies, curre
 
   async function createRate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!rateDrawId || !rateCurrencyId) return window.alert("뽑기와 화폐를 선택해 주세요.");
+    const effectiveRateCurrencyId = activeCurrencies.some((currency) => currency.id === rateCurrencyId) ? rateCurrencyId : activeCurrencies[0]?.id ?? "";
+    if (!rateDrawId || !effectiveRateCurrencyId) return window.alert("뽑기와 화폐를 선택해 주세요.");
     setLoading("rate");
     try {
-      await jsonRequest("/api/admin/ticket-exchange-rates", { drawId: rateDrawId, currencyId: rateCurrencyId, currencyCost, ticketQuantity });
+      await jsonRequest("/api/admin/ticket-exchange-rates", { drawId: rateDrawId, currencyId: effectiveRateCurrencyId, currencyCost, ticketQuantity });
       window.alert("화폐 → 추첨권 교환 비율이 생성되었습니다.");
       router.refresh();
     } catch (error) { window.alert((error as Error).message); } finally { setLoading(null); }
@@ -96,7 +98,7 @@ export function TicketGrantManager({ draws, members, balances, currencies, curre
   }
 
   async function deleteCurrency(currency: VirtualCurrency) {
-    if (!window.confirm(`${currency.name} 화폐를 삭제할까요? 연결된 교환비도 함께 정지됩니다.`)) return;
+    if (!window.confirm(`${currency.name} 화폐를 삭제할까요? 연결된 교환비는 실제 삭제됩니다.`)) return;
     setLoading(`currency-${currency.id}`);
     try { await jsonRequest(`/api/admin/currencies/${currency.id}`, {}, "DELETE"); router.refresh(); }
     catch (error) { window.alert((error as Error).message); } finally { setLoading(null); }

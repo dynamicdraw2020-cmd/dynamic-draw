@@ -14,7 +14,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const demo = rejectDemoMutation(); if (demo) return demo; const csrf = enforceSameOrigin(request); if (csrf) return csrf; const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id } = await context.params; const admin = createAdminClient();
-  await admin.from("ticket_exchange_rates").update({ is_active: false, deleted_at: new Date().toISOString() }).eq("currency_id", id).is("deleted_at", null);
+  await admin.from("ticket_exchange_rates").delete().eq("currency_id", id);
   const { error } = await admin.from("virtual_currencies").update({ is_active: false, deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) return fail("화폐를 삭제하지 못했습니다.", 400, "CURRENCY_DELETE_FAILED", error.message);
   const meta = requestMeta(request); await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "VIRTUAL_CURRENCY_DELETED", p_target_table: "virtual_currencies", p_target_id: id, p_details: {}, p_ip: meta.ip, p_user_agent: meta.userAgent });

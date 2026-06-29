@@ -39,9 +39,9 @@ export async function requireApiUser() {
     const admin = createAdminClient();
     if (auth.profile.role === "USER") {
       const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
-      const mode = String((modeRow as { value?: unknown } | null)?.value ?? "NORMAL").replace(/^"|"$/g, "");
-      if (mode === "MAINTENANCE") return { error: fail("현재 긴급 점검 모드입니다. 잠시 후 다시 이용해 주세요.", 503, "OPERATION_MAINTENANCE") } as const;
-      if (mode === "READ_ONLY") return { error: fail("현재 읽기 전용 모드입니다. 조회만 가능합니다.", 423, "OPERATION_READ_ONLY") } as const;
+      const mode = String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
+      if (mode === "UPDATING" || mode === "READ_ONLY") return { error: fail("현재 업데이트중입니다. 잠시 후 다시 이용해 주세요.", 503, "OPERATION_UPDATING") } as const;
+      if (mode === "INACTIVE" || mode === "MAINTENANCE") return { error: fail("현재 사이트가 비활성화되어 있습니다.", 503, "OPERATION_INACTIVE") } as const;
     }
     const { count } = await admin.from("blacklist_entries").select("id", { count: "exact", head: true }).eq("profile_id", auth.profile.id).eq("status", "ACTIVE").in("scope", ["ALL", "LOGIN"]);
     if ((count ?? 0) > 0) return { error: fail("운영 정책에 따라 이용이 제한된 계정입니다.", 403, "ACCOUNT_RESTRICTED") } as const;
@@ -55,6 +55,14 @@ export async function requireApiAdmin(minimum: "VIEWER" | "MANAGER" | "SUPER_ADM
   const user = await requireApiUser();
   if ("error" in user) return user;
   const rank = { USER: 0, VIEWER: 1, MANAGER: 2, SUPER_ADMIN: 3 } as const;
+  try {
+    const admin = createAdminClient();
+    const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
+    const mode = String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
+    if ((mode === "INACTIVE" || mode === "MAINTENANCE") && user.auth.profile.role !== "SUPER_ADMIN") {
+      return { error: fail("현재 사이트가 비활성화되어 최고 관리자만 접근할 수 있습니다.", 503, "OPERATION_ADMIN_BLOCKED") } as const;
+    }
+  } catch {}
   if (rank[user.auth.profile.role] < rank[minimum]) {
     return { error: fail("이 작업을 수행할 권한이 없습니다.", 403, "FORBIDDEN") } as const;
   }

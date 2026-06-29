@@ -22,7 +22,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { data, error } = await admin.rpc("reveal_result", {
     p_result_id: id,
     p_admin_id: adminRoles.has(guard.auth.profile.role) ? guard.auth.userId : null,
-    p_force: false,
+    p_force: true,
     p_ip: meta.ip,
     p_user_agent: meta.userAgent,
   });

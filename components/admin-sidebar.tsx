@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowLeftRight, BarChart3, ClipboardList, FileClock, Gift, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, NotebookPen, Settings, ShieldCheck, ShieldX, Sparkles, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, CalendarClock, ClipboardList, FileClock, Gift, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, MessageCircle, NotebookPen, Settings, ShieldCheck, ShieldX, Sparkles, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
@@ -43,6 +43,9 @@ const groups = [
     description: "공지, 이벤트, 회원 운영",
     items: [
       { href: "/admin/contents", label: "공지·이벤트", icon: Megaphone, minimum: "MANAGER" },
+      { href: "/admin/community", label: "커뮤니티 관리", icon: MessageCircle, minimum: "MANAGER" },
+      { href: "/admin/reviews", label: "당첨 후기 관리", icon: Gift, minimum: "MANAGER" },
+      { href: "/admin/support", label: "문의센터 관리", icon: MessageCircle, minimum: "MANAGER" },
       { href: "/admin/members", label: "회원 관리", icon: UsersRound, minimum: "MANAGER" },
       { href: "/admin/blacklist", label: "블랙리스트", icon: ShieldX, minimum: "MANAGER" },
     ],
@@ -53,6 +56,7 @@ const groups = [
     items: [
       { href: "/admin/permissions", label: "관리자 권한", icon: ShieldCheck, minimum: "SUPER_ADMIN" },
       { href: "/admin/workspace", label: "관리자 메모·회의록", icon: NotebookPen, minimum: "MANAGER" },
+      { href: "/admin/automation", label: "자동화", icon: CalendarClock, minimum: "MANAGER" },
     ],
   },
   {

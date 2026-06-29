@@ -2,6 +2,7 @@
 
 import { CalendarCheck2, Gift, LoaderCircle, Plus, Settings, Ticket, Trash2, UserCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import type { AdminRewardSystemData, PromoCode, RandomBoxReward } from "@/lib/types";
 import { displayLoginId } from "@/lib/identity";
@@ -49,7 +50,7 @@ export function RewardSystemManager({ data }: { data: AdminRewardSystemData }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [activeSection, setActiveSection] = useState<"referral" | "boxes" | "attendance" | "codes">("referral");
+  const [activeSection, setActiveSection] = useState<"referral" | "boxes" | "attendance" | "codes" | "vip">("referral");
   const approvedMembers = useMemo(() => data.members.filter((member) => member.status === "APPROVED"), [data.members]);
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string, success: string) {
@@ -88,6 +89,7 @@ export function RewardSystemManager({ data }: { data: AdminRewardSystemData }) {
     { key: "boxes", label: "랜덤박스", help: "랜덤박스를 만들고 박스 안 보상과 확률을 관리합니다." },
     { key: "attendance", label: "출석 보상", help: "KST 기준 출석 체크, 강제 출석, 연속·월간 출석 보상을 관리합니다." },
     { key: "codes", label: "쿠폰·이벤트 코드", help: "쿠폰과 이벤트 코드를 만들고 대상과 보상을 관리합니다." },
+    { key: "vip", label: "VIP 특별 출석", help: "VIP 등급과 최초 1회 특별 출석 보상을 레벨·VIP 관리 화면에서 설정합니다." },
   ] as const;
 
   return <div className="grid gap-3">
@@ -149,6 +151,15 @@ export function RewardSystemManager({ data }: { data: AdminRewardSystemData }) {
       </form>
     </section>
     </>}
+
+
+
+    {activeSection === "vip" && <section className="panel panel-pad">
+      <div className="flex items-center gap-1"><Settings size={19} className="text-gold" /><h2 className="panel-title mb-0">VIP 등급별 특별 출석 보상</h2></div>
+      <p className="panel-description mt-1">VIP 등급명, 설명, 도달 조건, 최초 1회 특별 출석 보상은 성장 시스템과 연결되어 관리됩니다.</p>
+      <div className="note-box mt-2">추천·보상 카테고리에서 바로 확인할 수 있도록 연결했습니다. 실제 설정은 <strong>레벨·VIP·배지</strong> 화면에서 진행합니다.</div>
+      <Link className="btn btn-primary mt-3" href="/admin/growth">레벨·VIP·배지 설정으로 이동</Link>
+    </section>}
 
     {activeSection === "boxes" && <>
     <div className="grid grid-2">

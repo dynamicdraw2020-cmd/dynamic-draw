@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowLeftRight, BarChart3, FileClock, Gift, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, Settings, ShieldCheck, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, ClipboardList, FileClock, Gift, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, NotebookPen, Settings, ShieldCheck, ShieldX, Sparkles, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
@@ -12,6 +12,7 @@ const groups = [
     items: [
       { href: "/admin", label: "대시보드", icon: LayoutDashboard, minimum: "VIEWER" },
       { href: "/admin/stats", label: "통계", icon: BarChart3, minimum: "VIEWER" },
+      { href: "/admin/operations", label: "운영 통계", icon: ClipboardList, minimum: "VIEWER" },
       { href: "/admin/activity", label: "유저 활동 로그", icon: Activity, minimum: "VIEWER" },
     ],
   },
@@ -33,6 +34,7 @@ const groups = [
     items: [
       { href: "/admin/tickets", label: "추첨권·화폐 설정", icon: Tickets, minimum: "MANAGER" },
       { href: "/admin/rewards", label: "추천·보상", icon: Gift, minimum: "MANAGER" },
+      { href: "/admin/growth", label: "레벨·VIP·배지", icon: Sparkles, minimum: "MANAGER" },
       { href: "/admin/exchanges", label: "교환 시스템", icon: ArrowLeftRight, minimum: "MANAGER" },
     ],
   },
@@ -42,6 +44,15 @@ const groups = [
     items: [
       { href: "/admin/contents", label: "공지·이벤트", icon: Megaphone, minimum: "MANAGER" },
       { href: "/admin/members", label: "회원 관리", icon: UsersRound, minimum: "MANAGER" },
+      { href: "/admin/blacklist", label: "블랙리스트", icon: ShieldX, minimum: "MANAGER" },
+    ],
+  },
+  {
+    title: "운영 조직",
+    description: "권한, 메모, 회의록",
+    items: [
+      { href: "/admin/permissions", label: "관리자 권한", icon: ShieldCheck, minimum: "SUPER_ADMIN" },
+      { href: "/admin/workspace", label: "관리자 메모·회의록", icon: NotebookPen, minimum: "MANAGER" },
     ],
   },
   {

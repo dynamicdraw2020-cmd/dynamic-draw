@@ -35,6 +35,13 @@ export async function requireApiUser() {
   if (auth.profile.status !== "APPROVED") {
     return { error: fail("관리자 승인이 필요한 계정입니다.", 403, "ACCOUNT_NOT_APPROVED") } as const;
   }
+  try {
+    const admin = createAdminClient();
+    const { count } = await admin.from("blacklist_entries").select("id", { count: "exact", head: true }).eq("profile_id", auth.profile.id).eq("status", "ACTIVE").in("scope", ["ALL", "LOGIN"]);
+    if ((count ?? 0) > 0) return { error: fail("운영 정책에 따라 이용이 제한된 계정입니다.", 403, "ACCOUNT_RESTRICTED") } as const;
+  } catch {
+    // 블랙리스트 테이블이 아직 적용되지 않은 기존 설치와의 호환을 위해 무시합니다.
+  }
   return { auth } as const;
 }
 

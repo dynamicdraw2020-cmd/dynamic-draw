@@ -400,7 +400,10 @@ export interface AdminRewardSystemData {
   rewards: Reward[];
   settings: {
     signupBoxId: string | null;
+    signupBoxAmount: number;
     referralReferrerBoxId: string | null;
+    referralReferrerBoxAmount: number;
     referralReferredBoxId: string | null;
+    referralReferredBoxAmount: number;
   };
 }

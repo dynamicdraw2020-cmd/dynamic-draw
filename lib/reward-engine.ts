@@ -89,13 +89,27 @@ export async function ensureReferralCode(admin: AdminClient, profile: ProfileLit
 }
 
 export async function getRewardSettings(admin: AdminClient) {
-  const keys = ["signup_reward_box_id", "referral_referrer_box_id", "referral_referred_box_id"];
+  const keys = [
+    "signup_reward_box_id",
+    "signup_reward_box_amount",
+    "referral_referrer_box_id",
+    "referral_referrer_box_amount",
+    "referral_referred_box_id",
+    "referral_referred_box_amount",
+  ];
   const { data } = await admin.from("site_settings").select("key,value").in("key", keys);
   const map = new Map((data ?? [] as SettingRow[]).map((row) => [row.key, typeof row.value === "string" ? row.value : String(row.value ?? "").replace(/^"|"$/g, "")]));
+  const amount = (key: string, fallback: number) => {
+    const parsed = Number(map.get(key) ?? fallback);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : fallback;
+  };
   return {
     signupBoxId: map.get("signup_reward_box_id") || null,
+    signupBoxAmount: amount("signup_reward_box_amount", 1),
     referralReferrerBoxId: map.get("referral_referrer_box_id") || null,
+    referralReferrerBoxAmount: amount("referral_referrer_box_amount", 0),
     referralReferredBoxId: map.get("referral_referred_box_id") || null,
+    referralReferredBoxAmount: amount("referral_referred_box_amount", 0),
   };
 }
 
@@ -162,9 +176,30 @@ export async function createNotification(admin: AdminClient, profileId: string, 
   await admin.from("notifications").insert({ profile_id: profileId, title, body, type, link_url: linkUrl });
 }
 
+async function wasRewardDelivered(admin: AdminClient, profileId: string, sourceType: string, sourceId: string | null | undefined) {
+  const { count } = await admin.from("reward_delivery_logs").select("id", { count: "exact", head: true }).eq("profile_id", profileId).eq("source_type", sourceType).eq("source_id", sourceId ?? null);
+  return (count ?? 0) > 0;
+}
+
 export async function grantBox(admin: AdminClient, profileId: string, boxId: string | null | undefined, sourceType: string, createdBy?: string | null) {
-  if (!boxId) return [];
-  return deliverRewards({ admin, profileId, rewards: [{ type: "RANDOM_BOX", boxId, amount: 1, label: "랜덤박스" }], sourceType, sourceId: boxId, createdBy, notifyTitle: "랜덤박스가 지급되었습니다", notifyBody: "보상 센터에서 랜덤박스를 개봉할 수 있습니다." });
+  return grantBoxQuantity(admin, profileId, boxId, 1, sourceType, createdBy);
+}
+
+export async function grantBoxQuantity(
+  admin: AdminClient,
+  profileId: string,
+  boxId: string | null | undefined,
+  amount: number,
+  sourceType: string,
+  createdBy?: string | null,
+  sourceId?: string | null,
+) {
+  const quantity = Math.max(0, Math.floor(amount || 0));
+  if (!boxId || quantity < 1) return [];
+  const deliverySourceId = sourceId ?? boxId;
+  const alreadyDelivered = await wasRewardDelivered(admin, profileId, sourceType, deliverySourceId);
+  if (alreadyDelivered) return [];
+  return deliverRewards({ admin, profileId, rewards: [{ type: "RANDOM_BOX", boxId, amount: quantity, label: "랜덤박스" }], sourceType, sourceId: deliverySourceId, createdBy, notifyTitle: "랜덤박스가 지급되었습니다", notifyBody: "보상 센터에서 랜덤박스를 개봉할 수 있습니다." });
 }
 
 export async function handleApprovalRewards(admin: AdminClient, approvedProfileId: string, adminId: string) {
@@ -172,21 +207,31 @@ export async function handleApprovalRewards(admin: AdminClient, approvedProfileI
   if (!profile) return;
   await ensureReferralCode(admin, profile);
   const settings = await getRewardSettings(admin);
-  await grantBox(admin, profile.id, settings.signupBoxId, "SIGNUP_APPROVAL", adminId);
+  await grantBoxQuantity(admin, profile.id, settings.signupBoxId, settings.signupBoxAmount, "SIGNUP_APPROVAL", adminId, `signup:${profile.id}`);
 
   if (profile.referred_by) {
     const { data: referrer } = await admin.from("profiles").select("id,display_name,username,referral_code").eq("id", profile.referred_by).maybeSingle<ProfileLite>();
     if (referrer && referrer.id !== profile.id) {
+      const now = new Date().toISOString();
       const { data: existing } = await admin.from("referral_logs").select("id,referrer_rewarded_at,referred_rewarded_at").eq("referred_profile_id", profile.id).maybeSingle();
+      let referralLogId = (existing as { id?: string } | null)?.id ?? null;
       if (!existing) {
-        await admin.from("referral_logs").insert({ referrer_id: referrer.id, referred_profile_id: profile.id, referral_code: referrer.referral_code, status: "APPROVED", approved_at: new Date().toISOString() });
+        const { data: inserted } = await admin.from("referral_logs").insert({ referrer_id: referrer.id, referred_profile_id: profile.id, referral_code: referrer.referral_code, status: "APPROVED", approved_at: now }).select("id").single();
+        referralLogId = (inserted as { id?: string } | null)?.id ?? null;
       } else {
-        await admin.from("referral_logs").update({ status: "APPROVED", approved_at: new Date().toISOString() }).eq("id", (existing as { id: string }).id);
+        await admin.from("referral_logs").update({ status: "APPROVED", approved_at: now }).eq("id", (existing as { id: string }).id);
       }
-      await grantBox(admin, referrer.id, settings.referralReferrerBoxId, "REFERRAL_REFERRER_REWARD", adminId);
-      await grantBox(admin, profile.id, settings.referralReferredBoxId, "REFERRAL_REFERRED_REWARD", adminId);
-      await admin.from("referral_logs").update({ referrer_rewarded_at: new Date().toISOString(), referred_rewarded_at: new Date().toISOString() }).eq("referred_profile_id", profile.id);
-      await createNotification(admin, referrer.id, "추천 보상이 지급되었습니다", `${profile.display_name ?? "회원"}님이 승인되어 추천 보상을 받았습니다.`, "REFERRAL", "/rewards");
+      const referredSourceId = referralLogId ? `referral-referred:${referralLogId}` : `referral-referred:${profile.id}`;
+      const referrerSourceId = referralLogId ? `referral-referrer:${referralLogId}` : `referral-referrer:${profile.id}`;
+      const referrerDelivered = await grantBoxQuantity(admin, referrer.id, settings.referralReferrerBoxId, settings.referralReferrerBoxAmount, "REFERRAL_REFERRER_REWARD", adminId, referrerSourceId);
+      const referredDelivered = await grantBoxQuantity(admin, profile.id, settings.referralReferredBoxId, settings.referralReferredBoxAmount, "REFERRAL_REFERRED_REWARD", adminId, referredSourceId);
+      const updatePayload: Record<string, string> = { status: "APPROVED", approved_at: now };
+      if (referrerDelivered.length) updatePayload.referrer_rewarded_at = now;
+      if (referredDelivered.length) updatePayload.referred_rewarded_at = now;
+      await admin.from("referral_logs").update(updatePayload).eq("referred_profile_id", profile.id);
+      if (referrerDelivered.length) {
+        await createNotification(admin, referrer.id, "추천 보상이 지급되었습니다", `${profile.display_name ?? "회원"}님이 승인되어 추천 보상을 받았습니다.`, "REFERRAL", "/rewards");
+      }
     }
   }
 }

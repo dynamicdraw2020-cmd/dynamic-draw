@@ -794,7 +794,7 @@ export async function getAdminUserActivityData(profileId?: string): Promise<Admi
 }
 
 export async function getRewardSystemAdminData(): Promise<AdminRewardSystemData> {
-  const fallback: AdminRewardSystemData = { boxes: [], boxRewards: [], attendanceRules: [], promoCodes: [], members: [], draws: [], currencies: [], rewards: [], settings: { signupBoxId: null, referralReferrerBoxId: null, referralReferredBoxId: null } };
+  const fallback: AdminRewardSystemData = { boxes: [], boxRewards: [], attendanceRules: [], promoCodes: [], members: [], draws: [], currencies: [], rewards: [], settings: { signupBoxId: null, signupBoxAmount: 1, referralReferrerBoxId: null, referralReferrerBoxAmount: 0, referralReferredBoxId: null, referralReferredBoxAmount: 0 } };
   if (demoMode) return fallback;
   const admin = createAdminClient();
   const [boxesResult, boxRewardsResult, attendanceRulesResult, promoCodesResult, members, draws, currencies, settingsResult, rewardsResult] = await Promise.all([
@@ -805,7 +805,7 @@ export async function getRewardSystemAdminData(): Promise<AdminRewardSystemData>
     getAdminMembers(),
     getAdminDraws(),
     getVirtualCurrencies(),
-    admin.from("site_settings").select("key,value").in("key", ["signup_reward_box_id", "referral_referrer_box_id", "referral_referred_box_id"]),
+    admin.from("site_settings").select("key,value").in("key", ["signup_reward_box_id", "signup_reward_box_amount", "referral_referrer_box_id", "referral_referrer_box_amount", "referral_referred_box_id", "referral_referred_box_amount"]),
     admin.from("rewards").select("id,draw_id,name,description,image_url,color,probability_units,stock,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at").is("deleted_at", null).order("name", { ascending: true }),
   ]);
   const boxRewards = ((boxRewardsResult.data ?? []) as Array<RandomBoxReward & { currency?: { name?: string } | Array<{ name?: string }> | null; draw?: { name?: string } | Array<{ name?: string }> | null; reward?: { name?: string } | Array<{ name?: string }> | null; next_box?: { name?: string } | Array<{ name?: string }> | null }>).map((row) => {
@@ -832,8 +832,11 @@ export async function getRewardSystemAdminData(): Promise<AdminRewardSystemData>
     rewards: (rewardsResult.data as Reward[] | null) ?? [],
     settings: {
       signupBoxId: settingMap.get("signup_reward_box_id") || null,
+      signupBoxAmount: Math.max(0, Number(settingMap.get("signup_reward_box_amount") || 1)),
       referralReferrerBoxId: settingMap.get("referral_referrer_box_id") || null,
+      referralReferrerBoxAmount: Math.max(0, Number(settingMap.get("referral_referrer_box_amount") || 0)),
       referralReferredBoxId: settingMap.get("referral_referred_box_id") || null,
+      referralReferredBoxAmount: Math.max(0, Number(settingMap.get("referral_referred_box_amount") || 0)),
     },
   };
 }

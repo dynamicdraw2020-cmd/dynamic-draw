@@ -94,12 +94,23 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "save-settings") {
-    const schema = z.object({ signupBoxId: z.string().optional().nullable(), referralReferrerBoxId: z.string().optional().nullable(), referralReferredBoxId: z.string().optional().nullable() });
+    const schema = z.object({
+      signupBoxId: z.string().optional().nullable(),
+      signupBoxAmount: z.number().int().min(0).max(999).optional().default(1),
+      referralReferrerBoxId: z.string().optional().nullable(),
+      referralReferrerBoxAmount: z.number().int().min(0).max(999).optional().default(0),
+      referralReferredBoxId: z.string().optional().nullable(),
+      referralReferredBoxAmount: z.number().int().min(0).max(999).optional().default(0),
+    });
     const input = schema.parse(body);
+    const now = new Date().toISOString();
     const rows = [
-      { key: "signup_reward_box_id", value: input.signupBoxId || null, is_public: false, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
-      { key: "referral_referrer_box_id", value: input.referralReferrerBoxId || null, is_public: false, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
-      { key: "referral_referred_box_id", value: input.referralReferredBoxId || null, is_public: false, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
+      { key: "signup_reward_box_id", value: input.signupBoxId || null, is_public: false, updated_by: guard.auth.userId, updated_at: now },
+      { key: "signup_reward_box_amount", value: String(input.signupBoxAmount ?? 1), is_public: false, updated_by: guard.auth.userId, updated_at: now },
+      { key: "referral_referrer_box_id", value: input.referralReferrerBoxId || null, is_public: false, updated_by: guard.auth.userId, updated_at: now },
+      { key: "referral_referrer_box_amount", value: String(input.referralReferrerBoxAmount ?? 0), is_public: false, updated_by: guard.auth.userId, updated_at: now },
+      { key: "referral_referred_box_id", value: input.referralReferredBoxId || null, is_public: false, updated_by: guard.auth.userId, updated_at: now },
+      { key: "referral_referred_box_amount", value: String(input.referralReferredBoxAmount ?? 0), is_public: false, updated_by: guard.auth.userId, updated_at: now },
     ];
     const { error } = await admin.from("site_settings").upsert(rows, { onConflict: "key" });
     if (error) return fail("보상 설정을 저장하지 못했습니다.", 400, "REWARD_SETTINGS_FAILED", error.message);

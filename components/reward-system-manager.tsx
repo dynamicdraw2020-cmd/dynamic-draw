@@ -22,6 +22,9 @@ function formPayload(form: HTMLFormElement) {
     isActive: data.isActive === "true",
     amount: Number(data.amount || 1),
     rewardAmount: Number(data.rewardAmount || 1),
+    signupBoxAmount: Number(data.signupBoxAmount || 1),
+    referralReferrerBoxAmount: Number(data.referralReferrerBoxAmount || 0),
+    referralReferredBoxAmount: Number(data.referralReferredBoxAmount || 0),
     probabilityPercent: Number(data.probabilityPercent || 0),
     requiredCount: Number(data.requiredCount || 1),
     sortOrder: Number(data.sortOrder || 10),
@@ -84,8 +87,49 @@ export function RewardSystemManager({ data }: { data: AdminRewardSystemData }) {
 
     <section className="panel panel-pad">
       <div className="flex items-center gap-1"><Settings size={19} className="text-gold" /><h2 className="panel-title mb-0">추천·가입 보상 설정</h2></div>
-      <p className="panel-description mt-1">관리자 승인 완료 시 가입 보상과 추천인/가입자 보상을 자동 지급합니다.</p>
-      <form className="form-grid mt-3" onSubmit={(event) => submit(event, "save-settings", "추천·가입 보상 설정을 저장했습니다.")}><div className="form-row"><div className="field"><label>회원가입 승인 보상 박스</label><select className="select" name="signupBoxId" defaultValue={data.settings.signupBoxId ?? ""}><option value="">사용 안 함</option>{data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}</select></div><div className="field"><label>추천한 회원 보상 박스</label><select className="select" name="referralReferrerBoxId" defaultValue={data.settings.referralReferrerBoxId ?? ""}><option value="">사용 안 함</option>{data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}</select></div><div className="field"><label>추천받은 회원 보상 박스</label><select className="select" name="referralReferredBoxId" defaultValue={data.settings.referralReferredBoxId ?? ""}><option value="">사용 안 함</option>{data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}</select></div></div><button className="btn btn-primary" disabled={loading === "save-settings"}>{loading === "save-settings" ? <LoaderCircle size={17} className="spin" /> : <Settings size={17} />} 설정 저장</button></form>
+      <p className="panel-description mt-1">관리자 승인 완료 시 회원가입 보상, 추천한 회원 보상, 추천받은 회원 보상을 각각 따로 설정할 수 있습니다. 수량을 0으로 두면 지급하지 않습니다.</p>
+      <form className="form-grid mt-3" onSubmit={(event) => submit(event, "save-settings", "추천·가입 보상 설정을 저장했습니다.")}>
+        <div className="form-row">
+          <div className="field">
+            <label>회원가입 승인 보상 박스</label>
+            <select className="select" name="signupBoxId" defaultValue={data.settings.signupBoxId ?? ""}>
+              <option value="">사용 안 함</option>
+              {data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>지급 수량</label>
+            <input className="input" name="signupBoxAmount" type="number" min="0" max="999" defaultValue={data.settings.signupBoxAmount ?? 1} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="field">
+            <label>추천한 회원 보상 박스</label>
+            <select className="select" name="referralReferrerBoxId" defaultValue={data.settings.referralReferrerBoxId ?? ""}>
+              <option value="">사용 안 함</option>
+              {data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>지급 수량</label>
+            <input className="input" name="referralReferrerBoxAmount" type="number" min="0" max="999" defaultValue={data.settings.referralReferrerBoxAmount ?? 0} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="field">
+            <label>추천받은 회원 보상 박스</label>
+            <select className="select" name="referralReferredBoxId" defaultValue={data.settings.referralReferredBoxId ?? ""}>
+              <option value="">사용 안 함</option>
+              {data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>지급 수량</label>
+            <input className="input" name="referralReferredBoxAmount" type="number" min="0" max="999" defaultValue={data.settings.referralReferredBoxAmount ?? 0} />
+          </div>
+        </div>
+        <button className="btn btn-primary" disabled={loading === "save-settings"}>{loading === "save-settings" ? <LoaderCircle size={17} className="spin" /> : <Settings size={17} />} 설정 저장</button>
+      </form>
     </section>
 
     <div className="grid grid-2">

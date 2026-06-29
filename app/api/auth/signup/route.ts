@@ -2,12 +2,13 @@ import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
 import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { makeReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 
 const schema = z.object({
   loginId: z.string().trim().min(1, "아이디를 입력해 주세요."),
   displayName: z.string().trim().min(2, "이름 또는 닉네임은 2자 이상 입력해 주세요.").max(30),
   password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다.").max(72),
-  referralCode: z.string().trim().max(32).optional().default(""),
+  referralCode: z.string().trim().max(8, "추천인 ID는 8자리 이내 숫자만 입력해 주세요.").optional().default(""),
 });
 
 type AuthAdminError = { code?: string; message?: string; status?: number };
@@ -59,15 +60,18 @@ export async function POST(request: Request) {
 
   let referredBy: string | null = null;
   const rawReferral = parsed.data.referralCode.trim();
-  if (rawReferral) {
-    const normalizedReferral = rawReferral.toUpperCase();
+  if (rawReferral && !/^[0-9]{1,8}$/.test(rawReferral)) {
+    return fail("추천인 ID는 8자리 이내 숫자만 입력해 주세요.", 422, "REFERRAL_CODE_INVALID");
+  }
+  const normalizedReferral = normalizeReferralCodeInput(rawReferral);
+  if (normalizedReferral) {
     const { data: referrer } = await admin
       .from("profiles")
       .select("id,username,referral_code,status")
-      .or(`referral_code.eq.${normalizedReferral},username.eq.${rawReferral.toLowerCase()}`)
+      .eq("referral_code", normalizedReferral)
       .eq("status", "APPROVED")
       .maybeSingle();
-    if (!referrer) return fail("추천인 ID를 찾을 수 없습니다. 추천인에게 추천 ID를 다시 확인해 주세요.", 404, "REFERRER_NOT_FOUND");
+    if (!referrer) return fail("추천인 ID를 찾을 수 없습니다. 추천인에게 숫자 추천 ID를 다시 확인해 주세요.", 404, "REFERRER_NOT_FOUND");
     if (referrer.username === login.loginId) return fail("자기 자신은 추천인으로 입력할 수 없습니다.", 409, "SELF_REFERRAL_BLOCKED");
     referredBy = referrer.id;
   }
@@ -84,6 +88,11 @@ export async function POST(request: Request) {
 
   if (createError || !created.user) return signupError(createError);
 
+  const { data: nextReferralCode } = await admin.rpc("next_numeric_referral_code");
+  const ownReferralCode = typeof nextReferralCode === "string" && /^[0-9]{1,8}$/.test(nextReferralCode)
+    ? nextReferralCode
+    : makeReferralCode(created.user.id);
+
   const { error: profileError } = await admin
     .from("profiles")
     .upsert({
@@ -98,6 +107,7 @@ export async function POST(request: Request) {
       approved_by: null,
       approved_at: null,
       rejection_reason: null,
+      referral_code: ownReferralCode,
       referred_by: referredBy,
     }, { onConflict: "id" });
 
@@ -116,7 +126,7 @@ export async function POST(request: Request) {
     await admin.from("referral_logs").insert({
       referrer_id: referredBy,
       referred_profile_id: created.user.id,
-      referral_code: rawReferral.toUpperCase(),
+      referral_code: normalizedReferral,
       status: "PENDING",
     });
   }

@@ -70,20 +70,41 @@ function cleanRewards(value: unknown): RewardItem[] {
 }
 
 export function makeReferralCode(seed: string) {
-  const digest = createHash("sha1").update(seed).digest("hex").slice(0, 6).toUpperCase();
-  const readable = seed.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase() || "USER";
-  return `DD${readable}${digest}`.slice(0, 18);
+  const digest = createHash("sha1").update(seed).digest("hex").slice(0, 12);
+  const value = (Number.parseInt(digest, 16) % 90_000_000) + 10_000_000;
+  return String(value).slice(0, 8);
+}
+
+export function normalizeReferralCodeInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/\D/g, "").slice(0, 8);
+}
+
+export function isNumericReferralCode(value: string | null | undefined) {
+  return typeof value === "string" && /^[0-9]{1,8}$/.test(value);
+}
+
+async function nextNumericReferralCode(admin: AdminClient, seed: string) {
+  const { data } = await admin.rpc("next_numeric_referral_code");
+  if (typeof data === "string" && /^[0-9]{1,8}$/.test(data)) return data;
+  for (let i = 0; i < 8; i += 1) {
+    const code = makeReferralCode(`${seed}:${i}:${Date.now()}`);
+    const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("referral_code", code);
+    if ((count ?? 0) === 0) return code;
+  }
+  return makeReferralCode(`${seed}:fallback:${Math.random()}`);
 }
 
 export async function ensureReferralCode(admin: AdminClient, profile: ProfileLite) {
-  if (profile.referral_code) return profile.referral_code;
+  if (isNumericReferralCode(profile.referral_code)) return profile.referral_code;
   const base = profile.username || profile.display_name || profile.id;
-  for (let i = 0; i < 4; i += 1) {
-    const code = i === 0 ? makeReferralCode(base) : makeReferralCode(`${base}-${i}-${profile.id}`);
+  for (let i = 0; i < 6; i += 1) {
+    const code = await nextNumericReferralCode(admin, `${base}-${profile.id}-${i}`);
     const { error } = await admin.from("profiles").update({ referral_code: code }).eq("id", profile.id);
     if (!error) return code;
   }
-  const fallback = `DD${profile.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+  const fallback = makeReferralCode(`${base}-${profile.id}-final`);
   await admin.from("profiles").update({ referral_code: fallback }).eq("id", profile.id);
   return fallback;
 }

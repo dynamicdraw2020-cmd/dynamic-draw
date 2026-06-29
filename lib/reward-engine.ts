@@ -155,8 +155,15 @@ export async function deliverRewards(options: DeliveryOptions) {
       if (!error) delivered.push({ ...reward, amount });
     }
     if (reward.type === "EXP") {
-      await admin.from("reward_delivery_logs").insert({ profile_id: profileId, source_type: "EXP_PLACEHOLDER", source_id: sourceId, rewards: [reward], created_by: createdBy });
-      delivered.push({ ...reward, amount });
+      const { error } = await admin.rpc("add_profile_exp", {
+        p_profile_id: profileId,
+        p_amount: amount,
+        p_reason: options.memo ?? reward.label ?? "보상 EXP 지급",
+        p_source_type: sourceType,
+        p_source_id: String(sourceId ?? `${sourceType}:${Date.now()}`),
+        p_created_by: createdBy,
+      });
+      if (!error) delivered.push({ ...reward, amount });
     }
   }
 

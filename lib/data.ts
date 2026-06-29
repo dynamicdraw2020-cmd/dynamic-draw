@@ -872,3 +872,103 @@ export async function getRewardCenterData(profile: Profile): Promise<RewardCente
     notifications: (notificationsResult.data as NotificationItem[] | null) ?? [],
   };
 }
+
+export type PublicRankingEntry = {
+  profileId: string;
+  displayName: string;
+  loginId: string;
+  memberCode: string | null;
+  levelNo: number;
+  expTotal: number;
+  gainedExp: number;
+  weeklyDraws: number;
+  badges: Array<{ name: string; icon: string | null; labelColor: string | null }>;
+};
+
+function rankingProfileLabel(profile: { display_name?: string | null; username?: string | null; email?: string | null; member_code?: string | null } | null | undefined) {
+  return {
+    displayName: profile?.display_name ?? profile?.username ?? "회원",
+    loginId: profile?.username ?? profile?.email ?? "",
+    memberCode: profile?.member_code ?? null,
+  };
+}
+
+function isPublicRankingProfile(profile: { role?: string | null; status?: string | null } | null | undefined) {
+  return profile?.status === "APPROVED" && profile?.role === "USER";
+}
+
+export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]; exp: PublicRankingEntry[]; weeklyDraws: PublicRankingEntry[] }> {
+  if (demoMode) return { level: [], exp: [], weeklyDraws: [] };
+  const admin = createAdminClient();
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  const [profilesResult, growthResult, expResult, weeklyDrawResult, badgeResult] = await Promise.all([
+    admin.from("profiles").select("id,display_name,username,email,member_code,role,status").eq("status", "APPROVED").eq("role", "USER").limit(5000),
+    admin.from("profile_growth").select("profile_id,level_no,exp_total").order("level_no", { ascending: false }).order("exp_total", { ascending: false }).limit(5000),
+    admin.from("exp_logs").select("profile_id,amount").gt("amount", 0).order("created_at", { ascending: false }).limit(5000),
+    admin.from("results").select("participant_id,created_at").gte("created_at", weekAgo).is("voided_at", null).limit(5000),
+    admin.from("profile_badges").select("profile_id,badges(name,icon,label_color)").order("granted_at", { ascending: false }).limit(3000),
+  ]);
+
+  const profileMap = new Map<string, { display_name?: string | null; username?: string | null; email?: string | null; member_code?: string | null; role?: string | null; status?: string | null }>();
+  for (const profile of (profilesResult.data ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null; email?: string | null; member_code?: string | null; role?: string | null; status?: string | null }>) {
+    profileMap.set(profile.id, profile);
+  }
+
+  const badgeMap = new Map<string, Array<{ name: string; icon: string | null; labelColor: string | null }>>();
+  for (const row of (badgeResult.data ?? []) as Array<{ profile_id: string; badges?: { name?: string | null; icon?: string | null; label_color?: string | null } | Array<{ name?: string | null; icon?: string | null; label_color?: string | null }> | null }>) {
+    const badge = Array.isArray(row.badges) ? row.badges[0] : row.badges;
+    if (!badge?.name || !profileMap.has(row.profile_id)) continue;
+    const list = badgeMap.get(row.profile_id) ?? [];
+    if (list.length < 3) list.push({ name: badge.name, icon: badge.icon ?? null, labelColor: badge.label_color ?? null });
+    badgeMap.set(row.profile_id, list);
+  }
+
+  const baseFromGrowth = new Map<string, PublicRankingEntry>();
+  for (const row of (growthResult.data ?? []) as Array<{ profile_id: string; level_no: number; exp_total: number }>) {
+    const profile = profileMap.get(row.profile_id);
+    if (!isPublicRankingProfile(profile)) continue;
+    const label = rankingProfileLabel(profile);
+    baseFromGrowth.set(row.profile_id, {
+      profileId: row.profile_id,
+      displayName: label.displayName,
+      loginId: label.loginId,
+      memberCode: label.memberCode,
+      levelNo: Number(row.level_no ?? 1),
+      expTotal: Number(row.exp_total ?? 0),
+      gainedExp: 0,
+      weeklyDraws: 0,
+      badges: badgeMap.get(row.profile_id) ?? [],
+    });
+  }
+
+  for (const [profileId, profile] of profileMap) {
+    if (!baseFromGrowth.has(profileId)) {
+      const label = rankingProfileLabel(profile);
+      baseFromGrowth.set(profileId, { profileId, displayName: label.displayName, loginId: label.loginId, memberCode: label.memberCode, levelNo: 1, expTotal: 0, gainedExp: 0, weeklyDraws: 0, badges: badgeMap.get(profileId) ?? [] });
+    }
+  }
+
+  const expAgg = new Map<string, PublicRankingEntry>();
+  for (const row of (expResult.data ?? []) as Array<{ profile_id: string; amount: number }>) {
+    if (!profileMap.has(row.profile_id)) continue;
+    const base = expAgg.get(row.profile_id) ?? baseFromGrowth.get(row.profile_id);
+    if (!base) continue;
+    expAgg.set(row.profile_id, { ...base, gainedExp: base.gainedExp + Number(row.amount ?? 0) });
+  }
+
+  const drawAgg = new Map<string, PublicRankingEntry>();
+  for (const row of (weeklyDrawResult.data ?? []) as Array<{ participant_id: string }>) {
+    if (!profileMap.has(row.participant_id)) continue;
+    const base = drawAgg.get(row.participant_id) ?? baseFromGrowth.get(row.participant_id);
+    if (!base) continue;
+    drawAgg.set(row.participant_id, { ...base, weeklyDraws: base.weeklyDraws + 1 });
+  }
+
+  return {
+    level: Array.from(baseFromGrowth.values()).sort((a, b) => b.levelNo - a.levelNo || b.expTotal - a.expTotal).slice(0, 50),
+    exp: Array.from(expAgg.values()).sort((a, b) => b.gainedExp - a.gainedExp || b.expTotal - a.expTotal).slice(0, 50),
+    weeklyDraws: Array.from(drawAgg.values()).sort((a, b) => b.weeklyDraws - a.weeklyDraws || b.expTotal - a.expTotal).slice(0, 50),
+  };
+}
+

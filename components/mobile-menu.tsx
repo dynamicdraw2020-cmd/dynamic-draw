@@ -10,10 +10,11 @@ const links = [
   ["전체 추첨", "/raffles"],
   ["직접 참여", "/play"],
   ["보상 센터", "/rewards"],
+  ["순위", "/rankings"],
+  ["문의센터", "/support"],
+  ["대시보드", "/dashboard"],
   ["커뮤니티", "/community"],
   ["당첨 후기", "/reviews"],
-  ["문의센터", "/support"],
-  ["운영 안내", "/probabilities"],
   ["최근 결과", "/results"],
 ];
 

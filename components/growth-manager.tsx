@@ -19,11 +19,9 @@ type GrowthData = {
   currencies: Array<Record<string, any>>;
   rewards: Array<Record<string, any>>;
   boxes: Array<Record<string, any>>;
-  memberTiers: Array<Record<string, any>>;
-  profileMemberTiers: Array<Record<string, any>>;
 };
 
-const tabs = ["레벨", "뽑기 EXP", "VIP 등급", "회원 등급", "배지·휘장", "강제 EXP"] as const;
+const tabs = ["레벨", "뽑기 EXP", "VIP 등급", "VIP 부여", "배지·휘장", "강제 EXP"] as const;
 
 type Tab = typeof tabs[number];
 
@@ -80,17 +78,6 @@ function cleanRewardDrafts(rewards: RewardDraft[]) {
       if (reward.type === "EXP") return true;
       return false;
     });
-}
-
-
-function rewardDraftLabel(data: GrowthData, reward: RewardDraft) {
-  const amount = Math.max(1, Math.floor(Number(reward.amount) || 1)).toLocaleString();
-  if (reward.type === "RANDOM_BOX") return `${data.boxes.find((box) => box.id === reward.boxId)?.name ?? "랜덤박스"} ${amount}개`;
-  if (reward.type === "TICKET") return `${data.draws.find((draw) => draw.id === reward.drawId)?.name ?? "뽑기"} 추첨권 ${amount}장`;
-  if (reward.type === "CURRENCY") return `${data.currencies.find((currency) => currency.id === reward.currencyId)?.name ?? "화폐"} ${amount}`;
-  if (reward.type === "ITEM") return `${data.rewards.find((item) => item.id === reward.rewardId)?.name ?? "상품"} ${amount}개`;
-  if (reward.type === "EXP") return `경험치 ${amount}`;
-  return `보상 ${amount}`;
 }
 
 function RewardBuilder({
@@ -166,7 +153,6 @@ function RewardBuilder({
         </div>
       </div>)}
     </div>
-    <div className="note-box">현재 설정 보상: {cleanRewardDrafts(rewards).length ? rewards.filter((reward) => cleanRewardDrafts([reward]).length).map((reward) => rewardDraftLabel(data, reward)).join(" · ") : "지급 보상 없음"}</div>
     <button className="btn btn-secondary" type="button" onClick={() => setRewards((prev) => [...prev, emptyRewardDraft()])}>+ 보상 추가</button>
   </div>;
 }
@@ -178,13 +164,7 @@ export function GrowthManager({ data }: { data: GrowthData }) {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [levelRewards, setLevelRewards] = useState<RewardDraft[]>([emptyRewardDraft()]);
   const [vipRewards, setVipRewards] = useState<RewardDraft[]>([emptyRewardDraft()]);
-  const [memberSearch, setMemberSearch] = useState("");
   const members = useMemo(() => data.members.filter((member) => member.status === "APPROVED"), [data.members]);
-  const filteredMembers = useMemo(() => {
-    const q = memberSearch.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((member) => [member.display_name, displayLoginId(member as any), member.member_code ?? "", member.role ?? ""].some((value) => String(value).toLowerCase().includes(q)));
-  }, [members, memberSearch]);
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string, success: string) {
     event.preventDefault();
@@ -219,7 +199,6 @@ export function GrowthManager({ data }: { data: GrowthData }) {
 
   return <div className="grid gap-3">
     {message && <div className={`form-message form-${message.type}`}>{message.text}</div>}
-    <section className="panel panel-pad member-search-panel"><div className="field"><label>회원 검색</label><input className="input" value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="닉네임, 아이디, 고유 ID, 권한 검색" /></div><p className="panel-description mt-1">등급 배정, 배지 지급, EXP 조정에서 검색된 회원만 표시됩니다. 검색 결과 {filteredMembers.length.toLocaleString()}명</p></section>
     <section className="panel panel-pad">
       <div className="reward-tabs" role="tablist" aria-label="성장 관리 카테고리">
         {tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}
@@ -251,32 +230,29 @@ export function GrowthManager({ data }: { data: GrowthData }) {
     {tab === "VIP 등급" && <>
       <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "save-vip", "VIP 등급을 저장했습니다.")}>
         <div className="flex items-center gap-1"><Trophy size={19} className="text-gold" /><h2 className="panel-title mb-0">VIP 등급 설정</h2></div>
-        <p className="panel-description">등급명과 설명, 도달 조건, 최초 1회 특별 출석 보상을 설정합니다.</p>
+        <p className="panel-description">VIP는 레벨이 아니라 관리자가 부여하는 회원 권한입니다. 뽑기 횟수 조건을 설정하고 직접 또는 조건 충족 회원에게 부여할 수 있습니다.</p>
         <div className="form-row"><div className="field"><label>등급명</label><input className="input" name="name" defaultValue="VIP" /></div><div className="field"><label>정렬</label><input className="input" name="sortOrder" type="number" defaultValue="10" /></div></div>
         <div className="field"><label>설명</label><input className="input" name="description" placeholder="예: 이벤트 활동 우수 회원" /></div>
-        <div className="form-row"><div className="field"><label>필요 레벨</label><input className="input" name="thresholdLevel" type="number" min="1" defaultValue="1" /></div><div className="field"><label>필요 EXP</label><input className="input" name="thresholdExp" type="number" min="0" defaultValue="0" /></div></div>
+        <div className="field"><label>VIP 부여 가능 뽑기 횟수</label><input className="input" name="drawCountRequired" type="number" min="0" defaultValue="0" /><small>0이면 조건 없이 관리자가 직접 부여할 수 있습니다.</small></div>
         <div className="field"><label>최초 1회 특별 출석 보상</label><RewardBuilder data={data} rewards={vipRewards} setRewards={setVipRewards} fieldName="attendanceRewardJson" description="VIP 등급 도달 뒤 최초 출석 때 지급할 특별 보상을 선택하세요." /></div>
         <button className="btn btn-primary" disabled={loading === "save-vip"}>{loading === "save-vip" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} VIP 등급 저장</button>
       </form>
-      <section className="panel panel-pad"><h2 className="panel-title">VIP 등급 현황</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>등급</th><th>조건</th><th>상태</th><th>관리</th></tr></thead><tbody>{data.vipTiers.length ? data.vipTiers.map((row) => <tr key={row.id}><td><strong>{row.name}</strong><div className="text-muted text-small">{row.description ?? "설명 없음"}</div></td><td>Lv.{row.threshold_level} / {Number(row.threshold_exp ?? 0).toLocaleString()} EXP</td><td>{row.is_active ? "사용" : "정지"}</td><td><div className="table-actions"><button className="btn btn-secondary btn-sm" type="button" onClick={() => action({ action: "toggle-vip", id: row.id, isActive: !row.is_active }, "VIP 상태를 변경했습니다.")}>{row.is_active ? "정지" : "복구"}</button><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "delete-vip", id: row.id }, "VIP 등급을 삭제했습니다.")}>삭제</button></div></td></tr>) : <tr><td colSpan={4}><div className="empty">VIP 등급이 없습니다.</div></td></tr>}</tbody></table></div></section>
+      <section className="panel panel-pad"><h2 className="panel-title">VIP 등급 현황</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>등급</th><th>조건</th><th>상태</th><th>관리</th></tr></thead><tbody>{data.vipTiers.length ? data.vipTiers.map((row) => <tr key={row.id}><td><strong>{row.name}</strong><div className="text-muted text-small">{row.description ?? "설명 없음"}</div></td><td>{Number(row.draw_count_required ?? 0).toLocaleString()}회 이상</td><td>{row.is_active ? "사용" : "정지"}</td><td><div className="table-actions"><button className="btn btn-secondary btn-sm" type="button" onClick={() => action({ action: "toggle-vip", id: row.id, isActive: !row.is_active }, "VIP 상태를 변경했습니다.")}>{row.is_active ? "정지" : "복구"}</button><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "delete-vip", id: row.id }, "VIP 등급을 삭제했습니다.")}>삭제</button></div></td></tr>) : <tr><td colSpan={4}><div className="empty">VIP 등급이 없습니다.</div></td></tr>}</tbody></table></div></section>
     </>}
 
-    {tab === "회원 등급" && <>
-      <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "save-member-tier", "회원 등급을 저장했습니다.")}>
-        <div className="flex items-center gap-1"><Trophy size={19} className="text-gold" /><h2 className="panel-title mb-0">회원 등급 생성</h2></div>
-        <p className="panel-description">관리자 권한과 별개로 일반 회원에게 부여할 운영 등급을 만듭니다. 커뮤니티 이용 가능 여부도 등급별로 설정합니다.</p>
-        <div className="form-row"><div className="field"><label>등급명</label><input className="input" name="name" defaultValue="일반 회원" required /></div><div className="field"><label>표시 라벨</label><input className="input" name="badgeLabel" defaultValue="GENERAL" /></div><div className="field"><label>표시 색상</label><input className="input" name="badgeColor" defaultValue="#334155" /></div></div>
-        <div className="field"><label>설명</label><input className="input" name="description" placeholder="예: 커뮤니티 참여 가능 회원 등급" /></div>
-        <div className="form-row"><label className="check-row"><input type="checkbox" name="canUseCommunity" defaultChecked /> 커뮤니티 사용 가능</label><div className="field"><label>정렬</label><input className="input" name="sortOrder" type="number" defaultValue="10" /></div></div>
-        <button className="btn btn-primary" disabled={loading === "save-member-tier"}>{loading === "save-member-tier" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} 회원 등급 저장</button>
+    {tab === "VIP 부여" && <>
+      <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "grant-vip", "회원에게 VIP를 부여했습니다.")}>
+        <div className="flex items-center gap-1"><Trophy size={19} className="text-gold" /><h2 className="panel-title mb-0">VIP 강제 부여</h2></div>
+        <p className="panel-description">VIP는 레벨이 아니라 관리자가 직접 부여하는 회원 등급입니다.</p>
+        <div className="form-row"><div className="field"><label>회원</label><select className="select" name="profileId">{members.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></div><div className="field"><label>VIP 등급</label><select className="select" name="vipTierId">{data.vipTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}</select></div></div>
+        <button className="btn btn-primary" disabled={loading === "grant-vip"}>{loading === "grant-vip" ? <LoaderCircle size={17} className="spin" /> : <Trophy size={17} />} VIP 부여</button>
       </form>
-      <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "assign-member-tier", "회원 등급을 배정했습니다.")}>
-        <div className="flex items-center gap-1"><BadgeCheck size={19} className="text-gold" /><h2 className="panel-title mb-0">회원별 등급 배정</h2></div>
-        <div className="form-row"><div className="field"><label>회원</label><select className="select" name="profileId">{filteredMembers.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></div><div className="field"><label>회원 등급</label><select className="select" name="tierId">{data.memberTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name} · {tier.can_use_community ? "커뮤니티 가능" : "커뮤니티 제한"}</option>)}</select></div></div>
-        <button className="btn btn-primary" disabled={loading === "assign-member-tier"}>{loading === "assign-member-tier" ? <LoaderCircle size={17} className="spin" /> : <Award size={17} />} 등급 배정</button>
-      </form>
-      <section className="panel panel-pad"><h2 className="panel-title">회원 등급 현황</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>등급</th><th>커뮤니티</th><th>설명</th><th>관리</th></tr></thead><tbody>{data.memberTiers.length ? data.memberTiers.map((tier) => <tr key={tier.id}><td><strong>{tier.name}</strong><div className="text-muted text-small">{tier.badge_label ?? "라벨 없음"}</div></td><td>{tier.can_use_community ? "사용 가능" : "제한"}</td><td>{tier.description ?? "-"}</td><td><button className="btn btn-danger btn-sm" onClick={() => action({ action: "delete-member-tier", id: tier.id }, "회원 등급을 삭제했습니다.")}>삭제</button></td></tr>) : <tr><td colSpan={4}><div className="empty">회원 등급이 없습니다.</div></td></tr>}</tbody></table></div></section>
-      <section className="panel panel-pad"><h2 className="panel-title">배정 내역</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>회원</th><th>등급</th><th>커뮤니티</th><th>관리</th></tr></thead><tbody>{data.profileMemberTiers.length ? data.profileMemberTiers.map((row) => { const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const tier = Array.isArray(row.tier) ? row.tier[0] : row.tier; return <tr key={`${row.profile_id}-${row.tier_id}`}><td>{p?.display_name ?? row.profile_id}<div className="text-muted text-small">{p?.member_code ?? ""}</div></td><td>{tier?.name ?? row.tier_id}</td><td>{tier?.can_use_community ? "사용 가능" : "제한"}</td><td><button className="btn btn-danger btn-sm" onClick={() => action({ action: "remove-member-tier", profileId: row.profile_id, tierId: row.tier_id }, "회원 등급을 해제했습니다.")}>해제</button></td></tr>; }) : <tr><td colSpan={4}><div className="empty">등급 배정 내역이 없습니다.</div></td></tr>}</tbody></table></div></section>
+      <section className="panel panel-pad">
+        <h2 className="panel-title">뽑기 횟수 조건으로 VIP 부여</h2>
+        <p className="panel-description">선택한 VIP 등급의 “뽑기 횟수 조건”을 충족한 회원에게 한 번에 부여합니다.</p>
+        <div className="grid grid-2 mt-2">{data.vipTiers.length ? data.vipTiers.map((tier) => <article className="panel-soft" key={tier.id}><strong>{tier.name}</strong><p className="text-muted text-small">조건: 뽑기 {Number(tier.draw_count_required ?? 0).toLocaleString()}회 이상</p><button className="btn btn-secondary btn-block mt-2" type="button" onClick={() => action({ action: "auto-grant-vip", vipTierId: tier.id }, "조건 충족 회원에게 VIP를 부여했습니다.")}>조건 충족 회원 자동 부여</button></article>) : <div className="empty">VIP 등급이 없습니다.</div>}</div>
+      </section>
+      <section className="panel panel-pad"><h2 className="panel-title">VIP 보유 현황</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>회원</th><th>레벨/EXP</th><th>VIP</th><th>관리</th></tr></thead><tbody>{data.growthRows.length ? data.growthRows.map((row) => { const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const tier = data.vipTiers.find((item) => item.id === row.vip_tier_id); return <tr key={row.profile_id}><td>{p?.display_name ?? row.profile_id}<div className="text-muted text-small">{p?.member_code ?? ""}</div></td><td>Lv.{row.level_no} · {Number(row.exp_total ?? 0).toLocaleString()} EXP</td><td>{tier?.name ?? "-"}</td><td><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "clear-vip", profileId: row.profile_id }, "VIP를 해제했습니다.")}>VIP 해제</button></td></tr>; }) : <tr><td colSpan={4}><div className="empty">성장 기록이 없습니다.</div></td></tr>}</tbody></table></div></section>
     </>}
 
     {tab === "배지·휘장" && <>
@@ -288,7 +264,7 @@ export function GrowthManager({ data }: { data: GrowthData }) {
       </form>
       <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "grant-badge", "회원에게 배지를 지급했습니다.")}>
         <div className="flex items-center gap-1"><BadgeCheck size={19} className="text-gold" /><h2 className="panel-title mb-0">회원 배지 지급</h2></div>
-        <div className="form-row"><div className="field"><label>회원</label><select className="select" name="profileId">{filteredMembers.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></div><div className="field"><label>배지</label><select className="select" name="badgeId">{data.badges.map((badge) => <option key={badge.id} value={badge.id}>{badge.icon} {badge.name}</option>)}</select></div></div>
+        <div className="form-row"><div className="field"><label>회원</label><select className="select" name="profileId">{members.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></div><div className="field"><label>배지</label><select className="select" name="badgeId">{data.badges.map((badge) => <option key={badge.id} value={badge.id}>{badge.icon} {badge.name}</option>)}</select></div></div>
         <button className="btn btn-primary" disabled={loading === "grant-badge"}>{loading === "grant-badge" ? <LoaderCircle size={17} className="spin" /> : <Award size={17} />} 배지 지급</button>
       </form>
       <section className="panel panel-pad"><h2 className="panel-title">배지 현황</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>배지</th><th>설명</th><th>관리</th></tr></thead><tbody>{data.badges.length ? data.badges.map((badge) => <tr key={badge.id}><td><strong>{badge.icon} {badge.name}</strong></td><td>{badge.description ?? "-"}</td><td><button className="btn btn-danger btn-sm" onClick={() => action({ action: "delete-badge", id: badge.id }, "배지를 삭제했습니다.")}>삭제</button></td></tr>) : <tr><td colSpan={3}><div className="empty">배지가 없습니다.</div></td></tr>}</tbody></table></div></section>
@@ -297,7 +273,7 @@ export function GrowthManager({ data }: { data: GrowthData }) {
     {tab === "강제 EXP" && <>
       <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "adjust-exp", "EXP를 조정했습니다.")}>
         <div className="flex items-center gap-1"><Sparkles size={19} className="text-gold" /><h2 className="panel-title mb-0">경험치 강제 지급/회수</h2></div>
-        <div className="form-row"><div className="field"><label>회원</label><select className="select" name="profileId">{filteredMembers.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></div><div className="field"><label>지급/회수 EXP</label><input className="input" name="amount" type="number" defaultValue="100" /></div></div>
+        <div className="form-row"><div className="field"><label>회원</label><select className="select" name="profileId">{members.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></div><div className="field"><label>지급/회수 EXP</label><input className="input" name="amount" type="number" defaultValue="100" /></div></div>
         <div className="field"><label>사유</label><input className="input" name="reason" defaultValue="관리자 EXP 조정" /></div>
         <button className="btn btn-primary" disabled={loading === "adjust-exp"}>{loading === "adjust-exp" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} EXP 조정</button>
       </form>

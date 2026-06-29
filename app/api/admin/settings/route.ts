@@ -7,6 +7,9 @@ const schema = z.object({
   heroTitle: z.string().trim().min(2).max(100),
   heroDescription: z.string().trim().min(2).max(500),
   publicStats: z.boolean(),
+  operationMode: z.enum(["NORMAL", "READ_ONLY", "MAINTENANCE"]).optional().default("NORMAL"),
+  operationMessage: z.string().trim().max(500).optional().default(""),
+  operationEndsAt: z.string().trim().max(80).optional().default(""),
 });
 
 export async function PATCH(request: Request) {
@@ -21,6 +24,9 @@ export async function PATCH(request: Request) {
     { key: "hero_title", value: parsed.data.heroTitle, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "hero_description", value: parsed.data.heroDescription, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "public_stats", value: parsed.data.publicStats, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
+    { key: "operation_mode", value: parsed.data.operationMode, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
+    { key: "operation_message", value: parsed.data.operationMessage, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
+    { key: "operation_ends_at", value: parsed.data.operationEndsAt, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
   ];
   const { error } = await admin.from("site_settings").upsert(rows, { onConflict: "key" });
   if (error) return fail("설정을 저장하지 못했습니다.", 400, "SETTINGS_UPDATE_FAILED", error.message);

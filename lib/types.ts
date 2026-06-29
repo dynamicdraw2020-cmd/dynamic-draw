@@ -13,6 +13,13 @@ export interface Profile {
   member_code: string | null;
   created_at: string;
   approved_at?: string | null;
+  duplicate_risk_score?: number | null;
+  duplicate_risk_flags?: string[] | null;
+  login_state?: "ONLINE" | "OFFLINE" | "TRYING" | "FAILED" | null;
+  last_login_attempt_at?: string | null;
+  last_seen_at?: string | null;
+  ip_address?: string | null;
+  browser_fingerprint?: string | null;
 }
 
 export interface Reward {
@@ -161,6 +168,8 @@ export interface ExchangeRule {
   target_reward_name: string;
   target_quantity: number;
   is_active: boolean;
+  source_product_catalog_id?: string | null;
+  target_product_catalog_id?: string | null;
 }
 
 export interface InventoryItem {
@@ -169,6 +178,8 @@ export interface InventoryItem {
   reward_color: string;
   quantity: number;
   is_exchange_material: boolean;
+  product_catalog_id?: string | null;
+  canonical_reward_id?: string | null;
 }
 
 export interface PublicStats {

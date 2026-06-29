@@ -1,25 +1,43 @@
 "use client";
 
-import { Bell, CalendarCheck2, Gift, LoaderCircle, Send, Ticket, UserPlus } from "lucide-react";
+import { Bell, CalendarCheck2, Copy, Gift, LoaderCircle, Send, Ticket, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import type { RewardCenterData } from "@/lib/types";
+import { FormEvent, useMemo, useState } from "react";
+import type { PromoCode, RewardCenterData } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
 async function postJson(url: string, body: unknown = {}) {
   const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message ?? "요청을 처리하지 못했습니다.");
-  return data;
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error?.message ?? "요청을 처리하지 못했습니다.");
+  return payload.data ?? payload;
 }
 
 type BoxEntry = RewardCenterData["boxes"][number];
 
-function rewardText(reward: Record<string, unknown> | null | undefined) {
-  if (!reward) return "보상이 지급되었습니다.";
-  const label = typeof reward.label === "string" && reward.label.trim() ? reward.label.trim() : typeof reward.type === "string" ? reward.type : "보상";
+function describeReward(reward: Record<string, unknown> | null | undefined) {
+  if (!reward) return "보상 지급";
+  const rawType = String(reward.type ?? reward.reward_type ?? "").toUpperCase();
   const amount = Math.max(1, Number(reward.amount ?? 1) || 1);
-  return `${label} ${amount.toLocaleString()} 지급`;
+  const label = typeof reward.label === "string" && reward.label.trim() ? reward.label.trim() : "";
+  if (label) return `${label} ${amount.toLocaleString()}개`;
+  if (rawType === "CURRENCY") return `화폐 ${amount.toLocaleString()}`;
+  if (rawType === "TICKET") return `추첨권 ${amount.toLocaleString()}장`;
+  if (rawType === "ITEM") return `상품 ${amount.toLocaleString()}개`;
+  if (rawType === "RANDOM_BOX") return `랜덤박스 ${amount.toLocaleString()}개`;
+  if (rawType === "EXP") return `경험치 ${amount.toLocaleString()}`;
+  return `보상 ${amount.toLocaleString()}`;
+}
+
+function rewardSummary(value: unknown) {
+  const rewards = Array.isArray(value) ? value : value ? [value] : [];
+  if (!rewards.length) return "지급된 보상이 없습니다.";
+  return rewards.map((item) => describeReward(item as Record<string, unknown>)).join(" · ");
+}
+
+function promoRewardPreview(code: PromoCode) {
+  if (!Array.isArray(code.rewards) || !code.rewards.length) return "보상 설정 없음";
+  return rewardSummary(code.rewards);
 }
 
 export function RewardCenter({ data }: { data: RewardCenterData }) {
@@ -31,13 +49,14 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
   const [openingResult, setOpeningResult] = useState<string>("");
   const [remainingBoxCount, setRemainingBoxCount] = useState<number | null>(null);
   const referralCode = data.referral.referralCode ?? "승인 후 발급";
+  const promoCodes = useMemo(() => data.availablePromoCodes ?? [], [data.availablePromoCodes]);
 
-  async function run(key: string, fn: () => Promise<unknown>, success: string) {
+  async function run(key: string, fn: () => Promise<unknown>, success: (result: unknown) => string) {
     try {
       setLoading(key);
       setMessage(null);
-      await fn();
-      setMessage({ type: "success", text: success });
+      const result = await fn();
+      setMessage({ type: "success", text: success(result) });
       router.refresh();
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "처리 중 오류가 발생했습니다." });
@@ -51,8 +70,12 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
     const form = new FormData(event.currentTarget);
     const code = String(form.get("code") ?? "").trim();
     if (!code) return;
-    await run("code", () => postJson("/api/rewards/redeem-code", { code }), "코드 보상이 지급되었습니다.");
+    await run("code", () => postJson("/api/rewards/redeem-code", { code }), (result) => `코드 사용 완료 · ${rewardSummary((result as { rewards?: unknown })?.rewards)}`);
     event.currentTarget.reset();
+  }
+
+  async function redeemCode(code: string) {
+    await run(`code-${code}`, () => postJson("/api/rewards/redeem-code", { code }), (result) => `코드 사용 완료 · ${rewardSummary((result as { rewards?: unknown })?.rewards)}`);
   }
 
   function openGiftBox(box: BoxEntry) {
@@ -77,9 +100,8 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
       setLoading(`open-${openingBox.box_id}`);
       setOpeningStage("opening");
       const result = await postJson("/api/rewards/open-box", { boxId: openingBox.box_id });
-      const reward = result?.reward as Record<string, unknown> | undefined;
-      setOpeningResult(rewardText(reward));
-      setRemainingBoxCount(typeof result?.remaining === "number" ? result.remaining : null);
+      setOpeningResult(rewardSummary((result as { reward?: unknown; rewards?: unknown })?.reward ?? (result as { rewards?: unknown })?.rewards));
+      setRemainingBoxCount(typeof (result as { remaining?: unknown })?.remaining === "number" ? (result as { remaining: number }).remaining : null);
       setOpeningStage("result");
       setMessage({ type: "success", text: "랜덤박스를 개봉했습니다." });
     } catch (error) {
@@ -91,27 +113,43 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
   }
 
   return <>
-    <div className="grid gap-3">
+    <div className="grid gap-3 reward-center-mobile">
       {message && <div className={`form-message form-${message.type}`}>{message.text}</div>}
+
       <section className="panel panel-pad">
         <div className="flex items-center gap-1"><UserPlus size={19} className="text-gold" /><h2 className="panel-title mb-0">내 추천 ID</h2></div>
-        <p className="panel-description mt-1">친구가 회원가입 시 이 ID를 입력하고 관리자 승인을 받으면 양쪽 모두 보상을 받을 수 있습니다. 추천인 보상은 관리자가 설정한 내용대로 지급됩니다.</p>
+        <p className="panel-description mt-1">친구가 회원가입 시 이 ID를 입력하고 관리자 승인을 받으면 양쪽 모두 보상을 받을 수 있습니다.</p>
         <div className="member-code mt-2">{referralCode}</div>
+        <button className="btn btn-secondary btn-sm mt-2" type="button" onClick={() => navigator.clipboard?.writeText(referralCode)}><Copy size={15} /> 추천 ID 복사</button>
         <div className="text-muted text-small mt-2">승인 추천 수 {data.referral.totalApproved.toLocaleString()}명{data.referral.referredBy ? ` · 나를 추천한 회원 ${data.referral.referredBy}` : ""}</div>
       </section>
 
       <div className="grid grid-2">
         <section className="panel panel-pad">
           <div className="flex items-center gap-1"><CalendarCheck2 size={19} className="text-gold" /><h2 className="panel-title mb-0">출석 체크</h2></div>
-          <p className="panel-description mt-1">KST 기준 하루 1회 출석할 수 있습니다.</p>
-          {data.attendanceToday ? <div className="note-box mt-2">오늘 출석 완료 · 연속 {data.attendanceToday.streak_count.toLocaleString()}일</div> : <button className="btn btn-primary mt-2" type="button" disabled={loading === "attendance"} onClick={() => run("attendance", () => postJson("/api/rewards/attendance"), "출석 체크가 완료되었습니다.")}>{loading === "attendance" ? <LoaderCircle size={17} className="spin" /> : <CalendarCheck2 size={17} />} 오늘 출석하기</button>}
+          <p className="panel-description mt-1">KST 기준 하루 1회 출석할 수 있습니다. 출석 보상이 있으면 완료 메시지에 바로 표시됩니다.</p>
+          {data.attendanceToday ? <div className="note-box mt-2">오늘 출석 완료 · 연속 {data.attendanceToday.streak_count.toLocaleString()}일</div> : <button className="btn btn-primary mt-2" type="button" disabled={loading === "attendance"} onClick={() => run("attendance", () => postJson("/api/rewards/attendance"), (result) => `출석 체크 완료 · ${rewardSummary((result as { rewards?: unknown })?.rewards)}`)}>{loading === "attendance" ? <LoaderCircle size={17} className="spin" /> : <CalendarCheck2 size={17} />} 오늘 출석하기</button>}
           <div className="table-wrap mt-3"><table className="table"><thead><tr><th>날짜</th><th>구분</th><th>연속</th></tr></thead><tbody>{data.recentAttendance.length ? data.recentAttendance.map((row) => <tr key={row.id}><td>{row.attendance_date}</td><td>{row.source === "ADMIN" ? "관리자 처리" : "직접 출석"}</td><td>{row.streak_count}일</td></tr>) : <tr><td colSpan={3}><div className="empty">출석 기록이 없습니다.</div></td></tr>}</tbody></table></div>
         </section>
 
         <section className="panel panel-pad">
           <div className="flex items-center gap-1"><Send size={19} className="text-gold" /><h2 className="panel-title mb-0">쿠폰 / 이벤트 코드</h2></div>
-          <p className="panel-description mt-1">운영자가 공개한 쿠폰이나 이벤트 코드를 입력해 보상을 받을 수 있습니다.</p>
+          <p className="panel-description mt-1">운영자가 공개한 쿠폰이나 이벤트 코드를 입력하거나 아래 목록에서 바로 사용할 수 있습니다.</p>
           <form className="form-row mt-2" onSubmit={submitCode}><input className="input" name="code" placeholder="예: DYNAMICOPEN" maxLength={40} /><button className="btn btn-secondary" type="submit" disabled={loading === "code"}>{loading === "code" ? <LoaderCircle size={17} className="spin" /> : <Ticket size={17} />} 코드 사용</button></form>
+          <div className="grid gap-2 mt-3">
+            {promoCodes.length ? promoCodes.map((code) => <article className="panel-soft reward-code-card" key={code.id}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <strong>{code.name}</strong>
+                  <div className="member-code mt-1" style={{ fontSize: 14, padding: "6px 10px" }}>{code.code}</div>
+                </div>
+                <span className="status-pill">{code.code_type === "EVENT_CODE" ? "이벤트 코드" : "쿠폰"}</span>
+              </div>
+              {code.description && <p className="text-muted text-small mt-2">{code.description}</p>}
+              <div className="note-box mt-2">보상: {promoRewardPreview(code)}</div>
+              <button className="btn btn-primary btn-block mt-2" type="button" disabled={loading === `code-${code.code}`} onClick={() => redeemCode(code.code)}>{loading === `code-${code.code}` ? <LoaderCircle size={17} className="spin" /> : <Ticket size={17} />} 이 코드 사용하기</button>
+            </article>) : <div className="empty mt-2">현재 바로 사용할 수 있는 공개 쿠폰/이벤트 코드가 없습니다.</div>}
+          </div>
         </section>
       </div>
 
@@ -127,8 +165,8 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
       </section>
     </div>
 
-    {openingBox && <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.58)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 80 }}>
-      <div className="panel panel-pad" style={{ width: "100%", maxWidth: 520, boxShadow: "0 20px 50px rgba(15, 23, 42, 0.24)" }}>
+    {openingBox && <div className="reward-box-modal">
+      <div className="panel panel-pad reward-box-dialog">
         <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="panel-title mb-0">{openingBox.box_name}</h2>
@@ -138,29 +176,24 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
         </div>
 
         {openingStage === "preview" && <>
-          <button
-            type="button"
-            onClick={confirmGiftOpen}
-            disabled={loading === `open-${openingBox.box_id}`}
-            style={{ width: "100%", marginTop: 18, borderRadius: 28, border: "1px solid rgba(15,23,42,0.08)", background: "linear-gradient(180deg, #fff8e1 0%, #ffd86a 100%)", padding: "30px 20px", boxShadow: "0 16px 40px rgba(15, 23, 42, 0.16)", cursor: "pointer" }}
-          >
-            <div style={{ fontSize: 76, lineHeight: 1 }}>🎁</div>
-            <div style={{ marginTop: 14, fontWeight: 800, fontSize: 20 }}>선물상자를 클릭해서 개봉하기</div>
-            <div className="text-muted text-small" style={{ marginTop: 8 }}>보유 수량 {openingBox.quantity.toLocaleString()}개</div>
+          <button type="button" className="reward-gift-button" onClick={confirmGiftOpen} disabled={loading === `open-${openingBox.box_id}`}>
+            <div className="reward-gift-emoji">🎁</div>
+            <div className="reward-gift-title">선물상자를 클릭해서 개봉하기</div>
+            <div className="text-muted text-small mt-1">보유 수량 {openingBox.quantity.toLocaleString()}개</div>
           </button>
           <div className="text-muted text-small mt-2">한 번 개봉하면 랜덤박스 1개가 차감되고 설정된 확률에 따라 보상이 지급됩니다.</div>
         </>}
 
-        {openingStage === "opening" && <div style={{ marginTop: 18, borderRadius: 28, background: "linear-gradient(180deg, #fff8e1 0%, #ffd86a 100%)", padding: "34px 20px", textAlign: "center" }}>
-          <div style={{ fontSize: 76, lineHeight: 1 }}>🎁</div>
-          <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontWeight: 800 }}><LoaderCircle size={20} className="spin" /> 개봉 중...</div>
+        {openingStage === "opening" && <div className="reward-gift-opening">
+          <div className="reward-gift-emoji">🎁</div>
+          <div className="reward-gift-title"><LoaderCircle size={20} className="spin" /> 개봉 중...</div>
           <div className="text-muted text-small mt-2">잠시만 기다려 주세요.</div>
         </div>}
 
-        {openingStage === "result" && <div style={{ marginTop: 18, borderRadius: 28, background: "linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)", padding: "34px 20px", textAlign: "center", border: "1px solid rgba(59, 130, 246, 0.14)" }}>
-          <div style={{ fontSize: 72, lineHeight: 1 }}>✨</div>
-          <div style={{ marginTop: 14, fontSize: 22, fontWeight: 900 }}>개봉 완료!</div>
-          <div style={{ marginTop: 10, fontSize: 18, fontWeight: 700 }}>{openingResult}</div>
+        {openingStage === "result" && <div className="reward-gift-result">
+          <div className="reward-gift-emoji">✨</div>
+          <div className="reward-gift-title">개봉 완료!</div>
+          <div className="reward-gift-reward">{openingResult}</div>
           <div className="text-muted text-small mt-2">{remainingBoxCount !== null ? `남은 수량 ${remainingBoxCount.toLocaleString()}개` : "보상 내역은 알림센터에서도 확인할 수 있습니다."}</div>
           <button className="btn btn-primary mt-3" type="button" onClick={() => closeGiftBox(true)}>확인</button>
         </div>}

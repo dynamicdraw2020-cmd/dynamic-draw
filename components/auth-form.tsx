@@ -4,6 +4,24 @@ import { ArrowRight, IdCard, LoaderCircle, LockKeyhole, UserRound } from "lucide
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+function simpleFingerprintSource() {
+  if (typeof window === "undefined") return "server";
+  const screenInfo = `${window.screen?.width ?? 0}x${window.screen?.height ?? 0}x${window.screen?.colorDepth ?? 0}`;
+  const language = navigator.language ?? "";
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  const platform = navigator.platform ?? "";
+  return [navigator.userAgent, screenInfo, language, timezone, platform].join("|");
+}
+
+function hashSmall(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fp_${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
 export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "signup"; nextPath?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -24,7 +42,7 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
     const response = await fetch(`/api/auth/${mode}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...payload, nextPath }),
+      body: JSON.stringify({ ...payload, nextPath, browserFingerprint: hashSmall(simpleFingerprintSource()) }),
     });
     const body = await response.json();
     setLoading(false);

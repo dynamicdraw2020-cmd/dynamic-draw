@@ -53,9 +53,9 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "save-vip") {
-      const input = z.object({ name: z.string().trim().min(1).max(80), description: z.string().trim().max(400).optional().default(""), thresholdLevel: z.coerce.number().int().min(1).default(1), thresholdExp: z.coerce.number().int().min(0).default(0), attendanceRewardJson: z.string().optional().default(""), sortOrder: z.coerce.number().int().default(10) }).parse(body);
+      const input = z.object({ name: z.string().trim().min(1).max(80), description: z.string().trim().max(400).optional().default(""), drawCountRequired: z.coerce.number().int().min(0).default(0), attendanceRewardJson: z.string().optional().default(""), sortOrder: z.coerce.number().int().default(10) }).parse(body);
       const rewards = parseJsonArray(input.attendanceRewardJson);
-      const { data, error } = await admin.from("vip_tiers").insert({ name: input.name, description: input.description || null, threshold_level: input.thresholdLevel, threshold_exp: input.thresholdExp, attendance_bonus_rewards: rewards, sort_order: input.sortOrder, created_by: guard.auth.userId }).select("*").single();
+      const { data, error } = await admin.from("vip_tiers").insert({ name: input.name, description: input.description || null, threshold_level: 0, threshold_exp: 0, draw_count_required: input.drawCountRequired, attendance_bonus_rewards: rewards, sort_order: input.sortOrder, created_by: guard.auth.userId }).select("*").single();
       if (error) return fail("VIP 등급을 저장하지 못했습니다.", 400, "VIP_SAVE_FAILED", error.message);
       return ok(data, 201);
     }
@@ -74,33 +74,40 @@ export async function POST(request: Request) {
       return ok({ deleted: true });
     }
 
-
-    if (body.action === "save-member-tier") {
-      const input = z.object({ name: z.string().trim().min(1).max(80), description: z.string().trim().max(400).optional().default(""), badgeLabel: z.string().trim().max(40).optional().default(""), badgeColor: z.string().trim().max(30).optional().default("#334155"), canUseCommunity: z.coerce.boolean().optional().default(false), sortOrder: z.coerce.number().int().default(10) }).parse(body);
-      const { data, error } = await admin.from("member_tiers").insert({ name: input.name, description: input.description || null, badge_label: input.badgeLabel || null, badge_color: input.badgeColor || "#334155", can_use_community: input.canUseCommunity, sort_order: input.sortOrder, created_by: guard.auth.userId }).select("*").single();
-      if (error) return fail("회원 등급을 저장하지 못했습니다.", 400, "MEMBER_TIER_SAVE_FAILED", error.message);
+    if (body.action === "grant-vip") {
+      const input = z.object({ profileId: z.uuid(), vipTierId: z.uuid() }).parse(body);
+      const { data: existing } = await admin.from("profile_growth").select("profile_id,level_no,exp_total").eq("profile_id", input.profileId).maybeSingle();
+      const payload = { profile_id: input.profileId, level_no: Number((existing as { level_no?: number } | null)?.level_no ?? 1), exp_total: Number((existing as { exp_total?: number } | null)?.exp_total ?? 0), vip_tier_id: input.vipTierId, updated_at: new Date().toISOString() };
+      const { data, error } = await admin.from("profile_growth").upsert(payload, { onConflict: "profile_id" }).select("*").single();
+      if (error) return fail("VIP를 부여하지 못했습니다.", 400, "VIP_GRANT_FAILED", error.message);
       return ok(data, 201);
     }
 
-    if (body.action === "delete-member-tier") {
-      const input = z.object({ id: z.uuid() }).parse(body);
-      const { error } = await admin.from("member_tiers").delete().eq("id", input.id);
-      if (error) return fail("회원 등급을 삭제하지 못했습니다.", 400, "MEMBER_TIER_DELETE_FAILED", error.message);
-      return ok({ deleted: true });
+    if (body.action === "clear-vip") {
+      const input = z.object({ profileId: z.uuid() }).parse(body);
+      const { error } = await admin.from("profile_growth").update({ vip_tier_id: null, updated_at: new Date().toISOString() }).eq("profile_id", input.profileId);
+      if (error) return fail("VIP를 해제하지 못했습니다.", 400, "VIP_CLEAR_FAILED", error.message);
+      return ok({ cleared: true });
     }
 
-    if (body.action === "assign-member-tier") {
-      const input = z.object({ profileId: z.uuid(), tierId: z.uuid() }).parse(body);
-      const { data, error } = await admin.from("profile_member_tiers").upsert({ profile_id: input.profileId, tier_id: input.tierId, granted_by: guard.auth.userId, granted_at: new Date().toISOString() }, { onConflict: "profile_id,tier_id" }).select("*").single();
-      if (error) return fail("회원 등급을 배정하지 못했습니다.", 400, "MEMBER_TIER_ASSIGN_FAILED", error.message);
-      return ok(data, 201);
-    }
-
-    if (body.action === "remove-member-tier") {
-      const input = z.object({ profileId: z.uuid(), tierId: z.uuid() }).parse(body);
-      const { error } = await admin.from("profile_member_tiers").delete().eq("profile_id", input.profileId).eq("tier_id", input.tierId);
-      if (error) return fail("회원 등급을 해제하지 못했습니다.", 400, "MEMBER_TIER_REMOVE_FAILED", error.message);
-      return ok({ removed: true });
+    if (body.action === "auto-grant-vip") {
+      const input = z.object({ vipTierId: z.uuid() }).parse(body);
+      const { data: tier } = await admin.from("vip_tiers").select("id,draw_count_required").eq("id", input.vipTierId).maybeSingle();
+      const required = Math.max(0, Number((tier as { draw_count_required?: number } | null)?.draw_count_required ?? 0));
+      const { data: results } = await admin.from("results").select("participant_id").not("revealed_at", "is", null).is("voided_at", null).limit(20000);
+      const counts = new Map<string, number>();
+      for (const row of (results ?? []) as Array<{ participant_id: string | null }>) {
+        if (row.participant_id) counts.set(row.participant_id, (counts.get(row.participant_id) ?? 0) + 1);
+      }
+      let granted = 0;
+      for (const [profileId, count] of counts) {
+        if (count < required) continue;
+        const { data: existing } = await admin.from("profile_growth").select("profile_id,level_no,exp_total").eq("profile_id", profileId).maybeSingle();
+        const payload = { profile_id: profileId, level_no: Number((existing as { level_no?: number } | null)?.level_no ?? 1), exp_total: Number((existing as { exp_total?: number } | null)?.exp_total ?? 0), vip_tier_id: input.vipTierId, updated_at: new Date().toISOString() };
+        const { error } = await admin.from("profile_growth").upsert(payload, { onConflict: "profile_id" });
+        if (!error) granted += 1;
+      }
+      return ok({ grantedCount: granted, requiredDrawCount: required });
     }
 
     if (body.action === "save-badge") {

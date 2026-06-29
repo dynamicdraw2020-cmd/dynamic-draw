@@ -303,21 +303,32 @@ export async function getUserInventory(profileId: string): Promise<InventoryItem
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("participant_items")
-    .select("reward_id, quantity, rewards(name,color,is_exchange_material)")
+    .select("reward_id, quantity, rewards(id,name,color,is_exchange_material,product_catalog_id)")
     .eq("profile_id", profileId)
     .gt("quantity", 0)
     .order("updated_at", { ascending: false });
   if (error || !data) return [];
-  return data.map((row) => {
+  const grouped = new Map<string, InventoryItem>();
+  for (const row of data) {
     const reward = Array.isArray(row.rewards) ? row.rewards[0] : row.rewards;
-    return {
+    const productId = reward?.product_catalog_id ?? null;
+    const key = productId ? `product:${productId}` : `reward:${row.reward_id}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.quantity += row.quantity;
+      continue;
+    }
+    grouped.set(key, {
       reward_id: row.reward_id,
+      canonical_reward_id: row.reward_id,
+      product_catalog_id: productId,
       reward_name: reward?.name ?? "상품",
       reward_color: reward?.color ?? "#94a3b8",
       quantity: row.quantity,
       is_exchange_material: Boolean(reward?.is_exchange_material),
-    };
-  });
+    });
+  }
+  return Array.from(grouped.values());
 }
 
 export async function getExchangeRules(): Promise<ExchangeRule[]> {
@@ -326,7 +337,7 @@ export async function getExchangeRules(): Promise<ExchangeRule[]> {
   const { data, error } = await supabase
     .from("exchange_rules")
     .select(
-      "id,name,source_reward_id,source_quantity,target_reward_id,target_quantity,is_active,source:rewards!exchange_rules_source_reward_id_fkey(name),target:rewards!exchange_rules_target_reward_id_fkey(name)",
+      "id,name,source_reward_id,source_quantity,target_reward_id,target_quantity,is_active,source:rewards!exchange_rules_source_reward_id_fkey(name,product_catalog_id),target:rewards!exchange_rules_target_reward_id_fkey(name,product_catalog_id)",
     )
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
@@ -344,6 +355,8 @@ export async function getExchangeRules(): Promise<ExchangeRule[]> {
       target_reward_name: target?.name ?? "교환 상품",
       target_quantity: row.target_quantity,
       is_active: row.is_active,
+      source_product_catalog_id: source?.product_catalog_id ?? null,
+      target_product_catalog_id: target?.product_catalog_id ?? null,
     };
   });
 }
@@ -658,6 +671,9 @@ export async function getAdminMembers(): Promise<Profile[]> {
         status: "PENDING",
         member_code: null,
         created_at: new Date().toISOString(),
+        duplicate_risk_score: 45,
+        duplicate_risk_flags: ["동일 IP 주의"],
+        login_state: "OFFLINE",
       },
       {
         id: "approved-1",
@@ -669,12 +685,49 @@ export async function getAdminMembers(): Promise<Profile[]> {
         status: "APPROVED",
         member_code: "DD-2026-000432",
         created_at: new Date(Date.now() - 86400000).toISOString(),
+        duplicate_risk_score: 0,
+        duplicate_risk_flags: [],
+        login_state: "ONLINE",
       },
     ];
   }
   const admin = createAdminClient();
   const { data } = await admin.from("profiles").select("*").neq("status", "DELETED").order("created_at", { ascending: false });
-  return (data as Profile[] | null) ?? [];
+  const profiles = (data as Profile[] | null) ?? [];
+  if (!profiles.length) return profiles;
+  const ids = profiles.map((profile) => profile.id);
+  const [riskResult, sessionResult, attemptResult] = await Promise.all([
+    admin.from("signup_risk_assessments").select("profile_id,risk_score,risk_flags,ip_address,browser_fingerprint,created_at").in("profile_id", ids).order("created_at", { ascending: false }),
+    admin.from("member_session_status").select("profile_id,status,last_seen_at,last_login_at,last_logout_at,ip_address,browser_fingerprint").in("profile_id", ids),
+    admin.from("login_activity_logs").select("profile_id,status,created_at,ip_address,browser_fingerprint").in("profile_id", ids).order("created_at", { ascending: false }).limit(1000),
+  ]);
+  const riskMap = new Map<string, { risk_score?: number | null; risk_flags?: string[] | null; ip_address?: string | null; browser_fingerprint?: string | null }>();
+  for (const row of (riskResult.data ?? []) as Array<{ profile_id: string; risk_score?: number | null; risk_flags?: string[] | null; ip_address?: string | null; browser_fingerprint?: string | null }>) {
+    if (!riskMap.has(row.profile_id)) riskMap.set(row.profile_id, row);
+  }
+  const sessionMap = new Map<string, { status?: string | null; last_seen_at?: string | null; ip_address?: string | null; browser_fingerprint?: string | null }>();
+  for (const row of (sessionResult.data ?? []) as Array<{ profile_id: string; status?: string | null; last_seen_at?: string | null; ip_address?: string | null; browser_fingerprint?: string | null }>) {
+    sessionMap.set(row.profile_id, row);
+  }
+  const attemptMap = new Map<string, { status?: string | null; created_at?: string | null }>();
+  for (const row of (attemptResult.data ?? []) as Array<{ profile_id: string | null; status?: string | null; created_at?: string | null }>) {
+    if (row.profile_id && !attemptMap.has(row.profile_id)) attemptMap.set(row.profile_id, row);
+  }
+  return profiles.map((profile) => {
+    const risk = riskMap.get(profile.id);
+    const session = sessionMap.get(profile.id);
+    const attempt = attemptMap.get(profile.id);
+    return {
+      ...profile,
+      duplicate_risk_score: risk?.risk_score ?? 0,
+      duplicate_risk_flags: risk?.risk_flags ?? [],
+      login_state: (session?.status ?? attempt?.status ?? "OFFLINE") as Profile["login_state"],
+      last_login_attempt_at: attempt?.created_at ?? null,
+      last_seen_at: session?.last_seen_at ?? null,
+      ip_address: session?.ip_address ?? risk?.ip_address ?? null,
+      browser_fingerprint: session?.browser_fingerprint ?? risk?.browser_fingerprint ?? null,
+    };
+  });
 }
 
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
@@ -885,7 +938,7 @@ export async function getRewardSystemAdminData(): Promise<AdminRewardSystemData>
     admin.from("random_boxes").select("id,name,description,image_url,is_active,is_signup_reward,starts_at,ends_at,sort_order,created_at,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
     admin.from("random_box_rewards").select("id,box_id,reward_type,amount,probability_units,label,currency_id,draw_id,reward_id,random_box_id,is_active,sort_order,currency:virtual_currencies(name),draw:draws(name),reward:rewards(name),next_box:random_boxes!random_box_rewards_random_box_id_fkey(name)").order("sort_order", { ascending: true }),
     admin.from("attendance_reward_rules").select("id,name,rule_type,required_count,rewards,is_active,sort_order").order("sort_order", { ascending: true }),
-    admin.from("promo_codes").select("id,code,name,description,code_type,target_mode,target_profile_id,target_role,event_id,starts_at,ends_at,max_uses,per_user_limit,used_count,rewards,is_active,created_at,deleted_at,target:profiles(display_name,username),event:events(title)").is("deleted_at", null).order("created_at", { ascending: false }),
+    admin.from("promo_codes").select("id,code,name,description,code_type,target_mode,target_profile_id,target_role,event_id,starts_at,ends_at,max_uses,per_user_limit,used_count,rewards,is_active,created_at,deleted_at").is("deleted_at", null).order("created_at", { ascending: false }),
     getAdminMembers(),
     getAdminDraws(),
     getVirtualCurrencies(),
@@ -1076,9 +1129,9 @@ export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]
   }
 
   return {
-    level: Array.from(baseFromGrowth.values()).sort((a, b) => b.levelNo - a.levelNo || b.expTotal - a.expTotal).slice(0, 50),
-    exp: Array.from(expAgg.values()).sort((a, b) => b.gainedExp - a.gainedExp || b.expTotal - a.expTotal).slice(0, 50),
-    weeklyDraws: Array.from(drawAgg.values()).sort((a, b) => b.weeklyDraws - a.weeklyDraws || b.expTotal - a.expTotal).slice(0, 50),
+    level: Array.from(baseFromGrowth.values()).sort((a, b) => b.levelNo - a.levelNo || b.expTotal - a.expTotal).slice(0, 5000),
+    exp: Array.from(expAgg.values()).sort((a, b) => b.gainedExp - a.gainedExp || b.expTotal - a.expTotal).slice(0, 5000),
+    weeklyDraws: Array.from(drawAgg.values()).sort((a, b) => b.weeklyDraws - a.weeklyDraws || b.expTotal - a.expTotal).slice(0, 5000),
   };
 }
 

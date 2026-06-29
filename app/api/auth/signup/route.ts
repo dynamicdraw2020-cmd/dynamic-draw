@@ -9,6 +9,7 @@ const schema = z.object({
   displayName: z.string().trim().min(2, "이름 또는 닉네임은 2자 이상 입력해 주세요.").max(30),
   password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다.").max(72),
   referralCode: z.string().trim().max(8, "추천인 ID는 8자리 이내 숫자만 입력해 주세요.").optional().default(""),
+  browserFingerprint: z.string().trim().max(120).optional().default(""),
 });
 
 type AuthAdminError = { code?: string; message?: string; status?: number };
@@ -54,6 +55,21 @@ export async function POST(request: Request) {
   if (limited) return limited;
 
   const admin = createAdminClient();
+  const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
+  let riskScore = 0;
+  const riskFlags: string[] = [];
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [sameIp, sameFingerprint] = await Promise.all([
+      admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", since),
+      admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", since),
+    ]);
+    if ((sameIp.count ?? 0) >= 2) { riskScore += 35; riskFlags.push("동일 IP 24시간 내 다중 가입"); }
+    if (fingerprint !== "unknown" && (sameFingerprint.count ?? 0) >= 1) { riskScore += 45; riskFlags.push("동일 브라우저 지문 재가입 의심"); }
+  } catch {
+    // 중복가입 위험도 테이블이 아직 적용되지 않은 기존 설치와의 호환을 위해 무시합니다.
+  }
+
   const authEmail = loginIdToAuthEmail(login.loginId);
   const { data: existing } = await admin.from("profiles").select("id").eq("username", login.loginId).maybeSingle();
   if (existing) return fail("이미 사용 중인 아이디입니다. 다른 아이디를 사용해 주세요.", 409, "LOGIN_ID_ALREADY_REGISTERED");
@@ -129,6 +145,20 @@ export async function POST(request: Request) {
       referral_code: normalizedReferral,
       status: "PENDING",
     });
+  }
+
+  try {
+    await admin.from("signup_risk_assessments").insert({
+      profile_id: created.user.id,
+      login_id: login.loginId,
+      ip_address: ip,
+      browser_fingerprint: fingerprint,
+      risk_score: riskScore,
+      risk_flags: riskFlags,
+      user_agent: request.headers.get("user-agent") || "unknown",
+    });
+  } catch {
+    // 보정 SQL 적용 전 호환
   }
 
   return ok({

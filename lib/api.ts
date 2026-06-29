@@ -37,6 +37,12 @@ export async function requireApiUser() {
   }
   try {
     const admin = createAdminClient();
+    if (auth.profile.role === "USER") {
+      const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
+      const mode = String((modeRow as { value?: unknown } | null)?.value ?? "NORMAL").replace(/^"|"$/g, "");
+      if (mode === "MAINTENANCE") return { error: fail("현재 긴급 점검 모드입니다. 잠시 후 다시 이용해 주세요.", 503, "OPERATION_MAINTENANCE") } as const;
+      if (mode === "READ_ONLY") return { error: fail("현재 읽기 전용 모드입니다. 조회만 가능합니다.", 423, "OPERATION_READ_ONLY") } as const;
+    }
     const { count } = await admin.from("blacklist_entries").select("id", { count: "exact", head: true }).eq("profile_id", auth.profile.id).eq("status", "ACTIVE").in("scope", ["ALL", "LOGIN"]);
     if ((count ?? 0) > 0) return { error: fail("운영 정책에 따라 이용이 제한된 계정입니다.", 403, "ACCOUNT_RESTRICTED") } as const;
   } catch {

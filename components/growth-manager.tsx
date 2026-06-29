@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { Award, BadgeCheck, LoaderCircle, Medal, Plus, Sparkles, Star, Trophy } from "lucide-react";
@@ -15,6 +16,9 @@ type GrowthData = {
   profileBadges: Array<Record<string, any>>;
   growthRows: Array<Record<string, any>>;
   expLogs: Array<Record<string, any>>;
+  currencies: Array<Record<string, any>>;
+  rewards: Array<Record<string, any>>;
+  boxes: Array<Record<string, any>>;
 };
 
 const tabs = ["레벨", "뽑기 EXP", "VIP 등급", "배지·휘장", "강제 EXP"] as const;
@@ -36,11 +40,130 @@ function memberLabel(member: Record<string, any>) {
   return `${member.display_name ?? "회원"} · ${displayLoginId(member as any)} · ${member.role ?? "USER"}${member.member_code ? ` · ${member.member_code}` : ""}`;
 }
 
+type RewardDraft = {
+  id: string;
+  type: "RANDOM_BOX" | "TICKET" | "CURRENCY" | "ITEM" | "EXP";
+  amount: number;
+  currencyId: string;
+  drawId: string;
+  rewardId: string;
+  boxId: string;
+  label: string;
+};
+
+function makeDraftId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function emptyRewardDraft(): RewardDraft {
+  return { id: makeDraftId(), type: "RANDOM_BOX", amount: 1, currencyId: "", drawId: "", rewardId: "", boxId: "", label: "" };
+}
+
+function cleanRewardDrafts(rewards: RewardDraft[]) {
+  return rewards
+    .map((reward) => {
+      const amount = Math.max(1, Math.floor(Number(reward.amount) || 1));
+      const base: Record<string, any> = { type: reward.type, amount, label: reward.label || undefined };
+      if (reward.type === "RANDOM_BOX") base.boxId = reward.boxId || undefined;
+      if (reward.type === "TICKET") base.drawId = reward.drawId || undefined;
+      if (reward.type === "CURRENCY") base.currencyId = reward.currencyId || undefined;
+      if (reward.type === "ITEM") base.rewardId = reward.rewardId || undefined;
+      return base;
+    })
+    .filter((reward) => {
+      if (reward.type === "RANDOM_BOX") return Boolean(reward.boxId);
+      if (reward.type === "TICKET") return Boolean(reward.drawId);
+      if (reward.type === "CURRENCY") return Boolean(reward.currencyId);
+      if (reward.type === "ITEM") return Boolean(reward.rewardId);
+      if (reward.type === "EXP") return true;
+      return false;
+    });
+}
+
+function RewardBuilder({
+  data,
+  rewards,
+  setRewards,
+  fieldName,
+  description,
+}: {
+  data: GrowthData;
+  rewards: RewardDraft[];
+  setRewards: (updater: (prev: RewardDraft[]) => RewardDraft[]) => void;
+  fieldName: string;
+  description: string;
+}) {
+  const payload = JSON.stringify(cleanRewardDrafts(rewards));
+  return <div className="form-grid">
+    <input type="hidden" name={fieldName} value={payload} />
+    <div className="note-box">{description} 보상 종류를 고르면 저장 시 자동으로 내부 JSON으로 변환됩니다.</div>
+    <div className="grid gap-2">
+      {rewards.map((reward, index) => <div className="panel-soft form-grid" key={reward.id}>
+        <div className="flex items-center justify-between gap-2">
+          <strong>보상 {index + 1}</strong>
+          <button className="btn btn-danger btn-sm" type="button" onClick={() => setRewards((prev) => prev.length <= 1 ? [emptyRewardDraft()] : prev.filter((item) => item.id !== reward.id))}>삭제</button>
+        </div>
+        <div className="form-row">
+          <div className="field">
+            <label>보상 종류</label>
+            <select className="select" value={reward.type} onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, type: event.target.value as RewardDraft["type"] } : item))}>
+              <option value="RANDOM_BOX">랜덤박스</option>
+              <option value="TICKET">추첨권</option>
+              <option value="CURRENCY">화폐</option>
+              <option value="ITEM">보유 상품</option>
+              <option value="EXP">경험치</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>지급 수량</label>
+            <input className="input" type="number" min="1" value={reward.amount} onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, amount: Number(event.target.value || 1) } : item))} />
+          </div>
+        </div>
+        {reward.type === "RANDOM_BOX" && <div className="field">
+          <label>랜덤박스 선택</label>
+          <select className="select" value={reward.boxId} onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, boxId: event.target.value } : item))}>
+            <option value="">선택 없음</option>
+            {data.boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}
+          </select>
+        </div>}
+        {reward.type === "TICKET" && <div className="field">
+          <label>추첨권 대상 뽑기</label>
+          <select className="select" value={reward.drawId} onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, drawId: event.target.value } : item))}>
+            <option value="">선택 없음</option>
+            {data.draws.map((draw) => <option key={draw.id} value={draw.id}>{draw.name} · {draw.status}</option>)}
+          </select>
+        </div>}
+        {reward.type === "CURRENCY" && <div className="field">
+          <label>화폐 선택</label>
+          <select className="select" value={reward.currencyId} onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, currencyId: event.target.value } : item))}>
+            <option value="">선택 없음</option>
+            {data.currencies.map((currency) => <option key={currency.id} value={currency.id}>{currency.name} · {currency.symbol}</option>)}
+          </select>
+        </div>}
+        {reward.type === "ITEM" && <div className="field">
+          <label>상품 선택</label>
+          <select className="select" value={reward.rewardId} onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, rewardId: event.target.value } : item))}>
+            <option value="">선택 없음</option>
+            {data.rewards.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </div>}
+        <div className="field">
+          <label>표시명</label>
+          <input className="input" value={reward.label} placeholder="예: 특별 보상" onChange={(event) => setRewards((prev) => prev.map((item) => item.id === reward.id ? { ...item, label: event.target.value } : item))} />
+        </div>
+      </div>)}
+    </div>
+    <button className="btn btn-secondary" type="button" onClick={() => setRewards((prev) => [...prev, emptyRewardDraft()])}>+ 보상 추가</button>
+  </div>;
+}
+
 export function GrowthManager({ data }: { data: GrowthData }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("레벨");
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [levelRewards, setLevelRewards] = useState<RewardDraft[]>([emptyRewardDraft()]);
+  const [vipRewards, setVipRewards] = useState<RewardDraft[]>([emptyRewardDraft()]);
   const members = useMemo(() => data.members.filter((member) => member.status === "APPROVED"), [data.members]);
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string, success: string) {
@@ -88,7 +211,7 @@ export function GrowthManager({ data }: { data: GrowthData }) {
         <p className="panel-description">레벨 번호, 필요 경험치, 레벨 이름, 레벨 달성 보상을 설정합니다.</p>
         <div className="form-row"><div className="field"><label>레벨</label><input className="input" name="levelNo" type="number" min="1" defaultValue="1" /></div><div className="field"><label>레벨명</label><input className="input" name="name" defaultValue="Lv.1" /></div><div className="field"><label>필요 EXP</label><input className="input" name="requiredExp" type="number" min="0" defaultValue="0" /></div></div>
         <div className="field"><label>설명</label><input className="input" name="description" placeholder="예: 시작 레벨" /></div>
-        <div className="field"><label>레벨 보상 JSON</label><textarea className="textarea" name="rewardsJson" rows={3} placeholder='[{"type":"CURRENCY","amount":100,"currencyId":"..."}]' /></div>
+        <div className="field"><label>레벨 달성 보상</label><RewardBuilder data={data} rewards={levelRewards} setRewards={setLevelRewards} fieldName="rewardsJson" description="레벨을 처음 달성했을 때 지급할 보상을 선택하세요." /></div>
         <button className="btn btn-primary" disabled={loading === "save-level"}>{loading === "save-level" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} 레벨 저장</button>
       </form>
       <section className="panel panel-pad"><h2 className="panel-title">레벨 목록</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>레벨</th><th>필요 EXP</th><th>설명</th><th>관리</th></tr></thead><tbody>{data.levels.length ? data.levels.map((row) => <tr key={row.id}><td><strong>{row.name}</strong><div className="text-muted text-small">Lv.{row.level_no}</div></td><td>{Number(row.required_exp ?? 0).toLocaleString()}</td><td>{row.description ?? "-"}</td><td><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "delete-level", id: row.id }, "레벨 설정을 삭제했습니다.")}>삭제</button></td></tr>) : <tr><td colSpan={4}><div className="empty">레벨 설정이 없습니다.</div></td></tr>}</tbody></table></div></section>
@@ -111,7 +234,7 @@ export function GrowthManager({ data }: { data: GrowthData }) {
         <div className="form-row"><div className="field"><label>등급명</label><input className="input" name="name" defaultValue="VIP" /></div><div className="field"><label>정렬</label><input className="input" name="sortOrder" type="number" defaultValue="10" /></div></div>
         <div className="field"><label>설명</label><input className="input" name="description" placeholder="예: 이벤트 활동 우수 회원" /></div>
         <div className="form-row"><div className="field"><label>필요 레벨</label><input className="input" name="thresholdLevel" type="number" min="1" defaultValue="1" /></div><div className="field"><label>필요 EXP</label><input className="input" name="thresholdExp" type="number" min="0" defaultValue="0" /></div></div>
-        <div className="field"><label>최초 1회 특별 출석 보상 JSON</label><textarea className="textarea" name="attendanceRewardJson" rows={3} placeholder='[{"type":"TICKET","amount":1,"drawId":"..."}]' /></div>
+        <div className="field"><label>최초 1회 특별 출석 보상</label><RewardBuilder data={data} rewards={vipRewards} setRewards={setVipRewards} fieldName="attendanceRewardJson" description="VIP 등급 도달 뒤 최초 출석 때 지급할 특별 보상을 선택하세요." /></div>
         <button className="btn btn-primary" disabled={loading === "save-vip"}>{loading === "save-vip" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} VIP 등급 저장</button>
       </form>
       <section className="panel panel-pad"><h2 className="panel-title">VIP 등급 현황</h2><div className="table-wrap mt-2"><table className="table"><thead><tr><th>등급</th><th>조건</th><th>상태</th><th>관리</th></tr></thead><tbody>{data.vipTiers.length ? data.vipTiers.map((row) => <tr key={row.id}><td><strong>{row.name}</strong><div className="text-muted text-small">{row.description ?? "설명 없음"}</div></td><td>Lv.{row.threshold_level} / {Number(row.threshold_exp ?? 0).toLocaleString()} EXP</td><td>{row.is_active ? "사용" : "정지"}</td><td><div className="table-actions"><button className="btn btn-secondary btn-sm" type="button" onClick={() => action({ action: "toggle-vip", id: row.id, isActive: !row.is_active }, "VIP 상태를 변경했습니다.")}>{row.is_active ? "정지" : "복구"}</button><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "delete-vip", id: row.id }, "VIP 등급을 삭제했습니다.")}>삭제</button></div></td></tr>) : <tr><td colSpan={4}><div className="empty">VIP 등급이 없습니다.</div></td></tr>}</tbody></table></div></section>

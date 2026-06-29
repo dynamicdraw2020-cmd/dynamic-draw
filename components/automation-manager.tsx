@@ -7,7 +7,7 @@ import { FormEvent, useState } from "react";
 type Draw = { id: string; name: string; status: string };
 type Currency = { id: string; name: string; symbol: string | null };
 type Reward = { id: string; name: string };
-type Announcement = { id: string; reward_id: string; title: string; message: string; is_active: boolean; reward?: { name?: string | null } | Array<{ name?: string | null }> | null };
+type Announcement = { id: string; reward_id: string; title: string; message: string; is_active: boolean; reward?: { name?: string | null } | null };
 type Job = { id: string; name: string; job_type: string; scheduled_at: string | null; status: string; payload: Record<string, unknown>; created_at: string };
 
 async function postJson(url: string, body: unknown) {
@@ -15,11 +15,6 @@ async function postJson(url: string, body: unknown) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error?.message ?? "요청을 처리하지 못했습니다.");
   return data;
-}
-
-function rewardName(value: Announcement["reward"], fallback: string) {
-  const reward = Array.isArray(value) ? value[0] : value;
-  return reward?.name ?? fallback;
 }
 
 export function AutomationManager({ jobs, draws, currencies, rewards, announcements }: { jobs: Job[]; draws: Draw[]; currencies: Currency[]; rewards: Reward[]; announcements: Announcement[] }) {
@@ -69,6 +64,6 @@ export function AutomationManager({ jobs, draws, currencies, rewards, announceme
       <div className="form-row"><select className="select" name="rewardId" required><option value="">상품 선택</option>{rewards.map((reward) => <option key={reward.id} value={reward.id}>{reward.name}</option>)}</select><input className="input" name="title" defaultValue="특별 상품 당첨" required /><input className="input" name="message" defaultValue="{{reward}} 당첨 결과가 공개되었습니다." required /></div>
       <button className="btn btn-primary" disabled={loading === "announcement"}>{loading === "announcement" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} 전체공지 규칙 만들기</button>
     </form>
-    <section className="panel panel-pad"><h2 className="panel-title">전체공지 규칙</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>상품</th><th>제목</th><th>문구</th><th>상태</th><th>관리</th></tr></thead><tbody>{announcements.length ? announcements.map((item) => <tr key={item.id}><td>{rewardName(item.reward, item.reward_id)}</td><td>{item.title}</td><td>{item.message}</td><td>{item.is_active ? "사용" : "정지"}</td><td><div className="table-actions"><button className="btn btn-secondary btn-sm" type="button" onClick={() => run("toggle-special-announcement", item.id)}>{item.is_active ? "정지" : "복구"}</button><button className="btn btn-danger btn-sm" type="button" onClick={() => confirm("전체공지 규칙을 삭제할까요?") && run("delete-special-announcement", item.id)}><Trash2 size={14} /> 삭제</button></div></td></tr>) : <tr><td colSpan={5}><div className="empty">전체공지 규칙이 없습니다.</div></td></tr>}</tbody></table></div></section>
+    <section className="panel panel-pad"><h2 className="panel-title">전체공지 규칙</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>상품</th><th>제목</th><th>문구</th><th>상태</th></tr></thead><tbody>{announcements.length ? announcements.map((item) => <tr key={item.id}><td>{item.reward?.name ?? item.reward_id}</td><td>{item.title}</td><td>{item.message}</td><td>{item.is_active ? "사용" : "정지"}</td></tr>) : <tr><td colSpan={4}><div className="empty">전체공지 규칙이 없습니다.</div></td></tr>}</tbody></table></div></section>
   </div>;
 }

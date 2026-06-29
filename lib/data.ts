@@ -587,19 +587,19 @@ export async function getPublicEvents(limit = 12): Promise<EventPost[]> {
 
 export async function getPublicRaffles(limit = 8): Promise<RaffleEvent[]> {
   if (demoMode) {
-    return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "전체 추첨 이벤트 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
+    return [{ id: "raffle-demo", title: "본방 입장 추첨이벤트", description: "공개 추첨이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
   }
   const supabase = await createClient();
-  const { data, error } = await supabase.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").eq("is_public", true).in("status", ["ACTIVE", "COMPLETED"]).order("created_at", { ascending: false }).limit(limit);
+  const { data, error } = await supabase.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,required_member_tier_id,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").eq("is_public", true).in("status", ["ACTIVE", "COMPLETED"]).order("created_at", { ascending: false }).limit(limit);
   if (error || !data) return [];
   return data as RaffleEvent[];
 }
 
 export async function getAdminRaffles(): Promise<AdminRaffleEvent[]> {
-  if (demoMode) return [{ id: "raffle-demo", title: "전체 회원 본방 입장 추첨", description: "전체 추첨 이벤트 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
+  if (demoMode) return [{ id: "raffle-demo", title: "본방 입장 추첨이벤트", description: "공개 추첨이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
   const admin = createAdminClient();
   const [{ data }, { count }] = await Promise.all([
-    admin.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").order("created_at", { ascending: false }).limit(200),
+    admin.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,required_member_tier_id,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").order("created_at", { ascending: false }).limit(200),
     admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "APPROVED").eq("role", "USER"),
   ]);
   return ((data as RaffleEvent[] | null) ?? []).map((item) => ({ ...item, participant_count: count ?? 0 }));
@@ -1027,7 +1027,7 @@ export async function getRewardCenterData(profile: Profile): Promise<RewardCente
     return true;
   });
   return {
-    referral: { referralCode, referredBy: referrer?.display_name ?? referrer?.username ?? null, totalApproved: referralCountResult.count ?? 0 },
+    referral: { referralCode: referralCode ?? null, referredBy: referrer?.display_name ?? referrer?.username ?? null, totalApproved: referralCountResult.count ?? 0 },
     boxes,
     attendanceToday: (todayResult.data as AttendanceLog | null) ?? null,
     recentAttendance: (recentResult.data as AttendanceLog[] | null) ?? [],

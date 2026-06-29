@@ -228,6 +228,8 @@ export interface RaffleEvent {
   is_public: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  required_member_tier_id?: string | null;
+  required_member_tier_name?: string | null;
   winner_profile_id: string | null;
   winner_member_code: string | null;
   winner_display_name: string | null;

@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useState } from "react";
 
 const groups = [
-  { title: "바로가기", links: [["공지", "/notices"], ["이벤트", "/events"], ["직접 참여", "/play"], ["보상", "/rewards"]] },
-  { title: "확인", links: [["순위", "/rankings"], ["대시보드", "/dashboard"], ["당첨 후기", "/reviews"], ["최근 결과", "/results"]] },
-  { title: "소통", links: [["문의센터", "/support"], ["커뮤니티", "/community"], ["전체 추첨", "/raffles"]] },
+  { title: "주요 기능", links: [["공지", "/notices"], ["이벤트", "/events"], ["뽑기&교환", "/play"], ["보상 센터", "/rewards"]] },
+  { title: "확인", links: [["랭킹", "/rankings"], ["통계", "/dashboard"], ["추첨이벤트", "/raffles"], ["최근 결과", "/results"]] },
+  { title: "소통", links: [["문의센터", "/support"], ["커뮤니티", "/community"], ["당첨 후기", "/reviews"]] },
 ];
 
 export function MobileMenu() {
@@ -17,14 +17,14 @@ export function MobileMenu() {
       <button className="btn btn-secondary btn-sm mobile-menu-button" onClick={() => setOpen((value) => !value)} aria-label="메뉴 열기" aria-expanded={open}>
         {open ? <X size={18} /> : <Menu size={18} />} 메뉴
       </button>
-      <nav className={`mobile-panel simple-mobile-panel ${open ? "open" : ""}`}>
-        {groups.map((group) => (
-          <section key={group.title} className="mobile-menu-group">
-            <strong>{group.title}</strong>
+      <nav className={`mobile-panel simple-mobile-panel phone-menu ${open ? "open" : ""}`}>
+        {groups.map((group, index) => (
+          <details key={group.title} className="mobile-menu-group" open={index === 0}>
+            <summary>{group.title}</summary>
             <div>
               {group.links.map(([label, href]) => <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>)}
             </div>
-          </section>
+          </details>
         ))}
       </nav>
     </>

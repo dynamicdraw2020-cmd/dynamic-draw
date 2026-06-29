@@ -10,7 +10,7 @@ const groups = [
     title: "운영 현황",
     description: "전체 상태와 기록 확인",
     items: [
-      { href: "/admin", label: "대시보드", icon: LayoutDashboard, minimum: "VIEWER" },
+      { href: "/admin", label: "관리 홈", icon: LayoutDashboard, minimum: "VIEWER" },
       { href: "/admin/stats", label: "통계", icon: BarChart3, minimum: "VIEWER" },
       { href: "/admin/operations", label: "운영 통계", icon: ClipboardList, minimum: "VIEWER" },
       { href: "/admin/activity", label: "유저 활동 로그", icon: Activity, minimum: "VIEWER" },
@@ -20,9 +20,9 @@ const groups = [
     title: "이벤트·추첨",
     description: "뽑기, 라이브, 결과 관리",
     items: [
-      { href: "/admin/draws", label: "뽑기·상품·확률", icon: TicketCheck, minimum: "MANAGER" },
+      { href: "/admin/draws", label: "뽑기·교환·확률", icon: TicketCheck, minimum: "MANAGER" },
       { href: "/admin/live", label: "실시간 추첨", icon: Activity, minimum: "MANAGER" },
-      { href: "/admin/raffles", label: "전체 회원 추첨", icon: Trophy, minimum: "MANAGER" },
+      { href: "/admin/raffles", label: "추첨이벤트", icon: Trophy, minimum: "MANAGER" },
       { href: "/admin/results", label: "결과 관리", icon: ListChecks, minimum: "VIEWER" },
       { href: "/admin/result-images", label: "결과 이미지 생성", icon: ImageIcon, minimum: "MANAGER" },
       { href: "/admin/probability-history", label: "확률 변경 기록", icon: FileClock, minimum: "VIEWER" },
@@ -47,6 +47,7 @@ const groups = [
       { href: "/admin/reviews", label: "당첨 후기 관리", icon: Gift, minimum: "MANAGER" },
       { href: "/admin/support", label: "문의센터 관리", icon: MessageCircle, minimum: "MANAGER" },
       { href: "/admin/members", label: "회원 관리", icon: UsersRound, minimum: "MANAGER" },
+      { href: "/admin/member-grades", label: "회원 등급", icon: ShieldCheck, minimum: "MANAGER" },
       { href: "/admin/blacklist", label: "블랙리스트", icon: ShieldX, minimum: "MANAGER" },
     ],
   },
@@ -84,18 +85,19 @@ export function AdminSidebar({ profile }: { profile: Profile }) {
         {groups.map((group) => {
           const visibleItems = group.items.filter((item) => rank[profile.role] >= rank[item.minimum]);
           if (!visibleItems.length) return null;
-          return <section className="admin-nav-group" key={group.title}>
-            <div className="admin-nav-group-title">
+          const groupActive = visibleItems.some((item) => item.href === "/admin" ? pathname === item.href : pathname.startsWith(item.href));
+          return <details className="admin-nav-group" key={group.title} open={groupActive}>
+            <summary className="admin-nav-group-title">
               <strong>{group.title}</strong>
               <span>{group.description}</span>
-            </div>
+            </summary>
             <div className="admin-nav-group-links">
               {visibleItems.map(({ href, label, icon: Icon }) => {
                 const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
                 return <Link key={href} href={href} className={active ? "active" : ""}><Icon size={17} />{label}</Link>;
               })}
             </div>
-          </section>;
+          </details>;
         })}
       </nav>
     </aside>

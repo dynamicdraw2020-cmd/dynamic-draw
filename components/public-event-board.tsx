@@ -72,7 +72,7 @@ export function PublicEventBoard({ events, notices }: { events: EventPost[]; not
                 <div className="event-body-preview">{safeText(activeEvent.body, "참여 방법, 주의사항, 지급 기준은 운영 공지에 따라 안내됩니다.")}</div>
                 <div className="event-window-actions">
                   <Link className="btn btn-primary" href={`/events/${activeEvent.slug}`}>상세 페이지 열기 <ArrowRight size={15} /></Link>
-                  <Link className="btn btn-secondary" href="/play">직접 추첨으로 이동</Link>
+                  <Link className="btn btn-secondary" href="/play">뽑기&교환으로 이동</Link>
                 </div>
               </div>
             </>

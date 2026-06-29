@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { LoaderCircle, NotebookPen, Plus, Trash2 } from "lucide-react";
+import { LoaderCircle, NotebookPen, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { displayLoginId } from "@/lib/identity";
@@ -27,12 +27,6 @@ export function AdminWorkspace({ data }: { data: Data }) {
     catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "처리 중 오류가 발생했습니다." }); }
     finally { setLoading(null); }
   }
-  async function remove(action: "delete-note" | "delete-meeting", id: string) {
-    if (!confirm(action === "delete-note" ? "이 메모를 삭제할까요?" : "이 회의록을 삭제할까요?")) return;
-    try { setLoading(`${action}-${id}`); setMessage(null); await postWorkspace({ action, id }); setMessage({ type: "success", text: "삭제했습니다." }); router.refresh(); }
-    catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "삭제하지 못했습니다." }); }
-    finally { setLoading(null); }
-  }
   return <div className="grid gap-3">
     {message && <div className={`form-message form-${message.type}`}>{message.text}</div>}
     <div className="grid grid-2">
@@ -50,7 +44,7 @@ export function AdminWorkspace({ data }: { data: Data }) {
         <button className="btn btn-primary" disabled={loading === "create-meeting"}>{loading === "create-meeting" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} 회의록 저장</button>
       </form>
     </div>
-    <section className="panel panel-pad"><h2 className="panel-title">최근 메모</h2><div className="result-list mt-2">{data.notes.length ? data.notes.map((note) => { const profile = Array.isArray(note.profiles) ? note.profiles[0] : note.profiles; return <article className="result-row" key={note.id}><div className="result-main"><strong>{profile?.display_name ?? "공통 메모"}</strong><span>{note.note}</span></div><time className="result-time">{formatDateTime(note.created_at)}</time><button className="btn btn-danger btn-sm" type="button" onClick={() => remove("delete-note", note.id)} disabled={loading === `delete-note-${note.id}`}><Trash2 size={14} /> 삭제</button></article>; }) : <div className="empty">메모가 없습니다.</div>}</div></section>
-    <section className="panel panel-pad"><h2 className="panel-title">최근 회의록</h2><div className="result-list mt-2">{data.meetings.length ? data.meetings.map((meeting) => <article className="result-row" key={meeting.id}><div className="result-main"><strong>{meeting.title}</strong><span>{meeting.body}</span><span className="text-muted">결정 사항: {meeting.decisions ?? "-"}</span></div><time className="result-time">{formatDateTime(meeting.created_at)}</time><button className="btn btn-danger btn-sm" type="button" onClick={() => remove("delete-meeting", meeting.id)} disabled={loading === `delete-meeting-${meeting.id}`}><Trash2 size={14} /> 삭제</button></article>) : <div className="empty">회의록이 없습니다.</div>}</div></section>
+    <section className="panel panel-pad"><h2 className="panel-title">최근 메모</h2><div className="result-list mt-2">{data.notes.length ? data.notes.map((note) => { const profile = Array.isArray(note.profiles) ? note.profiles[0] : note.profiles; return <article className="result-row" key={note.id}><div className="result-main"><strong>{profile?.display_name ?? "공통 메모"}</strong><span>{note.note}</span></div><time className="result-time">{formatDateTime(note.created_at)}</time></article>; }) : <div className="empty">메모가 없습니다.</div>}</div></section>
+    <section className="panel panel-pad"><h2 className="panel-title">최근 회의록</h2><div className="result-list mt-2">{data.meetings.length ? data.meetings.map((meeting) => <article className="result-row" key={meeting.id}><div className="result-main"><strong>{meeting.title}</strong><span>{meeting.body}</span><span className="text-muted">결정 사항: {meeting.decisions ?? "-"}</span></div><time className="result-time">{formatDateTime(meeting.created_at)}</time></article>) : <div className="empty">회의록이 없습니다.</div>}</div></section>
   </div>;
 }

@@ -8,16 +8,18 @@ import { LogoutButton } from "@/components/logout-button";
 const navLinks = [
   { href: "/notices", label: "공지" },
   { href: "/events", label: "이벤트" },
-  { href: "/play", label: "참여" },
-  { href: "/rewards", label: "보상" },
-  { href: "/rankings", label: "순위" },
-  { href: "/support", label: "문의" },
+  { href: "/raffles", label: "추첨이벤트" },
+  { href: "/play", label: "뽑기&교환" },
+  { href: "/rewards", label: "보상 센터" },
+  { href: "/rankings", label: "랭킹" },
+  { href: "/support", label: "문의센터" },
+  { href: "/dashboard", label: "통계" },
 ];
 
 export async function SiteHeader() {
   const profile = await getCurrentProfile();
   return (
-    <header className="site-header official-header simple-header">
+    <header className="site-header official-header simple-header mobile-first-header">
       <div className="container header-inner simple-header-inner">
         <Link className="brand official-brand simple-brand" href="/" aria-label="𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃 홈">
           <span className="brand-mark official-brand-mark">D</span>

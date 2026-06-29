@@ -1,8 +1,8 @@
-# Dynamic Draw v1.0.3 — 실제 배포용 홈페이지 v1.0.2
+# Dynamic Draw v1.0.3 — 실제 배포용 홈페이지 v1.0.3
 
 결제 없이 이벤트 추첨을 운영하는 Next.js + Supabase 웹 서비스입니다.
 
-## v1.0.1 기존 배포 오류 수정
+## v1.0.3 기존 배포 오류 수정
 
 이미 GitHub·Vercel·Supabase까지 연결했다면 처음부터 다시 하지 않습니다.
 
@@ -128,6 +128,6 @@ npm run build
 - `docs/06_운영체크리스트_문제해결.md`
 
 
-## v1.0.2 pgcrypto 오류 수정
+## v1.0.3 pgcrypto 오류 수정
 
 Supabase에서 `function digest(text, unknown) does not exist` 또는 `gen_random_bytes` 오류가 나오면 루트의 `4_PGCRYPTO_오류_수정.sql`을 SQL Editor에서 한 번 실행합니다. 기존 회원·결과·설정 데이터는 삭제하지 않습니다.

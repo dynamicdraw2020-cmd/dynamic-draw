@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function PlayPage() {
   const profile = await requireApprovedUser();
   const [draws, tickets, currencies, exchangeRates] = await Promise.all([
-    getPlayableDraws(),
+    getPlayableDraws(profile.id),
     getUserDrawTickets(profile.id),
     getUserCurrencyBalances(profile.id),
     getUserTicketExchangeRates(),

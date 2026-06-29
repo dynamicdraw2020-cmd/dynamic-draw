@@ -1068,3 +1068,100 @@ body {
   .ranking-top-strip { grid-template-columns:1fr; }
   .ranking-top-grid { grid-template-columns:1fr; }
 }
+
+
+/* v1.0.3 mobile-first final GUI + gacha + support attachments + roulette fix */
+.simple-nav a { white-space: nowrap; }
+.mobile-first-header .simple-nav { overflow-x: auto; scrollbar-width: none; max-width: 58vw; }
+.mobile-first-header .simple-nav::-webkit-scrollbar { display: none; }
+.phone-menu details { border: 1px solid rgba(148,163,184,.14); border-radius: 16px; background: rgba(255,255,255,.04); padding: 8px; }
+.phone-menu summary { cursor: pointer; list-style: none; font-weight: 900; color: var(--text); padding: 8px 10px; }
+.phone-menu summary::-webkit-details-marker { display: none; }
+.phone-menu summary::after { content: "열기"; float: right; color: var(--muted); font-size: 11px; }
+.phone-menu details[open] summary::after { content: "닫기"; }
+.phone-menu .mobile-menu-group div { margin-top: 8px; }
+
+.admin-nav-group { overflow: hidden; }
+.admin-nav-group-title { cursor: pointer; list-style: none; }
+.admin-nav-group-title::-webkit-details-marker { display: none; }
+.admin-nav-group-title::after { content: "펼치기"; margin-left: auto; color: var(--subtle); font-size: 10px; }
+.admin-nav-group[open] .admin-nav-group-title::after { content: "접기"; }
+.admin-nav-group-links { margin-top: 7px; }
+
+.gacha-public-card { overflow: hidden; }
+.gacha-public-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(260px,380px); gap: 28px; align-items: center; }
+.gacha-copy h2 { font-size: clamp(28px,4vw,46px); margin: 10px 0; letter-spacing: -.05em; }
+.gacha-machine { width: min(100%, 350px); aspect-ratio: .78; margin: 0 auto; border-radius: 34px; border: 1px solid rgba(148,163,184,.18); background: linear-gradient(180deg,#f8fbff,#e8f1ff); box-shadow: 0 24px 80px rgba(15,23,42,.12); position: relative; padding: 20px; display: grid; grid-template-rows: 1fr auto auto; color:#102033; }
+.gacha-glass { border-radius: 50%; background: radial-gradient(circle at 50% 36%, rgba(255,255,255,.95), rgba(191,219,254,.55)); border: 8px solid #dbeafe; position: relative; overflow: hidden; }
+.gacha-capsule { position: absolute; width: 58px; height: 40px; border-radius: 999px; box-shadow: 0 8px 18px rgba(15,23,42,.18); animation: dd-capsule-float 3.4s ease-in-out infinite; }
+.cap-a { background:#60a5fa; left: 18%; top: 58%; }
+.cap-b { background:#22c55e; left: 48%; top: 62%; animation-delay:.35s; }
+.cap-c { background:#f97316; right: 12%; top: 55%; animation-delay:.65s; }
+.cap-d { background:#facc15; left: 36%; top: 35%; animation-delay:.9s; }
+.gacha-dial { width: 86px; height: 86px; border-radius: 50%; place-self: center; margin-top: -22px; display:grid; place-items:center; background:#102033; color:white; box-shadow: 0 16px 38px rgba(15,23,42,.22); }
+.gacha-tray { height: 46px; border-radius: 0 0 24px 24px; background:#111; color:white; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:900; }
+@keyframes dd-capsule-float { 0%,100%{ transform: translateY(0) rotate(-4deg); } 50%{ transform: translateY(-8px) rotate(4deg); } }
+
+.support-file-box { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.support-file-box span { color: var(--muted); font-size: 12px; }
+.support-attachments { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+.support-attachments a,.support-attachments div { width: 112px; border:1px solid var(--line); border-radius:14px; padding:6px; background:rgba(255,255,255,.04); position:relative; display:grid; gap:5px; color:inherit; }
+.support-attachments img { width:100%; aspect-ratio:1.25; object-fit:cover; border-radius:10px; }
+.support-attachments span { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.support-attachments button { position:absolute; top:4px; right:4px; border:0; width:24px; height:24px; border-radius:999px; display:grid; place-items:center; background:rgba(15,23,42,.72); color:white; }
+
+.roulette-wheel span { margin-left: 0 !important; transform-origin: center center !important; left: 50%; top: 50%; translate: 0 0; }
+.roulette-machine { width: min(82vmin, 430px); max-width: calc(100vw - 34px); }
+.roulette-wheel.optimized { min-width: 0; aspect-ratio: 1; background-size: cover; }
+.roulette-wheel.optimized.is-spinning { transition: transform var(--spin-duration, 4000ms) cubic-bezier(.12,.76,.12,1); }
+.roulette-fullscreen-card { overflow-x: hidden; }
+.roulette-result-panel { max-width: calc(100vw - 30px); }
+
+.ranking-top-strip.rank-month-card { grid-template-columns: minmax(0,1fr) auto minmax(0,2fr); }
+.rank-month-image { width: 120px; height: 120px; object-fit: cover; border-radius: 22px; border:1px solid var(--line); background: rgba(255,255,255,.04); }
+.recent-only-card { width: 100%; }
+.responsive-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.compact-select { max-width: 240px; }
+
+.member-grade-mobile .table { min-width: 650px; }
+
+@media (max-width: 760px) {
+  .mobile-first-header .simple-nav { display: none; }
+  .simple-header-inner { height: 62px; }
+  .simple-header-actions { gap: 5px; }
+  .account-chip { max-width: 104px; }
+  .phone-menu { inset: 62px 0 auto; padding: 12px; display:none; max-height: calc(100svh - 62px); overflow:auto; background: rgba(248,250,252,.98); color:#102033; border-bottom:1px solid #dbe3ef; }
+  .phone-menu.open { display:grid; gap:10px; }
+  .phone-menu details { background:white; border-color:#dbe3ef; }
+  .phone-menu summary { color:#102033; }
+  .phone-menu .mobile-menu-group div { grid-template-columns: 1fr; }
+  .phone-menu a { color:#102033 !important; min-height: 44px; display:flex; align-items:center; justify-content:center; background:#f8fafc !important; border:1px solid #dbe3ef; }
+
+  .community-hero-grid { grid-template-columns: 1fr !important; gap: 22px; }
+  .community-copy h1 { font-size: clamp(42px, 14vw, 62px) !important; }
+  .official-actions { display:grid; grid-template-columns:1fr; }
+  .official-actions .btn { width:100%; }
+  .public-gateway-grid { grid-template-columns: 1fr !important; }
+  .gateway-card { grid-template-columns: auto minmax(0,1fr) auto; padding: 18px; }
+  .gacha-public-layout { grid-template-columns:1fr; }
+  .gacha-machine { width: min(280px, 100%); }
+  .ranking-top-strip.rank-month-card { grid-template-columns:1fr; }
+  .rank-month-image { width:100%; height:160px; }
+  .ranking-top-grid { grid-template-columns:1fr; }
+  .responsive-card-head { align-items: stretch; }
+  .compact-select { max-width: none; width:100%; }
+  .support-mobile-stack .form-row { grid-template-columns:1fr; }
+  .support-attachments a,.support-attachments div { width: calc(50% - 5px); }
+  .roulette-overlay { align-items:start; padding: 8px; }
+  .roulette-fullscreen-card { width:100%; min-height: calc(100svh - 16px); gap: 8px; }
+  .roulette-machine { width: min(92vw, 340px); }
+  .roulette-wheel { border-width: 6px !important; }
+  .roulette-wheel span { width: 58px !important; font-size: 9px !important; }
+  .roulette-wheel span img { width: 20px !important; height: 20px !important; }
+  .roulette-center { width: 32%; }
+  .roulette-center svg { width: 24px; height: 24px; }
+  .roulette-title h2 { font-size: clamp(24px,9vw,38px) !important; }
+  .admin-nav { display:grid !important; overflow: visible !important; }
+  .admin-nav-group { width:100%; }
+  .admin-nav-group-links { display:grid !important; overflow: visible !important; }
+}

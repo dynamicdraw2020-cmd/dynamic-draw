@@ -74,6 +74,35 @@ export async function POST(request: Request) {
       return ok({ deleted: true });
     }
 
+
+    if (body.action === "save-member-tier") {
+      const input = z.object({ name: z.string().trim().min(1).max(80), description: z.string().trim().max(400).optional().default(""), badgeLabel: z.string().trim().max(40).optional().default(""), badgeColor: z.string().trim().max(30).optional().default("#334155"), canUseCommunity: z.coerce.boolean().optional().default(false), sortOrder: z.coerce.number().int().default(10) }).parse(body);
+      const { data, error } = await admin.from("member_tiers").insert({ name: input.name, description: input.description || null, badge_label: input.badgeLabel || null, badge_color: input.badgeColor || "#334155", can_use_community: input.canUseCommunity, sort_order: input.sortOrder, created_by: guard.auth.userId }).select("*").single();
+      if (error) return fail("회원 등급을 저장하지 못했습니다.", 400, "MEMBER_TIER_SAVE_FAILED", error.message);
+      return ok(data, 201);
+    }
+
+    if (body.action === "delete-member-tier") {
+      const input = z.object({ id: z.uuid() }).parse(body);
+      const { error } = await admin.from("member_tiers").delete().eq("id", input.id);
+      if (error) return fail("회원 등급을 삭제하지 못했습니다.", 400, "MEMBER_TIER_DELETE_FAILED", error.message);
+      return ok({ deleted: true });
+    }
+
+    if (body.action === "assign-member-tier") {
+      const input = z.object({ profileId: z.uuid(), tierId: z.uuid() }).parse(body);
+      const { data, error } = await admin.from("profile_member_tiers").upsert({ profile_id: input.profileId, tier_id: input.tierId, granted_by: guard.auth.userId, granted_at: new Date().toISOString() }, { onConflict: "profile_id,tier_id" }).select("*").single();
+      if (error) return fail("회원 등급을 배정하지 못했습니다.", 400, "MEMBER_TIER_ASSIGN_FAILED", error.message);
+      return ok(data, 201);
+    }
+
+    if (body.action === "remove-member-tier") {
+      const input = z.object({ profileId: z.uuid(), tierId: z.uuid() }).parse(body);
+      const { error } = await admin.from("profile_member_tiers").delete().eq("profile_id", input.profileId).eq("tier_id", input.tierId);
+      if (error) return fail("회원 등급을 해제하지 못했습니다.", 400, "MEMBER_TIER_REMOVE_FAILED", error.message);
+      return ok({ removed: true });
+    }
+
     if (body.action === "save-badge") {
       const input = z.object({ name: z.string().trim().min(1).max(80), description: z.string().trim().max(300).optional().default(""), icon: z.string().trim().max(20).optional().default("🏅"), labelColor: z.string().trim().max(30).optional().default("#111827") }).parse(body);
       const { data, error } = await admin.from("badges").insert({ name: input.name, description: input.description || null, icon: input.icon, label_color: input.labelColor, created_by: guard.auth.userId }).select("*").single();

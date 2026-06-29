@@ -177,6 +177,7 @@ export interface PublicStats {
   totalMembers: number;
   rewardStats: Array<{
     rewardId: string;
+    drawId?: string;
     drawName?: string;
     name: string;
     count: number;
@@ -184,7 +185,8 @@ export interface PublicStats {
     configuredRate: number;
     color: string;
   }>;
-  dailyStats: Array<{ date: string; count: number }>;
+  dailyStats: Array<{ date: string; count: number; drawId?: string }>;
+  drawOptions?: Array<{ drawId: string; drawName: string; total: number; status?: string | null }>;
 }
 
 export interface LiveEvent {
@@ -387,6 +389,7 @@ export interface RewardCenterData {
   attendanceToday: AttendanceLog | null;
   recentAttendance: AttendanceLog[];
   notifications: NotificationItem[];
+  availablePromoCodes: PromoCode[];
 }
 
 export interface AdminRewardSystemData {

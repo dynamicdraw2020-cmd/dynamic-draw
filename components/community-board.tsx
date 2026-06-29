@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 type CommentRow = { id: string; body: string; nickname: string | null; created_at: string };
-type PostRow = { id: string; title: string; body: string; nickname: string | null; created_at: string; comments?: CommentRow[] };
+type PostRow = { id: string; title: string; body: string; nickname: string | null; status?: string | null; created_at: string; comments?: CommentRow[] };
 
 type CommunityBoardProps = { posts: PostRow[]; signedIn: boolean };
 
@@ -106,5 +106,5 @@ export function AdminCommunityManager({ posts }: { posts: Array<PostRow & { repo
       setLoading(null);
     }
   }
-  return <section className="panel panel-pad"><h2 className="panel-title">커뮤니티 관리</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>글</th><th>닉네임</th><th>신고</th><th>작성</th><th>관리</th></tr></thead><tbody>{posts.length ? posts.map((post) => <tr key={post.id}><td><strong>{post.title}</strong><div className="text-muted text-small">{post.body.slice(0, 80)}</div></td><td>{post.nickname || "익명"}</td><td>{post.report_count ?? 0}</td><td>{new Date(post.created_at).toLocaleString("ko-KR")}</td><td><button className="btn btn-danger btn-sm" onClick={() => confirm("게시글을 삭제할까요?") && run("delete-post", post.id)} disabled={loading === `delete-post-${post.id}`}><Trash2 size={14} /> 삭제</button></td></tr>) : <tr><td colSpan={5}><div className="empty">게시글이 없습니다.</div></td></tr>}</tbody></table></div></section>;
+  return <section className="panel panel-pad"><div className="flex items-center justify-between gap-2"><div><h2 className="panel-title mb-0">커뮤니티 관리</h2><p className="panel-description mt-1">게시글 상태와 신고 수를 확인하고 삭제/복구합니다.</p></div><span className="status-pill">{posts.length.toLocaleString()}건</span></div><div className="table-wrap mt-3"><table className="table"><thead><tr><th>글</th><th>닉네임</th><th>상태</th><th>신고</th><th>작성</th><th>관리</th></tr></thead><tbody>{posts.length ? posts.map((post) => <tr key={post.id}><td><strong>{post.title}</strong><div className="text-muted text-small">{post.body.slice(0, 100)}</div></td><td>{post.nickname || "익명"}</td><td>{post.status === "DELETED" ? "삭제됨" : "게시중"}</td><td>{post.report_count ?? 0}</td><td>{new Date(post.created_at).toLocaleString("ko-KR")}</td><td><div className="table-actions">{post.status === "DELETED" ? <button className="btn btn-secondary btn-sm" onClick={() => run("restore-post", post.id)} disabled={loading === `restore-post-${post.id}`}>복구</button> : <button className="btn btn-danger btn-sm" onClick={() => confirm("게시글을 삭제할까요?") && run("delete-post", post.id)} disabled={loading === `delete-post-${post.id}`}><Trash2 size={14} /> 삭제</button>}</div></td></tr>) : <tr><td colSpan={6}><div className="empty">게시글이 없습니다.</div></td></tr>}</tbody></table></div></section>;
 }

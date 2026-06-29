@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminGrowthPage() {
   await requireAdmin("MANAGER");
   const admin = createAdminClient();
-  const [members, draws, levels, drawExp, vipTiers, badges, profileBadges, growthRows, expLogs, currencies, rewards, boxes] = await Promise.all([
+  const [members, draws, levels, drawExp, vipTiers, badges, profileBadges, growthRows, expLogs, currencies, rewards, boxes, memberTiers, profileMemberTiers] = await Promise.all([
     admin.from("profiles").select("id,display_name,username,email,member_code,role,status").eq("status", "APPROVED").order("display_name", { ascending: true }),
     admin.from("draws").select("id,name,status,is_public,deleted_at").is("deleted_at", null).order("created_at", { ascending: false }),
     admin.from("level_rules").select("*").order("level_no", { ascending: true }),
@@ -22,6 +22,8 @@ export default async function AdminGrowthPage() {
     admin.from("virtual_currencies").select("id,name,symbol,code,is_active,deleted_at").is("deleted_at", null).eq("is_active", true).order("name", { ascending: true }),
     admin.from("rewards").select("id,name,description,is_active,deleted_at").is("deleted_at", null).eq("is_active", true).order("name", { ascending: true }),
     admin.from("random_boxes").select("id,name,description,is_active,deleted_at").is("deleted_at", null).eq("is_active", true).order("name", { ascending: true }),
+    admin.from("member_tiers").select("*").order("sort_order", { ascending: true }),
+    admin.from("profile_member_tiers").select("*,profiles(display_name,username,member_code),tier:member_tiers(name,badge_label,badge_color,can_use_community)").order("granted_at", { ascending: false }).limit(200),
   ]);
-  return <main><div className="page-heading"><h1>레벨·VIP·배지</h1><p>뽑기 경험치, 레벨, VIP 등급, 배지와 휘장을 한곳에서 관리합니다.</p></div><GrowthManager data={{ members: members.data ?? [], draws: draws.data ?? [], levels: levels.data ?? [], drawExp: drawExp.data ?? [], vipTiers: vipTiers.data ?? [], badges: badges.data ?? [], profileBadges: profileBadges.data ?? [], growthRows: growthRows.data ?? [], expLogs: expLogs.data ?? [], currencies: currencies.data ?? [], rewards: rewards.data ?? [], boxes: boxes.data ?? [] }} /></main>;
+  return <main><div className="page-heading"><h1>레벨·VIP·배지</h1><p>뽑기 경험치, 레벨, VIP 등급, 배지와 휘장을 한곳에서 관리합니다.</p></div><GrowthManager data={{ members: members.data ?? [], draws: draws.data ?? [], levels: levels.data ?? [], drawExp: drawExp.data ?? [], vipTiers: vipTiers.data ?? [], badges: badges.data ?? [], profileBadges: profileBadges.data ?? [], growthRows: growthRows.data ?? [], expLogs: expLogs.data ?? [], currencies: currencies.data ?? [], rewards: rewards.data ?? [], boxes: boxes.data ?? [], memberTiers: memberTiers.data ?? [], profileMemberTiers: profileMemberTiers.data ?? [] }} /></main>;
 }

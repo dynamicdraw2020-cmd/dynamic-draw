@@ -8,6 +8,7 @@ import {
 } from "@/lib/mock-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { ensureReferralCode, isNumericReferralCode } from "@/lib/reward-engine";
 import type {
   Draw,
   DrawResult,
@@ -206,12 +207,95 @@ export async function getPublicDashboardData() {
   return { stats, draws, results, recent: results, byDraw };
 }
 
+function kstDayKey(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+function lastSevenKstDays() {
+  const todayKey = kstDayKey(new Date());
+  const base = new Date(`${todayKey}T00:00:00+09:00`);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(base.getTime() - (6 - index) * 86400000);
+    return kstDayKey(date);
+  });
+}
+
 export async function getAdminStats(): Promise<PublicStats> {
   if (demoMode) return mockStats;
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("get_admin_stats");
-  if (error || !data) return emptyStats;
-  return data as PublicStats;
+  try {
+    const [drawResult, rewardResult, resultResult, memberResult] = await Promise.all([
+      admin.from("draws").select("id,name,status,is_public,created_at,deleted_at").is("deleted_at", null).order("created_at", { ascending: false }),
+      admin.from("rewards").select("id,draw_id,name,color,probability_units,is_active,sort_order,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true }),
+      admin.from("results").select("id,draw_id,reward_id,created_at,revealed_at,voided_at").not("revealed_at", "is", null).is("voided_at", null).order("created_at", { ascending: false }).limit(5000),
+      admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "APPROVED").eq("role", "USER"),
+    ]);
+    if (drawResult.error || rewardResult.error || resultResult.error) throw new Error("stats query failed");
+
+    const draws = ((drawResult.data ?? []) as Array<{ id: string; name: string; status?: string | null; is_public?: boolean | null; created_at?: string | null; deleted_at?: string | null }>).filter((draw) => !draw.deleted_at);
+    const rewards = ((rewardResult.data ?? []) as Array<{ id: string; draw_id: string; name: string; color?: string | null; probability_units?: number | null; is_active?: boolean | null; sort_order?: number | null; deleted_at?: string | null }>).filter((reward) => !reward.deleted_at && reward.is_active !== false);
+    const results = ((resultResult.data ?? []) as Array<{ id: string; draw_id: string; reward_id: string; created_at: string; revealed_at: string | null; voided_at: string | null }>).filter((result) => result.revealed_at && !result.voided_at);
+
+    const drawMap = new Map(draws.map((draw) => [draw.id, draw]));
+    const drawTotals = new Map<string, number>();
+    const rewardCounts = new Map<string, number>();
+    const dailyCounts = new Map<string, number>();
+    const dailyCountsByDraw = new Map<string, Map<string, number>>();
+
+    for (const result of results) {
+      if (!drawMap.has(result.draw_id)) continue;
+      drawTotals.set(result.draw_id, (drawTotals.get(result.draw_id) ?? 0) + 1);
+      rewardCounts.set(result.reward_id, (rewardCounts.get(result.reward_id) ?? 0) + 1);
+      const day = kstDayKey(result.revealed_at ?? result.created_at);
+      dailyCounts.set(day, (dailyCounts.get(day) ?? 0) + 1);
+      const drawDaily = dailyCountsByDraw.get(result.draw_id) ?? new Map<string, number>();
+      drawDaily.set(day, (drawDaily.get(day) ?? 0) + 1);
+      dailyCountsByDraw.set(result.draw_id, drawDaily);
+    }
+
+    const rewardStats = rewards
+      .filter((reward) => drawMap.has(reward.draw_id))
+      .map((reward) => {
+        const draw = drawMap.get(reward.draw_id);
+        const count = rewardCounts.get(reward.id) ?? 0;
+        const drawTotal = drawTotals.get(reward.draw_id) ?? 0;
+        return {
+          rewardId: reward.id,
+          drawId: reward.draw_id,
+          drawName: draw?.name ?? "뽑기",
+          name: reward.name,
+          count,
+          actualRate: drawTotal > 0 ? Number(((count * 100) / drawTotal).toFixed(2)) : 0,
+          configuredRate: Number(((reward.probability_units ?? 0) / 10000).toFixed(4)),
+          color: reward.color ?? "#38bdf8",
+        };
+      });
+
+    const days = lastSevenKstDays();
+    const dailyStats = [
+      ...days.map((date) => ({ date: date.slice(5).replace("-", "/"), count: dailyCounts.get(date) ?? 0, drawId: "__ALL__" })),
+      ...draws.flatMap((draw) => {
+        const byDay = dailyCountsByDraw.get(draw.id) ?? new Map<string, number>();
+        return days.map((date) => ({ date: date.slice(5).replace("-", "/"), count: byDay.get(date) ?? 0, drawId: draw.id }));
+      }),
+    ];
+
+    const drawOptions = draws.map((draw) => ({ drawId: draw.id, drawName: draw.name, total: drawTotals.get(draw.id) ?? 0, status: draw.status ?? null }));
+    const todayKey = kstDayKey(new Date());
+    return {
+      totalDraws: results.length,
+      todayDraws: dailyCounts.get(todayKey) ?? 0,
+      totalMembers: memberResult.count ?? 0,
+      rewardStats,
+      dailyStats,
+      drawOptions,
+    };
+  } catch {
+    const { data, error } = await admin.rpc("get_admin_stats");
+    if (error || !data) return emptyStats;
+    return data as PublicStats;
+  }
 }
 
 export async function getUserInventory(profileId: string): Promise<InventoryItem[]> {
@@ -846,30 +930,56 @@ function kstDateString(date = new Date()) {
 }
 
 export async function getRewardCenterData(profile: Profile): Promise<RewardCenterData> {
-  const fallback: RewardCenterData = { referral: { referralCode: profile.member_code, referredBy: null, totalApproved: 0 }, boxes: [], attendanceToday: null, recentAttendance: [], notifications: [] };
+  const fallback: RewardCenterData = { referral: { referralCode: profile.member_code, referredBy: null, totalApproved: 0 }, boxes: [], attendanceToday: null, recentAttendance: [], notifications: [], availablePromoCodes: [] };
   if (demoMode) return fallback;
   const admin = createAdminClient();
   const today = kstDateString();
-  const [profileResult, referralCountResult, boxesResult, todayResult, recentResult, notificationsResult] = await Promise.all([
+  const [profileResult, referralCountResult, boxesResult, todayResult, recentResult, notificationsResult, promoCodesResult, promoUseResult] = await Promise.all([
     admin.from("profiles").select("referral_code,referred_by,referrer:profiles!profiles_referred_by_fkey(display_name,username)").eq("id", profile.id).maybeSingle(),
     admin.from("referral_logs").select("id", { count: "exact", head: true }).eq("referrer_id", profile.id).eq("status", "APPROVED"),
     admin.from("user_random_boxes").select("id,profile_id,box_id,quantity,source,updated_at,box:random_boxes(id,name,description,image_url,is_active,is_signup_reward,starts_at,ends_at,sort_order,created_at,deleted_at)").eq("profile_id", profile.id).gt("quantity", 0).order("updated_at", { ascending: false }),
     admin.from("attendance_logs").select("id,profile_id,attendance_date,source,streak_count,reward_snapshot,created_at").eq("profile_id", profile.id).eq("attendance_date", today).maybeSingle(),
     admin.from("attendance_logs").select("id,profile_id,attendance_date,source,streak_count,reward_snapshot,created_at").eq("profile_id", profile.id).order("attendance_date", { ascending: false }).limit(14),
     admin.from("notifications").select("id,profile_id,title,body,type,link_url,is_read,created_at").eq("profile_id", profile.id).order("created_at", { ascending: false }).limit(40),
+    admin.from("promo_codes").select("id,code,name,description,code_type,target_mode,target_profile_id,target_role,event_id,starts_at,ends_at,max_uses,per_user_limit,used_count,rewards,is_active,created_at,deleted_at").eq("is_active", true).is("deleted_at", null).order("created_at", { ascending: false }).limit(30),
+    admin.from("promo_redemptions").select("promo_id").eq("profile_id", profile.id),
   ]);
   const p = profileResult.data as { referral_code?: string | null; referrer?: { display_name?: string | null; username?: string | null } | Array<{ display_name?: string | null; username?: string | null }> | null } | null;
   const referrer = Array.isArray(p?.referrer) ? p?.referrer[0] : p?.referrer;
+  const referralCode = isNumericReferralCode(p?.referral_code)
+    ? p?.referral_code ?? null
+    : await ensureReferralCode(admin, {
+      id: profile.id,
+      display_name: profile.display_name,
+      username: profile.username,
+      referral_code: p?.referral_code ?? null,
+      referred_by: null,
+    });
   const boxes = ((boxesResult.data ?? []) as Array<UserRandomBox & { box?: RandomBox | RandomBox[] | null }>).map((row) => {
     const box = Array.isArray(row.box) ? row.box[0] : row.box;
     return { ...row, box_name: box?.name ?? "랜덤박스", box_description: box?.description ?? null, box_image_url: box?.image_url ?? null };
   });
+  const now = new Date();
+  const promoUseCounts = new Map<string, number>();
+  for (const row of ((promoUseResult.data ?? []) as Array<{ promo_id: string }>)) {
+    promoUseCounts.set(row.promo_id, (promoUseCounts.get(row.promo_id) ?? 0) + 1);
+  }
+  const availablePromoCodes = ((promoCodesResult.data ?? []) as PromoCode[]).filter((code) => {
+    if (code.starts_at && new Date(code.starts_at) > now) return false;
+    if (code.ends_at && new Date(code.ends_at) < now) return false;
+    if (code.max_uses !== null && code.used_count >= code.max_uses) return false;
+    if ((promoUseCounts.get(code.id) ?? 0) >= code.per_user_limit) return false;
+    if (code.target_mode === "PROFILE" && code.target_profile_id !== profile.id) return false;
+    if (code.target_mode === "ROLE" && code.target_role !== profile.role) return false;
+    return true;
+  });
   return {
-    referral: { referralCode: p?.referral_code ?? profile.member_code, referredBy: referrer?.display_name ?? referrer?.username ?? null, totalApproved: referralCountResult.count ?? 0 },
+    referral: { referralCode, referredBy: referrer?.display_name ?? referrer?.username ?? null, totalApproved: referralCountResult.count ?? 0 },
     boxes,
     attendanceToday: (todayResult.data as AttendanceLog | null) ?? null,
     recentAttendance: (recentResult.data as AttendanceLog[] | null) ?? [],
     notifications: (notificationsResult.data as NotificationItem[] | null) ?? [],
+    availablePromoCodes,
   };
 }
 

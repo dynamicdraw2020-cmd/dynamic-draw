@@ -24,5 +24,17 @@ export async function POST(request: Request) {
     if (error) return fail("회의록을 저장하지 못했습니다.", 400, "MEETING_CREATE_FAILED", error.message);
     return ok(data, 201);
   }
+  if (body.action === "delete-note") {
+    const input = z.object({ id: z.uuid() }).parse(body);
+    const { error } = await admin.from("admin_notes").delete().eq("id", input.id);
+    if (error) return fail("메모를 삭제하지 못했습니다.", 400, "NOTE_DELETE_FAILED", error.message);
+    return ok({ deleted: true });
+  }
+  if (body.action === "delete-meeting") {
+    const input = z.object({ id: z.uuid() }).parse(body);
+    const { error } = await admin.from("admin_meetings").delete().eq("id", input.id);
+    if (error) return fail("회의록을 삭제하지 못했습니다.", 400, "MEETING_DELETE_FAILED", error.message);
+    return ok({ deleted: true });
+  }
   return fail("지원하지 않는 작업입니다.", 404, "UNKNOWN_WORKSPACE_ACTION");
 }

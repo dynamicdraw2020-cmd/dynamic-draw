@@ -46,6 +46,40 @@ function describeBoxReward(row: RandomBoxReward) {
   return `경험치 ${row.amount.toLocaleString()}`;
 }
 
+function describeConfiguredReward(raw: Record<string, unknown>, data: AdminRewardSystemData) {
+  const type = String(raw.type ?? raw.reward_type ?? "").toUpperCase();
+  const amount = Math.max(1, Number(raw.amount ?? 1) || 1);
+  const note = typeof raw.label === "string" && raw.label.trim() ? ` · ${raw.label.trim()}` : "";
+  if (type === "CURRENCY") {
+    const currencyId = String(raw.currencyId ?? raw.currency_id ?? "");
+    const currency = data.currencies.find((item) => item.id === currencyId);
+    return `${currency?.symbol || currency?.code || currency?.name || "화폐"} ${amount.toLocaleString()}${note}`;
+  }
+  if (type === "TICKET") {
+    const drawId = String(raw.drawId ?? raw.draw_id ?? "");
+    const draw = data.draws.find((item) => item.id === drawId);
+    return `${draw?.name || "뽑기"} 추첨권 ${amount.toLocaleString()}장${note}`;
+  }
+  if (type === "ITEM") {
+    const rewardId = String(raw.rewardId ?? raw.reward_id ?? "");
+    const reward = data.rewards.find((item) => item.id === rewardId);
+    return `${reward?.name || "상품"} ${amount.toLocaleString()}개${note}`;
+  }
+  if (type === "RANDOM_BOX") {
+    const boxId = String(raw.boxId ?? raw.random_box_id ?? "");
+    const box = data.boxes.find((item) => item.id === boxId);
+    return `${box?.name || "랜덤박스"} ${amount.toLocaleString()}개${note}`;
+  }
+  if (type === "EXP") return `${amount.toLocaleString()} EXP${note}`;
+  return `보상 ${amount.toLocaleString()}${note}`;
+}
+
+function describeRewardList(rewards: unknown, data: AdminRewardSystemData) {
+  const rows = Array.isArray(rewards) ? rewards : [];
+  if (!rows.length) return "보상 설정 없음";
+  return rows.map((item) => describeConfiguredReward(item as Record<string, unknown>, data)).join(" · ");
+}
+
 export function RewardSystemManager({ data }: { data: AdminRewardSystemData }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
@@ -181,7 +215,7 @@ export function RewardSystemManager({ data }: { data: AdminRewardSystemData }) {
     {activeSection === "codes" && <>
     <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "create-promo-code", "쿠폰/이벤트 코드를 만들었습니다.")}><div className="flex items-center gap-1"><Ticket size={19} className="text-gold" /><h2 className="panel-title mb-0">쿠폰 / 이벤트 코드 생성</h2></div><div className="form-row"><div className="field"><label>코드</label><input className="input" name="code" placeholder="DYNAMICOPEN" required /></div><div className="field"><label>이름</label><input className="input" name="name" defaultValue="오픈 이벤트 코드" required /></div><div className="field"><label>구분</label><select className="select" name="codeType"><option value="COUPON">쿠폰</option><option value="EVENT_CODE">이벤트 코드</option></select></div></div><div className="field"><label>설명</label><input className="input" name="description" placeholder="공지에 표시할 설명" /></div><div className="form-row"><div className="field"><label>대상</label><select className="select" name="targetMode"><option value="ALL">전체</option><option value="PROFILE">특정 회원</option><option value="ROLE">권한</option></select></div><div className="field"><label>특정 회원</label><select className="select" name="targetProfileId"><option value="">선택 없음</option>{data.members.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {displayLoginId(member)}</option>)}</select></div><div className="field"><label>권한</label><select className="select" name="targetRole"><option value="">선택 없음</option><option value="USER">일반 회원</option><option value="VIEWER">조회 관리자</option><option value="MANAGER">운영 관리자</option><option value="SUPER_ADMIN">최고 관리자</option></select></div></div><div className="form-row"><div className="field"><label>시작</label><input className="input" type="datetime-local" name="startsAt" /></div><div className="field"><label>종료</label><input className="input" type="datetime-local" name="endsAt" /></div><div className="field"><label>전체 사용 제한</label><input className="input" name="maxUses" type="number" min="1" placeholder="무제한" /></div><div className="field"><label>1인 제한</label><input className="input" name="perUserLimit" type="number" min="1" defaultValue="1" /></div></div><RewardTargetFields data={data} /><button className="btn btn-primary" disabled={loading === "create-promo-code"}>{loading === "create-promo-code" ? <LoaderCircle size={17} className="spin" /> : <Plus size={17} />} 코드 만들기</button></form>
 
-    <section className="panel panel-pad"><h2 className="panel-title">쿠폰 / 이벤트 코드 현황</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>코드</th><th>대상</th><th>사용</th><th>기간</th><th>관리</th></tr></thead><tbody>{data.promoCodes.length ? data.promoCodes.map((code: PromoCode) => <tr key={code.id}><td><strong>{code.code}</strong><div className="text-muted text-small">{code.name} · {code.code_type}</div></td><td>{code.target_mode}{code.target_profile_name ? ` · ${code.target_profile_name}` : ""}{code.target_role ? ` · ${code.target_role}` : ""}</td><td>{code.used_count.toLocaleString()} / {code.max_uses?.toLocaleString() ?? "무제한"}</td><td>{code.starts_at ? formatDateTime(code.starts_at) : "즉시"} ~ {code.ends_at ? formatDateTime(code.ends_at) : "무기한"}</td><td><div className="table-actions"><button className="btn btn-secondary btn-sm" type="button" onClick={() => action({ action: "toggle-promo-code", codeId: code.id, isActive: !code.is_active }, "코드 상태를 변경했습니다.")}>{code.is_active ? "정지" : "복구"}</button><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "delete-promo-code", codeId: code.id }, "코드를 삭제했습니다.")}>삭제</button></div></td></tr>) : <tr><td colSpan={5}><div className="empty">생성된 코드가 없습니다.</div></td></tr>}</tbody></table></div></section>
+    <section className="panel panel-pad"><h2 className="panel-title">쿠폰 / 이벤트 코드 현황</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>코드</th><th>지급 보상</th><th>대상</th><th>사용</th><th>기간</th><th>관리</th></tr></thead><tbody>{data.promoCodes.length ? data.promoCodes.map((code: PromoCode) => <tr key={code.id}><td><strong>{code.code}</strong><div className="text-muted text-small">{code.name} · {code.code_type}</div></td><td><strong>{describeRewardList(code.rewards, data)}</strong></td><td>{code.target_mode}{code.target_profile_name ? ` · ${code.target_profile_name}` : ""}{code.target_role ? ` · ${code.target_role}` : ""}</td><td>{code.used_count.toLocaleString()} / {code.max_uses?.toLocaleString() ?? "무제한"}</td><td>{code.starts_at ? formatDateTime(code.starts_at) : "즉시"} ~ {code.ends_at ? formatDateTime(code.ends_at) : "무기한"}</td><td><div className="table-actions"><button className="btn btn-secondary btn-sm" type="button" onClick={() => action({ action: "toggle-promo-code", codeId: code.id, isActive: !code.is_active }, "코드 상태를 변경했습니다.")}>{code.is_active ? "정지" : "복구"}</button><button className="btn btn-danger btn-sm" type="button" onClick={() => action({ action: "delete-promo-code", codeId: code.id }, "코드를 삭제했습니다.")}>삭제</button></div></td></tr>) : <tr><td colSpan={6}><div className="empty">생성된 코드가 없습니다.</div></td></tr>}</tbody></table></div></section>
     </>}
   </div>;
 }

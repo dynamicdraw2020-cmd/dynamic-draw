@@ -11,6 +11,9 @@ export type RewardItem = {
   rewardId?: string;
   boxId?: string;
   label?: string;
+  displayLabel?: string;
+  displayName?: string;
+  name?: string;
 };
 
 type DeliveryOptions = {
@@ -134,6 +137,56 @@ export async function getRewardSettings(admin: AdminClient) {
   };
 }
 
+async function rewardTargetName(admin: AdminClient, reward: RewardItem) {
+  try {
+    if (reward.type === "CURRENCY" && reward.currencyId) {
+      const { data } = await admin.from("virtual_currencies").select("name,code,symbol").eq("id", reward.currencyId).maybeSingle();
+      const row = data as { name?: string | null; code?: string | null; symbol?: string | null } | null;
+      return row?.symbol || row?.code || row?.name || "화폐";
+    }
+    if (reward.type === "TICKET" && reward.drawId) {
+      const { data } = await admin.from("draws").select("name").eq("id", reward.drawId).maybeSingle();
+      const row = data as { name?: string | null } | null;
+      return `${row?.name || "뽑기"} 추첨권`;
+    }
+    if (reward.type === "ITEM" && reward.rewardId) {
+      const { data } = await admin.from("rewards").select("name").eq("id", reward.rewardId).maybeSingle();
+      const row = data as { name?: string | null } | null;
+      return row?.name || "상품";
+    }
+    if (reward.type === "RANDOM_BOX" && reward.boxId) {
+      const { data } = await admin.from("random_boxes").select("name").eq("id", reward.boxId).maybeSingle();
+      const row = data as { name?: string | null } | null;
+      return row?.name || "랜덤박스";
+    }
+  } catch {
+    // 이름 조회 실패 시 아래 기본 문구로 표시합니다.
+  }
+  if (reward.type === "CURRENCY") return "화폐";
+  if (reward.type === "TICKET") return "추첨권";
+  if (reward.type === "ITEM") return "상품";
+  if (reward.type === "RANDOM_BOX") return "랜덤박스";
+  if (reward.type === "EXP") return "경험치";
+  return "보상";
+}
+
+async function enrichRewardItem(admin: AdminClient, reward: RewardItem, amount: number): Promise<RewardItem> {
+  const targetName = await rewardTargetName(admin, reward);
+  const memo = reward.label?.trim();
+  let displayLabel = "";
+  if (reward.type === "CURRENCY") displayLabel = `${targetName} ${amount.toLocaleString()}`;
+  else if (reward.type === "TICKET") displayLabel = `${targetName} ${amount.toLocaleString()}장`;
+  else if (reward.type === "ITEM") displayLabel = `${targetName} ${amount.toLocaleString()}개`;
+  else if (reward.type === "RANDOM_BOX") displayLabel = `${targetName} ${amount.toLocaleString()}개`;
+  else if (reward.type === "EXP") displayLabel = `${amount.toLocaleString()} EXP`;
+  else displayLabel = `${targetName} ${amount.toLocaleString()}`;
+
+  if (memo && memo !== targetName && !displayLabel.includes(memo)) {
+    displayLabel = `${displayLabel} · ${memo}`;
+  }
+  return { ...reward, amount, displayLabel, displayName: displayLabel, name: displayLabel };
+}
+
 async function getBalance(admin: AdminClient, profileId: string, currencyId: string) {
   const { data } = await admin.from("currency_balances").select("balance").eq("profile_id", profileId).eq("currency_id", currencyId).maybeSingle();
   return Number((data as { balance?: number } | null)?.balance ?? 0);
@@ -151,7 +204,7 @@ export async function deliverRewards(options: DeliveryOptions) {
       const { error } = await admin.from("currency_balances").upsert({ profile_id: profileId, currency_id: reward.currencyId, balance: after, updated_at: new Date().toISOString() }, { onConflict: "profile_id,currency_id" });
       if (!error) {
         await admin.from("currency_logs").insert({ profile_id: profileId, currency_id: reward.currencyId, amount, action: sourceType, memo: options.memo ?? reward.label ?? "보상 지급", balance_after: after, created_by: createdBy, ip_address: options.ip ?? "system", user_agent: options.userAgent ?? "system" });
-        delivered.push({ ...reward, amount });
+        delivered.push(await enrichRewardItem(admin, reward, amount));
       }
     }
     if (reward.type === "TICKET" && reward.drawId) {
@@ -160,20 +213,20 @@ export async function deliverRewards(options: DeliveryOptions) {
       const { error } = await admin.from("draw_tickets").upsert({ profile_id: profileId, draw_id: reward.drawId, quantity: next, updated_at: new Date().toISOString() }, { onConflict: "profile_id,draw_id" });
       if (!error) {
         await admin.rpc("append_admin_log", { p_admin_id: createdBy ?? profileId, p_action: "REWARD_DRAW_TICKET_GRANTED", p_target_table: "draw_tickets", p_target_id: profileId, p_details: { profileId, drawId: reward.drawId, quantityAdded: amount, quantityAfter: next, sourceType, sourceId }, p_ip: options.ip ?? "system", p_user_agent: options.userAgent ?? "system" });
-        delivered.push({ ...reward, amount });
+        delivered.push(await enrichRewardItem(admin, reward, amount));
       }
     }
     if (reward.type === "ITEM" && reward.rewardId) {
       const { data: existing } = await admin.from("participant_items").select("quantity").eq("profile_id", profileId).eq("reward_id", reward.rewardId).maybeSingle();
       const next = Number((existing as { quantity?: number } | null)?.quantity ?? 0) + amount;
       const { error } = await admin.from("participant_items").upsert({ profile_id: profileId, reward_id: reward.rewardId, quantity: next, updated_at: new Date().toISOString() }, { onConflict: "profile_id,reward_id" });
-      if (!error) delivered.push({ ...reward, amount });
+      if (!error) delivered.push(await enrichRewardItem(admin, reward, amount));
     }
     if (reward.type === "RANDOM_BOX" && reward.boxId) {
       const { data: existing } = await admin.from("user_random_boxes").select("quantity").eq("profile_id", profileId).eq("box_id", reward.boxId).maybeSingle();
       const next = Number((existing as { quantity?: number } | null)?.quantity ?? 0) + amount;
       const { error } = await admin.from("user_random_boxes").upsert({ profile_id: profileId, box_id: reward.boxId, quantity: next, source: sourceType, updated_at: new Date().toISOString() }, { onConflict: "profile_id,box_id" });
-      if (!error) delivered.push({ ...reward, amount });
+      if (!error) delivered.push(await enrichRewardItem(admin, reward, amount));
     }
     if (reward.type === "EXP") {
       const { error } = await admin.rpc("add_profile_exp", {
@@ -184,7 +237,7 @@ export async function deliverRewards(options: DeliveryOptions) {
         p_source_id: String(sourceId ?? `${sourceType}:${Date.now()}`),
         p_created_by: createdBy,
       });
-      if (!error) delivered.push({ ...reward, amount });
+      if (!error) delivered.push(await enrichRewardItem(admin, reward, amount));
     }
   }
 
@@ -197,7 +250,17 @@ export async function deliverRewards(options: DeliveryOptions) {
 
 export function rewardSummary(rewards: RewardItem[]) {
   if (!rewards.length) return "지급된 보상이 없습니다.";
-  return rewards.map((reward) => `${reward.label ?? reward.type} ${reward.amount ?? 1}`).join(" · ");
+  return rewards.map((reward) => {
+    const direct = reward.displayLabel || reward.displayName || reward.name;
+    if (direct) return direct;
+    const amount = reward.amount ?? 1;
+    if (reward.type === "CURRENCY") return `화폐 ${amount.toLocaleString()}`;
+    if (reward.type === "TICKET") return `추첨권 ${amount.toLocaleString()}장`;
+    if (reward.type === "ITEM") return `상품 ${amount.toLocaleString()}개`;
+    if (reward.type === "RANDOM_BOX") return `랜덤박스 ${amount.toLocaleString()}개`;
+    if (reward.type === "EXP") return `${amount.toLocaleString()} EXP`;
+    return `보상 ${amount.toLocaleString()}`;
+  }).join(" · ");
 }
 
 export async function createNotification(admin: AdminClient, profileId: string, title: string, body: string, type = "INFO", linkUrl: string | null = null) {

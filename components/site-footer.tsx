@@ -25,8 +25,8 @@ export async function SiteFooter() {
         <div className="footer-links">
           <Link href="/notices">공지</Link>
           <Link href="/events">이벤트</Link>
-          <Link href="/raffles">추첨이벤트</Link>
-          <Link href="/play">뽑기&교환</Link>
+          <Link href="/raffles">추첨 이벤트</Link>
+          <Link href="/play">뽑기 & 교환</Link>
           <Link href="/rewards">보상 센터</Link>
         </div>
       </div>

@@ -17,16 +17,17 @@ type BoxEntry = RewardCenterData["boxes"][number];
 
 function describeReward(reward: Record<string, unknown> | null | undefined) {
   if (!reward) return "보상 지급";
+  const direct = reward.displayLabel ?? reward.displayName ?? reward.display_text ?? reward.name;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
   const rawType = String(reward.type ?? reward.reward_type ?? "").toUpperCase();
   const amount = Math.max(1, Number(reward.amount ?? 1) || 1);
   const label = typeof reward.label === "string" && reward.label.trim() ? reward.label.trim() : "";
-  if (label) return `${label} ${amount.toLocaleString()}개`;
-  if (rawType === "CURRENCY") return `화폐 ${amount.toLocaleString()}`;
-  if (rawType === "TICKET") return `추첨권 ${amount.toLocaleString()}장`;
-  if (rawType === "ITEM") return `상품 ${amount.toLocaleString()}개`;
-  if (rawType === "RANDOM_BOX") return `랜덤박스 ${amount.toLocaleString()}개`;
-  if (rawType === "EXP") return `경험치 ${amount.toLocaleString()}`;
-  return `보상 ${amount.toLocaleString()}`;
+  if (rawType === "CURRENCY") return label ? `화폐 ${amount.toLocaleString()} · ${label}` : `화폐 ${amount.toLocaleString()}`;
+  if (rawType === "TICKET") return label ? `추첨권 ${amount.toLocaleString()}장 · ${label}` : `추첨권 ${amount.toLocaleString()}장`;
+  if (rawType === "ITEM") return label ? `상품 ${amount.toLocaleString()}개 · ${label}` : `상품 ${amount.toLocaleString()}개`;
+  if (rawType === "RANDOM_BOX") return label ? `랜덤박스 ${amount.toLocaleString()}개 · ${label}` : `랜덤박스 ${amount.toLocaleString()}개`;
+  if (rawType === "EXP") return label ? `${amount.toLocaleString()} EXP · ${label}` : `${amount.toLocaleString()} EXP`;
+  return label ? `보상 ${amount.toLocaleString()} · ${label}` : `보상 ${amount.toLocaleString()}`;
 }
 
 function rewardSummary(value: unknown) {
@@ -113,10 +114,10 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
   }
 
   return <>
-    <div className="grid gap-3 reward-center-mobile">
+    <div className="grid gap-3 reward-center-mobile reward-center-phone-shell">
       {message && <div className={`form-message form-${message.type}`}>{message.text}</div>}
 
-      <section className="panel panel-pad">
+      <section className="panel panel-pad reward-mobile-card">
         <div className="flex items-center gap-1"><UserPlus size={19} className="text-gold" /><h2 className="panel-title mb-0">내 추천 ID</h2></div>
         <p className="panel-description mt-1">친구가 회원가입 시 이 ID를 입력하고 관리자 승인을 받으면 양쪽 모두 보상을 받을 수 있습니다.</p>
         <div className="member-code mt-2">{referralCode}</div>
@@ -125,14 +126,14 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
       </section>
 
       <div className="grid grid-2">
-        <section className="panel panel-pad">
+        <section className="panel panel-pad reward-mobile-card">
           <div className="flex items-center gap-1"><CalendarCheck2 size={19} className="text-gold" /><h2 className="panel-title mb-0">출석 체크</h2></div>
           <p className="panel-description mt-1">KST 기준 하루 1회 출석할 수 있습니다. 출석 보상이 있으면 완료 메시지에 바로 표시됩니다.</p>
           {data.attendanceToday ? <div className="note-box mt-2">오늘 출석 완료 · 연속 {data.attendanceToday.streak_count.toLocaleString()}일</div> : <button className="btn btn-primary mt-2" type="button" disabled={loading === "attendance"} onClick={() => run("attendance", () => postJson("/api/rewards/attendance"), (result) => `출석 체크 완료 · ${rewardSummary((result as { rewards?: unknown })?.rewards)}`)}>{loading === "attendance" ? <LoaderCircle size={17} className="spin" /> : <CalendarCheck2 size={17} />} 오늘 출석하기</button>}
           <div className="table-wrap mt-3"><table className="table"><thead><tr><th>날짜</th><th>구분</th><th>연속</th></tr></thead><tbody>{data.recentAttendance.length ? data.recentAttendance.map((row) => <tr key={row.id}><td>{row.attendance_date}</td><td>{row.source === "ADMIN" ? "관리자 처리" : "직접 출석"}</td><td>{row.streak_count}일</td></tr>) : <tr><td colSpan={3}><div className="empty">출석 기록이 없습니다.</div></td></tr>}</tbody></table></div>
         </section>
 
-        <section className="panel panel-pad">
+        <section className="panel panel-pad reward-mobile-card">
           <div className="flex items-center gap-1"><Send size={19} className="text-gold" /><h2 className="panel-title mb-0">쿠폰 / 이벤트 코드</h2></div>
           <p className="panel-description mt-1">운영자가 공개한 쿠폰이나 이벤트 코드를 입력하거나 아래 목록에서 바로 사용할 수 있습니다.</p>
           <form className="form-row mt-2" onSubmit={submitCode}><input className="input" name="code" placeholder="예: DYNAMICOPEN" maxLength={40} /><button className="btn btn-secondary" type="submit" disabled={loading === "code"}>{loading === "code" ? <LoaderCircle size={17} className="spin" /> : <Ticket size={17} />} 코드 사용</button></form>
@@ -153,13 +154,13 @@ export function RewardCenter({ data }: { data: RewardCenterData }) {
         </section>
       </div>
 
-      <section className="panel panel-pad">
+      <section className="panel panel-pad reward-mobile-card">
         <div className="flex items-center gap-1"><Gift size={19} className="text-gold" /><h2 className="panel-title mb-0">내 랜덤박스</h2></div>
         <p className="panel-description mt-1">추천, 가입, 출석, 쿠폰 보상으로 받은 박스를 개봉할 수 있습니다. 개봉 버튼을 누른 뒤 선물상자를 클릭하면 개봉이 진행됩니다.</p>
         <div className="grid grid-3 mt-3">{data.boxes.length ? data.boxes.map((box) => <article className="panel-soft" key={box.id}><div className="flex items-center gap-1"><Gift size={19} /><strong>{box.box_name}</strong></div><p className="text-muted text-small mt-1">{box.box_description ?? "랜덤 보상 박스"}</p><div className="ticket-count mt-2">보유 {box.quantity.toLocaleString()}개</div><button className="btn btn-primary btn-block mt-2" type="button" disabled={loading === `open-${box.box_id}` || Boolean(openingBox)} onClick={() => openGiftBox(box)}>{loading === `open-${box.box_id}` ? <LoaderCircle size={17} className="spin" /> : <Gift size={17} />} 개봉하기</button></article>) : <div className="panel empty">보유한 랜덤박스가 없습니다.</div>}</div>
       </section>
 
-      <section className="panel panel-pad">
+      <section className="panel panel-pad reward-mobile-card">
         <div className="flex items-center gap-1"><Bell size={19} className="text-gold" /><h2 className="panel-title mb-0">알림센터</h2></div>
         <div className="result-list mt-3">{data.notifications.length ? data.notifications.map((item) => <article className="result-row" key={item.id}><div className="result-icon"><Bell size={17} /></div><div className="result-main"><strong>{item.title}{!item.is_read ? " · NEW" : ""}</strong><span>{item.body}</span></div><time className="result-time">{formatDateTime(item.created_at)}</time></article>) : <div className="empty">아직 받은 알림이 없습니다.</div>}</div>
       </section>

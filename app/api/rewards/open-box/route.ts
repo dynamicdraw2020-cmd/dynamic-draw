@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const { error: consumeError } = await update;
   if (consumeError) return fail("랜덤박스를 차감하지 못했습니다.", 400, "BOX_CONSUME_FAILED", consumeError.message);
   const meta = requestMeta(request);
-  const delivered = await deliverRewards({ admin, profileId: guard.auth.userId, rewards: [selected.reward], sourceType: "RANDOM_BOX_OPEN", sourceId: parsed.data.boxId, createdBy: guard.auth.userId, ip: meta.ip, userAgent: meta.userAgent, notifyTitle: "랜덤박스 개봉 결과", notifyBody: `${selected.reward.label ?? selected.reward.type} 보상이 지급되었습니다.` });
+  const delivered = await deliverRewards({ admin, profileId: guard.auth.userId, rewards: [selected.reward], sourceType: "RANDOM_BOX_OPEN", sourceId: parsed.data.boxId, createdBy: guard.auth.userId, ip: meta.ip, userAgent: meta.userAgent, notifyTitle: "랜덤박스 개봉 결과" });
   const { data: log } = await admin.from("random_box_open_logs").insert({ profile_id: guard.auth.userId, box_id: parsed.data.boxId, selected_reward_id: selected.row.id, reward_snapshot: delivered }).select("*").single();
   return ok({ log, reward: delivered[0] ?? selected.reward, remaining: next }, 201);
 }

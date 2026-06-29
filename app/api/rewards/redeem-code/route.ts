@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const { count } = await admin.from("promo_redemptions").select("id", { count: "exact", head: true }).eq("promo_id", promo.id).eq("profile_id", guard.auth.userId);
   if ((count ?? 0) >= promo.per_user_limit) return fail("이미 사용 가능한 횟수를 모두 사용했습니다.", 409, "PROMO_ALREADY_USED");
   const meta = requestMeta(request);
-  const delivered = await deliverRewards({ admin, profileId: guard.auth.userId, rewards: promo.rewards as RewardItem[], sourceType: promo.code_type, sourceId: promo.id, createdBy: guard.auth.userId, ip: meta.ip, userAgent: meta.userAgent, notifyTitle: `${promo.name} 보상 지급`, notifyBody: "코드 보상이 지급되었습니다." });
+  const delivered = await deliverRewards({ admin, profileId: guard.auth.userId, rewards: promo.rewards as RewardItem[], sourceType: promo.code_type, sourceId: promo.id, createdBy: guard.auth.userId, ip: meta.ip, userAgent: meta.userAgent, notifyTitle: `${promo.name} 보상 지급` });
   const { data: redemption, error } = await admin.from("promo_redemptions").insert({ promo_id: promo.id, profile_id: guard.auth.userId, reward_snapshot: delivered, ip_address: meta.ip, user_agent: meta.userAgent }).select("*").single();
   if (error) return fail("코드 사용 기록을 저장하지 못했습니다.", 400, "PROMO_REDEEM_LOG_FAILED", error.message);
   await admin.from("promo_codes").update({ used_count: promo.used_count + 1, updated_at: new Date().toISOString() }).eq("id", promo.id);

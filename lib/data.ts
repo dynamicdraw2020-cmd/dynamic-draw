@@ -587,7 +587,7 @@ export async function getPublicEvents(limit = 12): Promise<EventPost[]> {
 
 export async function getPublicRaffles(limit = 8): Promise<RaffleEvent[]> {
   if (demoMode) {
-    return [{ id: "raffle-demo", title: "본방 입장 추첨이벤트", description: "공개 추첨이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
+    return [{ id: "raffle-demo", title: "본방 입장 추첨 이벤트", description: "공개 추첨 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, created_at: new Date().toISOString() }];
   }
   const supabase = await createClient();
   const { data, error } = await supabase.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,required_member_tier_id,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").eq("is_public", true).in("status", ["ACTIVE", "COMPLETED"]).order("created_at", { ascending: false }).limit(limit);
@@ -596,7 +596,7 @@ export async function getPublicRaffles(limit = 8): Promise<RaffleEvent[]> {
 }
 
 export async function getAdminRaffles(): Promise<AdminRaffleEvent[]> {
-  if (demoMode) return [{ id: "raffle-demo", title: "본방 입장 추첨이벤트", description: "공개 추첨이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
+  if (demoMode) return [{ id: "raffle-demo", title: "본방 입장 추첨 이벤트", description: "공개 추첨 이벤트입니다.", prize_name: "본방 입장 우선권", status: "ACTIVE", is_public: true, starts_at: null, ends_at: null, winner_profile_id: null, winner_member_code: null, winner_display_name: null, executed_at: null, participant_count: 1, created_at: new Date().toISOString() }];
   const admin = createAdminClient();
   const [{ data }, { count }] = await Promise.all([
     admin.from("raffle_events").select("id,title,description,prize_name,status,is_public,starts_at,ends_at,required_member_tier_id,winner_profile_id,winner_member_code,winner_display_name,executed_at,created_at,updated_at").order("created_at", { ascending: false }).limit(200),
@@ -764,12 +764,61 @@ export async function getAdminExchangeRules() {
 export async function getAdminResults(limit = 100) {
   if (demoMode) return mockResults;
   const admin = createAdminClient();
-  const { data } = await admin
+
+  let rows: Array<Record<string, any>> = [];
+  const rawResult = await admin
     .from("results")
-    .select("id,created_at,revealed_at,voided_at,void_reason,public_display_name,public_member_code,draws(name),rewards(name,color),profiles(display_name,member_code)")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
-  return data ?? [];
+
+  if (rawResult.error) {
+    const relationFallback = await admin
+      .from("results")
+      .select("id,created_at,revealed_at,voided_at,void_reason,public_display_name,public_member_code,draws(name),rewards(name,color),profiles(display_name,member_code)")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return relationFallback.data ?? [];
+  }
+
+  rows = (rawResult.data ?? []) as Array<Record<string, any>>;
+  if (!rows.length) return [];
+
+  const drawIds = Array.from(new Set(rows.map((row) => String(row.draw_id ?? row.drawId ?? "")).filter(Boolean)));
+  const rewardIds = Array.from(new Set(rows.map((row) => String(row.reward_id ?? row.rewardId ?? "")).filter(Boolean)));
+  const profileIds = Array.from(new Set(rows.map((row) => String(row.participant_id ?? row.profile_id ?? row.profileId ?? "")).filter(Boolean)));
+
+  const [drawResult, rewardResult, profileResult] = await Promise.all([
+    drawIds.length ? admin.from("draws").select("id,name").in("id", drawIds) : Promise.resolve({ data: [] }),
+    rewardIds.length ? admin.from("rewards").select("id,name,color").in("id", rewardIds) : Promise.resolve({ data: [] }),
+    profileIds.length ? admin.from("profiles").select("id,display_name,username,member_code").in("id", profileIds) : Promise.resolve({ data: [] }),
+  ]);
+
+  const drawMap = new Map(((drawResult.data ?? []) as Array<{ id: string; name?: string | null }>).map((row) => [row.id, row]));
+  const rewardMap = new Map(((rewardResult.data ?? []) as Array<{ id: string; name?: string | null; color?: string | null }>).map((row) => [row.id, row]));
+  const profileMap = new Map(((profileResult.data ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }>).map((row) => [row.id, row]));
+
+  return rows.map((row) => {
+    const drawId = String(row.draw_id ?? row.drawId ?? "");
+    const rewardId = String(row.reward_id ?? row.rewardId ?? "");
+    const profileId = String(row.participant_id ?? row.profile_id ?? row.profileId ?? "");
+    const draw = drawMap.get(drawId);
+    const reward = rewardMap.get(rewardId);
+    const profile = profileMap.get(profileId);
+    return {
+      ...row,
+      id: row.id,
+      created_at: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+      revealed_at: row.revealed_at ?? row.revealedAt ?? null,
+      voided_at: row.voided_at ?? row.voidedAt ?? null,
+      void_reason: row.void_reason ?? row.voidReason ?? null,
+      public_display_name: row.public_display_name ?? row.publicDisplayName ?? null,
+      public_member_code: row.public_member_code ?? row.publicMemberCode ?? null,
+      draws: draw ? { name: draw.name ?? "-" } : null,
+      rewards: reward ? { name: reward.name ?? "-", color: reward.color ?? "#111827" } : null,
+      profiles: profile ? { display_name: profile.display_name ?? profile.username ?? "회원", member_code: profile.member_code ?? null } : null,
+    };
+  });
 }
 
 export async function getAdminLogs(limit = 100) {

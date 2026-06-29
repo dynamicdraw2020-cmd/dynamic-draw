@@ -37,6 +37,18 @@ export async function POST(request: Request) {
   const { data: profile } = await admin.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
   if (!profile) return fail("회원 정보가 생성되지 않았습니다. 관리자에게 문의해 주세요.", 500, "PROFILE_MISSING");
 
+  const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
+  const operationMode = String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
+  const isAdmin = ["VIEWER", "MANAGER", "SUPER_ADMIN"].includes(profile.role);
+  if ((operationMode === "UPDATING" || operationMode === "READ_ONLY") && !isAdmin) {
+    await supabase.auth.signOut();
+    return fail("현재 업데이트중입니다. 관리자만 로그인할 수 있습니다.", 503, "OPERATION_LOGIN_BLOCKED");
+  }
+  if ((operationMode === "INACTIVE" || operationMode === "MAINTENANCE") && profile.role !== "SUPER_ADMIN") {
+    await supabase.auth.signOut();
+    return fail("현재 사이트가 비활성화되어 최고 관리자만 로그인할 수 있습니다.", 503, "OPERATION_LOGIN_BLOCKED");
+  }
+
   await admin.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", data.user.id);
   await admin.from("member_session_status").upsert({ profile_id: data.user.id, status: "ONLINE", last_login_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), ip_address: meta.ip, browser_fingerprint: fingerprint, user_agent: meta.userAgent }, { onConflict: "profile_id" });
   await admin.from("login_activity_logs").insert({ profile_id: data.user.id, login_id: profile.username ?? parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "SUCCESS", user_agent: meta.userAgent });

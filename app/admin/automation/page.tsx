@@ -16,5 +16,5 @@ export default async function AdminAutomationPage() {
     admin.from("rewards").select("id,name").is("deleted_at", null).eq("is_active", true).order("name", { ascending: true }),
     admin.from("special_reward_announcements").select("id,reward_id,title,message,is_active,reward:rewards(name)").order("created_at", { ascending: false }).limit(120),
   ]);
-  return <main><div className="page-heading"><h1>자동 추첨·자동 지급</h1><p>예약된 추첨권 지급, 화폐 지급, 전체 회원 추첨과 지정 상품 전체공지를 관리합니다.</p></div><AutomationManager jobs={(jobs.data ?? []) as never[]} draws={(draws.data ?? []) as never[]} currencies={(currencies.data ?? []) as never[]} rewards={(rewards.data ?? []) as never[]} announcements={(announcements.data ?? []) as never[]} /></main>;
+  return <main><div className="page-heading"><h1>자동 추첨·자동 지급</h1><p>예약된 추첨권 지급, 화폐 지급, 추첨 이벤트과 지정 상품 전체공지를 관리합니다.</p></div><AutomationManager jobs={(jobs.data ?? []) as never[]} draws={(draws.data ?? []) as never[]} currencies={(currencies.data ?? []) as never[]} rewards={(rewards.data ?? []) as never[]} announcements={(announcements.data ?? []) as never[]} /></main>;
 }

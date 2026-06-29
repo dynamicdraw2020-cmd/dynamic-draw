@@ -2,6 +2,7 @@ import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
 import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { makeReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 
 const schema = z.object({
@@ -55,6 +56,15 @@ export async function POST(request: Request) {
   if (limited) return limited;
 
   const admin = createAdminClient();
+  let signupBypassBySuperAdmin = false;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: adminProfile } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      signupBypassBySuperAdmin = adminProfile?.role === "SUPER_ADMIN";
+    }
+  } catch {}
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
   let riskScore = 0;
   const riskFlags: string[] = [];
@@ -64,7 +74,7 @@ export async function POST(request: Request) {
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", cooldownSince),
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", cooldownSince),
     ]);
-    if ((fingerprint !== "unknown" && (recentDevice.count ?? 0) > 0) || (recentIp.count ?? 0) > 0) {
+    if (!signupBypassBySuperAdmin && ((fingerprint !== "unknown" && (recentDevice.count ?? 0) > 0) || (recentIp.count ?? 0) > 0)) {
       return fail("이미 회원가입을 요청하였습니다. 3분 뒤에 재시도 해주세요.", 429, "SIGNUP_DEVICE_COOLDOWN");
     }
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

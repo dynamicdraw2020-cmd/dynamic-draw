@@ -24,6 +24,6 @@ export async function POST(request: Request) {
       });
     }
   }
-  await supabase.auth.signOut();
-  return ok({});
+  await supabase.auth.signOut().catch(() => undefined);
+  return ok({ signedOut: true });
 }

@@ -20,6 +20,18 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 }
 
 
+
+async function getOperationModeForAuth() {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.from("site_settings").select("key,value").in("key", ["operation_mode", "operation_message", "operation_ends_at"]);
+    const map = new Map((data ?? []).map((row: { key: string; value: unknown }) => [row.key, String(row.value ?? "").replace(/^"|"$/g, "")]));
+    return { mode: map.get("operation_mode") || "ACTIVE", message: map.get("operation_message") || "", endsAt: map.get("operation_ends_at") || "" };
+  } catch {
+    return { mode: "ACTIVE", message: "", endsAt: "" };
+  }
+}
+
 async function isLoginBlacklisted(profileId: string) {
   try {
     const admin = createAdminClient();
@@ -41,6 +53,8 @@ export async function requireApprovedUser() {
   if (!profile) redirect("/login?next=/account");
   if (profile.status === "PENDING") redirect("/pending");
   if (profile.status !== "APPROVED") redirect("/login?error=account_unavailable");
+  const operation = await getOperationModeForAuth();
+  if (profile.role === "USER" && operation.mode !== "ACTIVE" && operation.mode !== "NORMAL") redirect("/system-status");
   if (await isLoginBlacklisted(profile.id)) redirect("/login?error=account_restricted");
   return profile;
 }
@@ -50,6 +64,8 @@ export async function requireAdmin(minimum: "VIEWER" | "MANAGER" | "SUPER_ADMIN"
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login?next=/admin");
   if (profile.status !== "APPROVED" || !ADMIN_ROLES.has(profile.role)) redirect("/");
+  const operation = await getOperationModeForAuth();
+  if ((operation.mode === "INACTIVE" || operation.mode === "MAINTENANCE") && profile.role !== "SUPER_ADMIN") redirect("/system-status");
 
   const rank = { VIEWER: 1, MANAGER: 2, SUPER_ADMIN: 3, USER: 0 } as const;
   if (rank[profile.role] < rank[minimum]) redirect("/admin?error=forbidden");

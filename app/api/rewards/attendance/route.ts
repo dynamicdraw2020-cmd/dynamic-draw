@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const { data, error } = await admin.from("attendance_logs").insert({ profile_id: guard.auth.userId, attendance_date: today, source: "SELF", streak_count: rewards.streak, reward_snapshot: rewards.items }).select("*").single();
   if (error) return fail("출석 체크를 처리하지 못했습니다.", 400, "ATTENDANCE_FAILED", error.message);
   const meta = requestMeta(request);
-  const delivered = await deliverRewards({ admin, profileId: guard.auth.userId, rewards: rewards.items as RewardItem[], sourceType: "ATTENDANCE", sourceId: data.id, createdBy: guard.auth.userId, ip: meta.ip, userAgent: meta.userAgent, notifyTitle: "출석 보상 지급", notifyBody: `${today} 출석 보상이 지급되었습니다.` });
+  const delivered = await deliverRewards({ admin, profileId: guard.auth.userId, rewards: rewards.items as RewardItem[], sourceType: "ATTENDANCE", sourceId: data.id, createdBy: guard.auth.userId, ip: meta.ip, userAgent: meta.userAgent, notifyTitle: "출석 보상 지급" });
   return ok({ attendance: data, rewards: delivered }, 201);
 }
 

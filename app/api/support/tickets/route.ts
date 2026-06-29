@@ -11,7 +11,18 @@ export async function POST(request: Request) {
   const guard = await requireApiUser(); if ("error" in guard) return guard.error;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail("문의 내용을 확인해 주세요. 사진은 최대 3장, 각 1.2MB 이하입니다.", 422, "VALIDATION_ERROR");
-  const { data, error } = await createAdminClient().from("support_tickets").insert({ profile_id: guard.auth.userId, category: parsed.data.category, title: parsed.data.title, body: parsed.data.body, attachments: parsed.data.attachments, status: "OPEN" }).select("*").single();
-  if (error) return fail("문의를 접수하지 못했습니다.", 400, "SUPPORT_CREATE_FAILED", error.message);
-  return ok(data, 201);
+  const admin = createAdminClient();
+  const payload = { profile_id: guard.auth.userId, category: parsed.data.category, title: parsed.data.title, body: parsed.data.body, attachments: parsed.data.attachments, status: "OPEN" };
+  const { data, error } = await admin.from("support_tickets").insert(payload).select("*").single();
+  if (!error) return ok(data, 201);
+
+  // 기존 DB에 attachments 컬럼 적용이 늦은 경우에도 문의 자체는 접수되도록 한 번 더 시도합니다.
+  const { data: fallback, error: fallbackError } = await admin
+    .from("support_tickets")
+    .insert({ profile_id: guard.auth.userId, category: parsed.data.category, title: parsed.data.title, body: parsed.data.body, status: "OPEN" })
+    .select("*")
+    .single();
+
+  if (fallbackError) return fail("문의를 접수하지 못했습니다.", 400, "SUPPORT_CREATE_FAILED", fallbackError.message);
+  return ok({ ...fallback, attachments: [] }, 201);
 }

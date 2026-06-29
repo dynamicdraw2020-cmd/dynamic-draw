@@ -7,6 +7,7 @@ const schema = z.object({
   loginId: z.string().trim().min(1, "아이디를 입력해 주세요."),
   displayName: z.string().trim().min(2, "이름 또는 닉네임은 2자 이상 입력해 주세요.").max(30),
   password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다.").max(72),
+  referralCode: z.string().trim().max(32).optional().default(""),
 });
 
 type AuthAdminError = { code?: string; message?: string; status?: number };
@@ -56,6 +57,21 @@ export async function POST(request: Request) {
   const { data: existing } = await admin.from("profiles").select("id").eq("username", login.loginId).maybeSingle();
   if (existing) return fail("이미 사용 중인 아이디입니다. 다른 아이디를 사용해 주세요.", 409, "LOGIN_ID_ALREADY_REGISTERED");
 
+  let referredBy: string | null = null;
+  const rawReferral = parsed.data.referralCode.trim();
+  if (rawReferral) {
+    const normalizedReferral = rawReferral.toUpperCase();
+    const { data: referrer } = await admin
+      .from("profiles")
+      .select("id,username,referral_code,status")
+      .or(`referral_code.eq.${normalizedReferral},username.eq.${rawReferral.toLowerCase()}`)
+      .eq("status", "APPROVED")
+      .maybeSingle();
+    if (!referrer) return fail("추천인 ID를 찾을 수 없습니다. 추천인에게 추천 ID를 다시 확인해 주세요.", 404, "REFERRER_NOT_FOUND");
+    if (referrer.username === login.loginId) return fail("자기 자신은 추천인으로 입력할 수 없습니다.", 409, "SELF_REFERRAL_BLOCKED");
+    referredBy = referrer.id;
+  }
+
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: authEmail,
     password: parsed.data.password,
@@ -82,6 +98,7 @@ export async function POST(request: Request) {
       approved_by: null,
       approved_at: null,
       rejection_reason: null,
+      referred_by: referredBy,
     }, { onConflict: "id" });
 
   if (profileError) {
@@ -93,6 +110,15 @@ export async function POST(request: Request) {
       duplicate ? "LOGIN_ID_ALREADY_REGISTERED" : "PROFILE_CREATE_FAILED",
       profileError.code,
     );
+  }
+
+  if (referredBy) {
+    await admin.from("referral_logs").insert({
+      referrer_id: referredBy,
+      referred_profile_id: created.user.id,
+      referral_code: rawReferral.toUpperCase(),
+      status: "PENDING",
+    });
   }
 
   return ok({

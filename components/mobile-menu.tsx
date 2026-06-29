@@ -9,6 +9,7 @@ const links = [
   ["이벤트", "/events"],
   ["전체 추첨", "/raffles"],
   ["직접 참여", "/play"],
+  ["보상 센터", "/rewards"],
   ["운영 안내", "/probabilities"],
   ["최근 결과", "/results"],
 ];

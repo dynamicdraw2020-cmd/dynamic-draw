@@ -57,6 +57,13 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
         <div style={{ position: "relative" }}><IdCard size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="loginId" name="loginId" required autoComplete="username" placeholder="영문·숫자 4~24자" minLength={4} maxLength={24} pattern="[A-Za-z0-9._-]+" style={{ paddingLeft: 40 }} /></div>
         {mode === "signup" && <small>전화번호와 이메일은 받지 않습니다. 아이디, 이름/닉네임, 비밀번호만 사용합니다.</small>}
       </div>
+      {mode === "signup" && (
+        <div className="field">
+          <label htmlFor="referralCode">추천인 ID <span className="text-muted">선택</span></label>
+          <input className="input" id="referralCode" name="referralCode" maxLength={32} placeholder="추천인이 있다면 추천 ID 입력" />
+          <small>관리자 승인 후 추천한 회원과 가입 회원 모두에게 설정된 보상이 지급됩니다.</small>
+        </div>
+      )}
       <div className="field">
         <label htmlFor="password">비밀번호</label>
         <div style={{ position: "relative" }}><LockKeyhole size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="password" name="password" type="password" required minLength={8} maxLength={72} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="8자 이상" style={{ paddingLeft: 40 }} /></div>

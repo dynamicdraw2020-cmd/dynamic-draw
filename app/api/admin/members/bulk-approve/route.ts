@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { handleApprovalRewards } from "@/lib/reward-engine";
 
 const schema = z.object({ memberIds: z.array(z.uuid()).min(1).max(300) });
 
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     const { data, error } = await admin.from("profiles").update({ status: "APPROVED", member_code: code, approved_by: guard.auth.userId, approved_at: new Date().toISOString(), rejection_reason: null }).eq("id", profile.id).eq("status", "PENDING").select("id,member_code").maybeSingle();
     if (!error && data) {
       approved.push({ id: data.id, member_code: data.member_code });
+      await handleApprovalRewards(admin, profile.id, guard.auth.userId);
       await admin.rpc("append_admin_log", { p_admin_id: guard.auth.userId, p_action: "MEMBER_BULK_APPROVED", p_target_table: "profiles", p_target_id: profile.id, p_details: { before: profile, after: data }, p_ip: meta.ip, p_user_agent: meta.userAgent });
     }
   }

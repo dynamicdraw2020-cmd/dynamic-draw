@@ -10,6 +10,7 @@ const navLinks = [
   { href: "/events", label: "이벤트" },
   { href: "/raffles", label: "전체 추첨" },
   { href: "/play", label: "직접 참여" },
+  { href: "/rewards", label: "보상 센터" },
   { href: "/probabilities", label: "운영 안내" },
   { href: "/dashboard", label: "대시보드" },
 ];

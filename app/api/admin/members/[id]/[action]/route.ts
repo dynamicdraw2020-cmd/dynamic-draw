@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { handleApprovalRewards } from "@/lib/reward-engine";
 
 const approveSchema = z.object({
   memberCode: z.string().trim().toUpperCase().regex(/^DD-\d{4}-[A-Z0-9]{4,12}$/, "고유 ID 형식은 DD-2026-001001처럼 입력해 주세요.").optional(),
@@ -80,6 +81,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (error.code === "23505") return fail("이미 사용 중인 고유 ID입니다.", 409, "MEMBER_CODE_DUPLICATE");
     return fail("회원 상태를 변경하지 못했습니다.", 400, "MEMBER_UPDATE_FAILED", error.message);
   }
+  if (action === "approve") {
+    await handleApprovalRewards(admin, id, guard.auth.userId);
+  }
+
   const meta = requestMeta(request);
   await admin.rpc("append_admin_log", {
     p_admin_id: guard.auth.userId,

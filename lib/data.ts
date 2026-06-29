@@ -32,6 +32,16 @@ import type {
   AdminUserActivityData,
   UserActivityEntry,
   ProductCatalogItem,
+  AdminRewardSystemData,
+  AttendanceLog,
+  AttendanceRule,
+  NotificationItem,
+  PromoCode,
+  RandomBox,
+  RandomBoxReward,
+  RewardCenterData,
+  UserRandomBox,
+  Reward,
 } from "@/lib/types";
 
 const emptyStats: PublicStats = {
@@ -106,16 +116,43 @@ export async function getPublicDraws(): Promise<Draw[]> {
   return attachRewards(admin, data as Draw[]);
 }
 
-export async function getPlayableDraws(): Promise<Draw[]> {
+export async function getPlayableDraws(profileId?: string): Promise<Draw[]> {
   if (!supabaseConfigured) return [mockDraw];
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const visibleIds = new Set<string>();
+
+  const { data: publicDraws } = await admin
     .from("draws")
     .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at")
     .eq("is_public", true)
     .is("deleted_at", null)
     .in("status", ["DRAFT", "ACTIVE", "PAUSED"])
     .order("created_at", { ascending: false });
+  for (const draw of (publicDraws ?? []) as Draw[]) visibleIds.add(draw.id);
+
+  const { data: rateRows } = await admin
+    .from("ticket_exchange_rates")
+    .select("draw_id")
+    .eq("is_active", true)
+    .is("deleted_at", null);
+  for (const row of (rateRows ?? []) as Array<{ draw_id: string | null }>) if (row.draw_id) visibleIds.add(row.draw_id);
+
+  if (profileId) {
+    const { data: ticketRows } = await admin
+      .from("draw_tickets")
+      .select("draw_id")
+      .eq("profile_id", profileId)
+      .gt("quantity", 0);
+    for (const row of (ticketRows ?? []) as Array<{ draw_id: string | null }>) if (row.draw_id) visibleIds.add(row.draw_id);
+  }
+
+  if (!visibleIds.size) return [];
+  const { data, error } = await admin
+    .from("draws")
+    .select("id,name,slug,description,status,animation_ms,is_public,created_at,deleted_at")
+    .in("id", Array.from(visibleIds))
+    .is("deleted_at", null)
+    .in("status", ["DRAFT", "ACTIVE", "PAUSED"]);
   if (error || !data) return [];
   const order: Record<Draw["status"], number> = { ACTIVE: 0, DRAFT: 1, PAUSED: 2, ENDED: 3 };
   const draws = await attachRewards(admin, data as Draw[]);
@@ -283,11 +320,14 @@ export async function getUserCurrencyBalances(profileId: string): Promise<UserCu
   const rows = data as Array<{ currency_id: string; balance: number }>;
   const currencyIds = Array.from(new Set(rows.map((row) => row.currency_id).filter(Boolean)));
   if (!currencyIds.length) return [];
-  const { data: currencies } = await admin
+  const first = await admin
     .from("virtual_currencies")
     .select("id,name,code,symbol,is_active,sort_order,deleted_at")
     .in("id", currencyIds);
-  const currencyMap = new Map(((currencies ?? []) as VirtualCurrency[]).map((currency) => [currency.id, currency]));
+  const second = first.error
+    ? await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order").in("id", currencyIds)
+    : first;
+  const currencyMap = new Map(((second.data ?? []) as VirtualCurrency[]).map((currency) => [currency.id, currency]));
   return rows
     .map((row): UserCurrencyBalance | null => {
       const currency = currencyMap.get(row.currency_id);
@@ -300,25 +340,48 @@ export async function getUserCurrencyBalances(profileId: string): Promise<UserCu
 export async function getUserTicketExchangeRates(): Promise<UserTicketExchangeRate[]> {
   if (demoMode) return [{ id: "rate-demo", draw: mockDraw, currency: { id: "coin-demo", name: "이벤트 코인", code: "EVENT_COIN", symbol: "EC", is_active: true, sort_order: 10 }, currencyCost: 100, ticketQuantity: 1 }];
   const admin = createAdminClient();
-  const { data, error } = await admin
+
+  // Supabase 프로젝트마다 deleted_at 보정 SQL 적용 시점이 다를 수 있어 1차 조회 실패 시
+  // deleted_at 조건 없이 한 번 더 읽습니다. 화면 동기화가 빈 값으로 떨어지는 일을 막기 위함입니다.
+  let rateRows: TicketExchangeRate[] = [];
+  const first = await admin
     .from("ticket_exchange_rates")
     .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("sort_order", { ascending: true });
-  if (error || !data) return [];
-  const rates = data as TicketExchangeRate[];
+
+  if (!first.error && first.data) {
+    rateRows = first.data as TicketExchangeRate[];
+  } else {
+    const fallback = await admin
+      .from("ticket_exchange_rates")
+      .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+    rateRows = (fallback.data as TicketExchangeRate[] | null) ?? [];
+  }
+
+  const rates = rateRows.filter((rate) => rate.is_active && !rate.deleted_at);
+  if (!rates.length) return [];
+
   const drawMap = await getDrawMap(admin, rates.map((rate) => rate.draw_id));
   const currencyIds = Array.from(new Set(rates.map((rate) => rate.currency_id).filter(Boolean)));
-  const { data: currencies } = currencyIds.length
+  const currencyQuery = currencyIds.length
     ? await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order,deleted_at").in("id", currencyIds)
-    : { data: [] };
-  const currencyMap = new Map(((currencies ?? []) as VirtualCurrency[]).map((currency) => [currency.id, currency]));
+    : { data: [] as VirtualCurrency[] | null, error: null };
+  const currencyFallback = currencyQuery.error && currencyIds.length
+    ? await admin.from("virtual_currencies").select("id,name,code,symbol,is_active,sort_order").in("id", currencyIds)
+    : currencyQuery;
+  const currencyMap = new Map(((currencyFallback.data ?? []) as VirtualCurrency[]).map((currency) => [currency.id, currency]));
+
   return rates
     .map((rate): UserTicketExchangeRate | null => {
       const draw = drawMap.get(rate.draw_id);
       const currency = currencyMap.get(rate.currency_id);
-      if (!draw || !currency || draw.deleted_at || !draw.is_public || draw.status === "ENDED" || currency.deleted_at || !currency.is_active) return null;
+      if (!draw || !currency) return null;
+      if (draw.deleted_at || draw.status === "ENDED") return null;
+      if (currency.deleted_at || !currency.is_active) return null;
       return { id: rate.id, draw, currency, currencyCost: rate.currency_cost, ticketQuantity: rate.ticket_quantity };
     })
     .filter((row): row is UserTicketExchangeRate => Boolean(row));
@@ -728,4 +791,81 @@ export async function getAdminUserActivityData(profileId?: string): Promise<Admi
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 160);
   return { profile, tickets, currencies, inventory, activities };
+}
+
+export async function getRewardSystemAdminData(): Promise<AdminRewardSystemData> {
+  const fallback: AdminRewardSystemData = { boxes: [], boxRewards: [], attendanceRules: [], promoCodes: [], members: [], draws: [], currencies: [], rewards: [], settings: { signupBoxId: null, referralReferrerBoxId: null, referralReferredBoxId: null } };
+  if (demoMode) return fallback;
+  const admin = createAdminClient();
+  const [boxesResult, boxRewardsResult, attendanceRulesResult, promoCodesResult, members, draws, currencies, settingsResult, rewardsResult] = await Promise.all([
+    admin.from("random_boxes").select("id,name,description,image_url,is_active,is_signup_reward,starts_at,ends_at,sort_order,created_at,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
+    admin.from("random_box_rewards").select("id,box_id,reward_type,amount,probability_units,label,currency_id,draw_id,reward_id,random_box_id,is_active,sort_order,currency:virtual_currencies(name),draw:draws(name),reward:rewards(name),next_box:random_boxes!random_box_rewards_random_box_id_fkey(name)").order("sort_order", { ascending: true }),
+    admin.from("attendance_reward_rules").select("id,name,rule_type,required_count,rewards,is_active,sort_order").order("sort_order", { ascending: true }),
+    admin.from("promo_codes").select("id,code,name,description,code_type,target_mode,target_profile_id,target_role,event_id,starts_at,ends_at,max_uses,per_user_limit,used_count,rewards,is_active,created_at,deleted_at,target:profiles(display_name,username),event:events(title)").is("deleted_at", null).order("created_at", { ascending: false }),
+    getAdminMembers(),
+    getAdminDraws(),
+    getVirtualCurrencies(),
+    admin.from("site_settings").select("key,value").in("key", ["signup_reward_box_id", "referral_referrer_box_id", "referral_referred_box_id"]),
+    admin.from("rewards").select("id,draw_id,name,description,image_url,color,probability_units,stock,is_inventory_item,is_exchange_material,is_active,sort_order,deleted_at").is("deleted_at", null).order("name", { ascending: true }),
+  ]);
+  const boxRewards = ((boxRewardsResult.data ?? []) as Array<RandomBoxReward & { currency?: { name?: string } | Array<{ name?: string }> | null; draw?: { name?: string } | Array<{ name?: string }> | null; reward?: { name?: string } | Array<{ name?: string }> | null; next_box?: { name?: string } | Array<{ name?: string }> | null }>).map((row) => {
+    const currency = Array.isArray(row.currency) ? row.currency[0] : row.currency;
+    const draw = Array.isArray(row.draw) ? row.draw[0] : row.draw;
+    const reward = Array.isArray(row.reward) ? row.reward[0] : row.reward;
+    const nextBox = Array.isArray(row.next_box) ? row.next_box[0] : row.next_box;
+    return { ...row, currency_name: currency?.name ?? null, draw_name: draw?.name ?? null, reward_name: reward?.name ?? null, random_box_name: nextBox?.name ?? null } as RandomBoxReward;
+  });
+  const promoCodes = ((promoCodesResult.data ?? []) as Array<PromoCode & { target?: { display_name?: string; username?: string } | Array<{ display_name?: string; username?: string }> | null; event?: { title?: string } | Array<{ title?: string }> | null }>).map((row) => {
+    const target = Array.isArray(row.target) ? row.target[0] : row.target;
+    const event = Array.isArray(row.event) ? row.event[0] : row.event;
+    return { ...row, target_profile_name: target?.display_name ?? target?.username ?? null, event_title: event?.title ?? null } as PromoCode;
+  });
+  const settingMap = new Map(((settingsResult.data ?? []) as Array<{ key: string; value: unknown }>).map((row) => [row.key, typeof row.value === "string" ? row.value : String(row.value ?? "").replace(/^"|"$/g, "")]));
+  return {
+    boxes: (boxesResult.data as RandomBox[] | null) ?? [],
+    boxRewards,
+    attendanceRules: (attendanceRulesResult.data as AttendanceRule[] | null) ?? [],
+    promoCodes,
+    members,
+    draws,
+    currencies,
+    rewards: (rewardsResult.data as Reward[] | null) ?? [],
+    settings: {
+      signupBoxId: settingMap.get("signup_reward_box_id") || null,
+      referralReferrerBoxId: settingMap.get("referral_referrer_box_id") || null,
+      referralReferredBoxId: settingMap.get("referral_referred_box_id") || null,
+    },
+  };
+}
+
+function kstDateString(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+export async function getRewardCenterData(profile: Profile): Promise<RewardCenterData> {
+  const fallback: RewardCenterData = { referral: { referralCode: profile.member_code, referredBy: null, totalApproved: 0 }, boxes: [], attendanceToday: null, recentAttendance: [], notifications: [] };
+  if (demoMode) return fallback;
+  const admin = createAdminClient();
+  const today = kstDateString();
+  const [profileResult, referralCountResult, boxesResult, todayResult, recentResult, notificationsResult] = await Promise.all([
+    admin.from("profiles").select("referral_code,referred_by,referrer:profiles!profiles_referred_by_fkey(display_name,username)").eq("id", profile.id).maybeSingle(),
+    admin.from("referral_logs").select("id", { count: "exact", head: true }).eq("referrer_id", profile.id).eq("status", "APPROVED"),
+    admin.from("user_random_boxes").select("id,profile_id,box_id,quantity,source,updated_at,box:random_boxes(id,name,description,image_url,is_active,is_signup_reward,starts_at,ends_at,sort_order,created_at,deleted_at)").eq("profile_id", profile.id).gt("quantity", 0).order("updated_at", { ascending: false }),
+    admin.from("attendance_logs").select("id,profile_id,attendance_date,source,streak_count,reward_snapshot,created_at").eq("profile_id", profile.id).eq("attendance_date", today).maybeSingle(),
+    admin.from("attendance_logs").select("id,profile_id,attendance_date,source,streak_count,reward_snapshot,created_at").eq("profile_id", profile.id).order("attendance_date", { ascending: false }).limit(14),
+    admin.from("notifications").select("id,profile_id,title,body,type,link_url,is_read,created_at").eq("profile_id", profile.id).order("created_at", { ascending: false }).limit(40),
+  ]);
+  const p = profileResult.data as { referral_code?: string | null; referrer?: { display_name?: string | null; username?: string | null } | Array<{ display_name?: string | null; username?: string | null }> | null } | null;
+  const referrer = Array.isArray(p?.referrer) ? p?.referrer[0] : p?.referrer;
+  const boxes = ((boxesResult.data ?? []) as Array<UserRandomBox & { box?: RandomBox | RandomBox[] | null }>).map((row) => {
+    const box = Array.isArray(row.box) ? row.box[0] : row.box;
+    return { ...row, box_name: box?.name ?? "랜덤박스", box_description: box?.description ?? null, box_image_url: box?.image_url ?? null };
+  });
+  return {
+    referral: { referralCode: p?.referral_code ?? profile.member_code, referredBy: referrer?.display_name ?? referrer?.username ?? null, totalApproved: referralCountResult.count ?? 0 },
+    boxes,
+    attendanceToday: (todayResult.data as AttendanceLog | null) ?? null,
+    recentAttendance: (recentResult.data as AttendanceLog[] | null) ?? [],
+    notifications: (notificationsResult.data as NotificationItem[] | null) ?? [],
+  };
 }

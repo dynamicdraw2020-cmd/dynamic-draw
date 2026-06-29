@@ -27,5 +27,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     p_user_agent: meta.userAgent,
   });
   if (error) return fail(databaseRpcErrorMessage(error, "결과를 공개하지 못했습니다."), 409, "REVEAL_FAILED", error.code);
+  await admin.rpc("award_growth_for_result", { p_result_id: id, p_actor_id: guard.auth.userId });
   return ok(data);
 }

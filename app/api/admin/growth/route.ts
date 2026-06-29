@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const bodySchema = z.object({ action: z.string().trim().min(1) }).passthrough();
@@ -13,15 +13,6 @@ function parseJsonArray(value: unknown) {
   return parsed;
 }
 
-async function syncLevel(admin: ReturnType<typeof createAdminClient>, profileId: string) {
-  const { data: growth } = await admin.from("profile_growth").select("exp_total").eq("profile_id", profileId).maybeSingle();
-  const expTotal = Number((growth as { exp_total?: number } | null)?.exp_total ?? 0);
-  const { data: level } = await admin.from("level_rules").select("level_no").lte("required_exp", expTotal).eq("is_active", true).order("required_exp", { ascending: false }).limit(1).maybeSingle();
-  const nextLevel = Number((level as { level_no?: number } | null)?.level_no ?? 1);
-  const { data: vip } = await admin.from("vip_tiers").select("id").eq("is_active", true).lte("threshold_level", nextLevel).lte("threshold_exp", expTotal).order("sort_order", { ascending: false }).limit(1).maybeSingle();
-  await admin.from("profile_growth").upsert({ profile_id: profileId, exp_total: expTotal, level_no: nextLevel, vip_tier_id: (vip as { id?: string } | null)?.id ?? null, updated_at: new Date().toISOString() }, { onConflict: "profile_id" });
-}
-
 export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo;
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
@@ -30,7 +21,6 @@ export async function POST(request: Request) {
   if (!parsed.success) return fail("요청값을 확인해 주세요.", 422, "VALIDATION_ERROR");
   const body = parsed.data as Record<string, unknown> & { action: string };
   const admin = createAdminClient();
-  const meta = requestMeta(request);
 
   try {
     if (body.action === "save-level") {
@@ -107,14 +97,16 @@ export async function POST(request: Request) {
 
     if (body.action === "adjust-exp") {
       const input = z.object({ profileId: z.uuid(), amount: z.coerce.number().int(), reason: z.string().trim().min(1).max(200) }).parse(body);
-      const { data: current } = await admin.from("profile_growth").select("exp_total").eq("profile_id", input.profileId).maybeSingle();
-      const before = Number((current as { exp_total?: number } | null)?.exp_total ?? 0);
-      const after = Math.max(0, before + input.amount);
-      const { error } = await admin.from("profile_growth").upsert({ profile_id: input.profileId, exp_total: after, updated_at: new Date().toISOString() }, { onConflict: "profile_id" });
+      const { data, error } = await admin.rpc("add_profile_exp", {
+        p_profile_id: input.profileId,
+        p_amount: input.amount,
+        p_reason: input.reason,
+        p_source_type: "ADMIN_ADJUST",
+        p_source_id: `admin-adjust:${Date.now()}`,
+        p_created_by: guard.auth.userId,
+      });
       if (error) return fail("EXP를 조정하지 못했습니다.", 400, "EXP_ADJUST_FAILED", error.message);
-      await admin.from("exp_logs").insert({ profile_id: input.profileId, amount: input.amount, before_exp: before, after_exp: after, reason: input.reason, source_type: "ADMIN_ADJUST", created_by: guard.auth.userId, ip_address: meta.ip, user_agent: meta.userAgent });
-      await syncLevel(admin, input.profileId);
-      return ok({ before, after });
+      return ok(data ?? { adjusted: true });
     }
   } catch (error) {
     return fail(error instanceof Error ? error.message : "처리 중 오류가 발생했습니다.", 400, "GROWTH_ACTION_FAILED");

@@ -10,5 +10,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("reveal_result", { p_result_id: id, p_admin_id: guard.auth.userId, p_force: false, p_ip: meta.ip, p_user_agent: meta.userAgent });
   if (error) return fail(databaseRpcErrorMessage(error, "결과를 공개하지 못했습니다."), 409, "RESULT_REVEAL_FAILED");
+  await admin.rpc("award_growth_for_result", { p_result_id: id, p_actor_id: guard.auth.userId });
   return ok(data);
 }

@@ -10,6 +10,8 @@ const schema = z.object({
   operationMode: z.enum(["NORMAL", "READ_ONLY", "MAINTENANCE"]).optional().default("NORMAL"),
   operationMessage: z.string().trim().max(500).optional().default(""),
   operationEndsAt: z.string().trim().max(80).optional().default(""),
+  footerMessage: z.string().trim().max(500).optional().default(""),
+  monthlyRankImageUrl: z.string().trim().max(500).optional().default(""),
 });
 
 export async function PATCH(request: Request) {
@@ -27,6 +29,8 @@ export async function PATCH(request: Request) {
     { key: "operation_mode", value: parsed.data.operationMode, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "operation_message", value: parsed.data.operationMessage, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "operation_ends_at", value: parsed.data.operationEndsAt, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
+    { key: "footer_message", value: parsed.data.footerMessage, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
+    { key: "monthly_rank_image_url", value: parsed.data.monthlyRankImageUrl, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
   ];
   const { error } = await admin.from("site_settings").upsert(rows, { onConflict: "key" });
   if (error) return fail("설정을 저장하지 못했습니다.", 400, "SETTINGS_UPDATE_FAILED", error.message);

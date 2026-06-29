@@ -27,10 +27,10 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
   const credential = credentialToAuthEmail(parsed.data.loginId);
-  await admin.from("login_activity_logs").insert({ login_id: parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "TRYING", user_agent: meta.userAgent }).catch(() => undefined);
+  await admin.from("login_activity_logs").insert({ login_id: parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "TRYING", user_agent: meta.userAgent });
   const { data, error } = await supabase.auth.signInWithPassword({ email: credential, password: parsed.data.password });
   if (error || !data.user) {
-    await admin.from("login_activity_logs").insert({ login_id: parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "FAILED", user_agent: meta.userAgent }).catch(() => undefined);
+    await admin.from("login_activity_logs").insert({ login_id: parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "FAILED", user_agent: meta.userAgent });
     return fail("아이디 또는 비밀번호가 올바르지 않습니다.", 401, "INVALID_CREDENTIALS");
   }
 
@@ -38,8 +38,8 @@ export async function POST(request: Request) {
   if (!profile) return fail("회원 정보가 생성되지 않았습니다. 관리자에게 문의해 주세요.", 500, "PROFILE_MISSING");
 
   await admin.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", data.user.id);
-  await admin.from("member_session_status").upsert({ profile_id: data.user.id, status: "ONLINE", last_login_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), ip_address: meta.ip, browser_fingerprint: fingerprint, user_agent: meta.userAgent }, { onConflict: "profile_id" }).catch(() => undefined);
-  await admin.from("login_activity_logs").insert({ profile_id: data.user.id, login_id: profile.username ?? parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "SUCCESS", user_agent: meta.userAgent }).catch(() => undefined);
+  await admin.from("member_session_status").upsert({ profile_id: data.user.id, status: "ONLINE", last_login_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), ip_address: meta.ip, browser_fingerprint: fingerprint, user_agent: meta.userAgent }, { onConflict: "profile_id" });
+  await admin.from("login_activity_logs").insert({ profile_id: data.user.id, login_id: profile.username ?? parsed.data.loginId, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "SUCCESS", user_agent: meta.userAgent });
 
   if (["VIEWER", "MANAGER", "SUPER_ADMIN"].includes(profile.role)) {
     await admin.rpc("append_admin_log", {

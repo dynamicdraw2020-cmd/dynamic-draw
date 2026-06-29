@@ -2,7 +2,7 @@ import { z } from "zod";
 import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const schema = z.object({ action: z.enum(["create", "delete", "run-one", "process-due", "create-special-announcement", "toggle-special-announcement", "delete-special-announcement"]), id: z.string().optional().nullable(), name: z.string().optional(), jobType: z.string().optional(), scheduledAt: z.string().optional().nullable(), payload: z.record(z.string(), z.unknown()).optional().default({}), rewardId: z.string().optional(), title: z.string().optional(), message: z.string().optional() });
+const schema = z.object({ action: z.enum(["create", "delete", "run-one", "process-due", "create-special-announcement"]), id: z.string().optional().nullable(), name: z.string().optional(), jobType: z.string().optional(), scheduledAt: z.string().optional().nullable(), payload: z.record(z.string(), z.unknown()).optional().default({}), rewardId: z.string().optional(), title: z.string().optional(), message: z.string().optional() });
 
 export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo;
@@ -35,20 +35,9 @@ export async function POST(request: Request) {
   if (input.action === "create-special-announcement") {
     const rewardId = input.rewardId ?? "";
     if (!z.uuid().safeParse(rewardId).success) return fail("상품을 선택해 주세요.", 422, "REWARD_REQUIRED");
-    const { data, error } = await admin.from("special_reward_announcements").upsert({ reward_id: rewardId, title: input.title || "특별 상품 당첨", message: input.message || "{{reward}} 당첨 결과가 공개되었습니다.", is_active: true, created_by: guard.auth.userId, updated_at: new Date().toISOString() }, { onConflict: "reward_id" }).select("*").single();
+    const { data, error } = await admin.from("special_reward_announcements").insert({ reward_id: rewardId, title: input.title || "특별 상품 당첨", message: input.message || "{{reward}} 당첨 결과가 공개되었습니다.", created_by: guard.auth.userId }).select("*").single();
     if (error) return fail("전체공지 규칙을 만들지 못했습니다.", 400, "ANNOUNCEMENT_CREATE_FAILED", error.message);
     return ok(data, 201);
-  }
-  if (input.action === "toggle-special-announcement" && input.id) {
-    const { data: row } = await admin.from("special_reward_announcements").select("is_active").eq("id", input.id).maybeSingle();
-    const { error } = await admin.from("special_reward_announcements").update({ is_active: !Boolean(row?.is_active), updated_at: new Date().toISOString() }).eq("id", input.id);
-    if (error) return fail("전체공지 규칙 상태를 변경하지 못했습니다.", 400, "ANNOUNCEMENT_TOGGLE_FAILED", error.message);
-    return ok({ id: input.id, isActive: !Boolean(row?.is_active) });
-  }
-  if (input.action === "delete-special-announcement" && input.id) {
-    const { error } = await admin.from("special_reward_announcements").delete().eq("id", input.id);
-    if (error) return fail("전체공지 규칙을 삭제하지 못했습니다.", 400, "ANNOUNCEMENT_DELETE_FAILED", error.message);
-    return ok({ deleted: true });
   }
   return fail("지원하지 않는 자동화 작업입니다.", 404, "UNKNOWN_AUTOMATION_ACTION");
 }

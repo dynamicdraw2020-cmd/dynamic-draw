@@ -59,6 +59,14 @@ export async function POST(request: Request) {
   let riskScore = 0;
   const riskFlags: string[] = [];
   try {
+    const cooldownSince = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    const [recentDevice, recentIp] = await Promise.all([
+      admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", cooldownSince),
+      admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", cooldownSince),
+    ]);
+    if ((fingerprint !== "unknown" && (recentDevice.count ?? 0) > 0) || (recentIp.count ?? 0) > 0) {
+      return fail("이미 회원가입을 요청하였습니다. 3분 뒤에 재시도 해주세요.", 429, "SIGNUP_DEVICE_COOLDOWN");
+    }
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const [sameIp, sameFingerprint] = await Promise.all([
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", since),

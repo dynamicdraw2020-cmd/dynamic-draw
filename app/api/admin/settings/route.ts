@@ -7,9 +7,6 @@ const schema = z.object({
   heroTitle: z.string().trim().min(2).max(100),
   heroDescription: z.string().trim().min(2).max(500),
   publicStats: z.boolean(),
-  operationMode: z.enum(["ACTIVE", "UPDATING", "INACTIVE"]).optional().default("ACTIVE"),
-  operationMessage: z.string().trim().max(500).optional().default(""),
-  operationEndsAt: z.string().trim().max(80).optional().default(""),
   footerMessage: z.string().trim().max(500).optional().default(""),
   monthlyRankImageUrl: z.string().trim().max(500).optional().default(""),
   playHeroTitle: z.string().trim().max(120).optional().default(""),
@@ -25,16 +22,11 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail("설정값을 확인해 주세요.", 422);
   const admin = createAdminClient();
-  const forceLogoutAt = parsed.data.operationMode === "ACTIVE" ? "" : new Date().toISOString();
   const rows = [
     { key: "site_name", value: parsed.data.siteName, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "hero_title", value: parsed.data.heroTitle, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "hero_description", value: parsed.data.heroDescription, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "public_stats", value: parsed.data.publicStats, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
-    { key: "operation_mode", value: parsed.data.operationMode, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
-    { key: "operation_message", value: parsed.data.operationMessage, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
-    { key: "operation_ends_at", value: parsed.data.operationEndsAt, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
-    { key: "operation_force_logout_at", value: forceLogoutAt, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "footer_message", value: parsed.data.footerMessage, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "monthly_rank_image_url", value: parsed.data.monthlyRankImageUrl, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },
     { key: "play_hero_title", value: parsed.data.playHeroTitle, is_public: true, updated_by: guard.auth.userId, updated_at: new Date().toISOString() },

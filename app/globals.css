@@ -1948,3 +1948,110 @@ body {
     border-radius: 22px !important;
   }
 }
+
+
+/* v1.0.3 support + operation-mode focus hotfix */
+.operation-mode-manager {
+  display: grid;
+  gap: 18px;
+  max-width: 980px;
+}
+.operation-mode-title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.operation-mode-title h2 {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 34px);
+}
+.operation-mode-title p {
+  margin: 3px 0 0;
+  color: var(--muted);
+}
+.operation-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.operation-mode-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 18px;
+  background: rgba(255,255,255,.04);
+  cursor: pointer;
+}
+.operation-mode-card input {
+  width: 18px;
+  height: 18px;
+}
+.operation-mode-card strong {
+  font-size: 20px;
+}
+.operation-mode-card span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+.operation-mode-card.active {
+  border-color: rgba(246,196,83,.7);
+  box-shadow: 0 16px 36px rgba(246,196,83,.10);
+}
+.operation-mode-warning {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(59,130,246,.10);
+  border: 1px solid rgba(59,130,246,.20);
+  font-weight: 800;
+}
+.admin-support-panel .table-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.support-admin-card {
+  border-radius: 18px;
+}
+.support-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .operation-mode-grid {
+    grid-template-columns: 1fr;
+  }
+  .operation-mode-card {
+    padding: 16px;
+  }
+  .operation-mode-manager .form-row {
+    grid-template-columns: 1fr !important;
+  }
+  .operation-mode-manager .btn,
+  .operation-mode-manager .input,
+  .operation-mode-manager .textarea {
+    width: 100%;
+    min-height: 46px;
+  }
+  .admin-support-panel {
+    padding: 16px !important;
+  }
+  .admin-support-panel .table-topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .admin-support-panel .table-topbar .btn {
+    width: 100%;
+  }
+  .support-admin-card {
+    padding: 14px !important;
+  }
+  .support-admin-card .btn,
+  .support-admin-card .select,
+  .support-admin-card .textarea {
+    width: 100%;
+  }
+}

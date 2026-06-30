@@ -7,12 +7,18 @@ export async function GET() {
 
   try {
     const admin = createAdminClient();
+
+    const { data: rpcData, error: rpcError } = await admin.rpc("get_admin_support_tickets", { p_limit: 500 });
+    if (!rpcError && Array.isArray(rpcData)) {
+      return ok({ tickets: rpcData, count: rpcData.length, source: "rpc" });
+    }
+
     const { data: tickets, error } = await admin
       .from("support_tickets")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
-    if (error) return fail(error.message, 500, "ADMIN_SUPPORT_LIST_DB_FAILED");
+    if (error) return fail(error.message, 500, "ADMIN_SUPPORT_LIST_DB_FAILED", { rpc: rpcError?.message });
 
     const rows = (tickets ?? []) as Array<Record<string, unknown>>;
     const profileIds = Array.from(new Set(rows.map((ticket) => String(ticket.profile_id ?? "")).filter(Boolean)));
@@ -32,7 +38,7 @@ export async function GET() {
       profiles: ticket.profile_id ? profileMap.get(String(ticket.profile_id)) ?? null : null,
     }));
 
-    return ok({ tickets: mapped, count: mapped.length });
+    return ok({ tickets: mapped, count: mapped.length, source: "table" });
   } catch (error) {
     return fail(error instanceof Error ? error.message : "문의 목록을 불러오지 못했습니다.", 500, "ADMIN_SUPPORT_LIST_FAILED");
   }

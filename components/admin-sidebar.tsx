@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowLeftRight, BarChart3, CalendarClock, ClipboardList, FileClock, Gift, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, MessageCircle, NotebookPen, Settings, ShieldCheck, ShieldX, Sparkles, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, CalendarClock, ClipboardList, FileClock, Gift, ImageIcon, LayoutDashboard, ListChecks, Logs, Megaphone, MessageCircle, NotebookPen, Settings, ShieldAlert, ShieldCheck, ShieldX, Sparkles, TicketCheck, Tickets, Trophy, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
@@ -11,7 +11,6 @@ const groups = [
     description: "전체 상태와 기록 확인",
     items: [
       { href: "/admin", label: "관리 홈", icon: LayoutDashboard, minimum: "VIEWER" },
-      { href: "/admin/settings", label: "운영 모드 설정", icon: Settings, minimum: "SUPER_ADMIN" },
       { href: "/admin/stats", label: "통계", icon: BarChart3, minimum: "VIEWER" },
       { href: "/admin/operations", label: "운영 통계", icon: ClipboardList, minimum: "VIEWER" },
       { href: "/admin/activity", label: "유저 활동 로그", icon: Activity, minimum: "VIEWER" },
@@ -66,6 +65,7 @@ const groups = [
     description: "로그와 전체 설정",
     items: [
       { href: "/admin/logs", label: "관리자 로그", icon: Logs, minimum: "VIEWER" },
+      { href: "/admin/operation-mode", label: "운영 모드", icon: ShieldAlert, minimum: "SUPER_ADMIN" },
       { href: "/admin/settings", label: "설정", icon: Settings, minimum: "SUPER_ADMIN" },
     ],
   },

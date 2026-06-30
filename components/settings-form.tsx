@@ -20,9 +20,6 @@ export function SettingsForm({ initial }: { initial: { siteName: string; heroTit
         heroTitle: form.get("heroTitle"),
         heroDescription: form.get("heroDescription"),
         publicStats: form.get("publicStats") === "on",
-        operationMode: form.get("operationMode"),
-        operationMessage: form.get("operationMessage"),
-        operationEndsAt: form.get("operationEndsAt"),
         playHeroTitle: form.get("playHeroTitle"),
         playHeroDescription: form.get("playHeroDescription"),
         probabilityTitle: form.get("probabilityTitle"),
@@ -42,15 +39,6 @@ export function SettingsForm({ initial }: { initial: { siteName: string; heroTit
       <div className="field"><label>메인 문구</label><input className="input" name="heroTitle" defaultValue={initial.heroTitle} maxLength={100} required /></div>
       <div className="field"><label>메인 설명</label><textarea className="textarea" name="heroDescription" defaultValue={initial.heroDescription} maxLength={500} required /></div>
       <label className="checkbox-row"><input type="checkbox" name="publicStats" defaultChecked={initial.publicStats} /> 공개 페이지에 누적 통계 표시</label>
-      <section className="panel-soft form-grid">
-        <h2 className="panel-title mb-0">운영 모드</h2>
-        <p className="panel-description">활성화/업데이트중/비활성화 상태를 설정합니다. 업데이트중은 관리자만 로그인 가능, 비활성화는 최고 관리자만 로그인 가능합니다.</p>
-        <div className="form-row">
-          <div className="field"><label>운영 상태</label><select className="select" name="operationMode" defaultValue={initial.operationMode ?? "ACTIVE"}><option value="ACTIVE">활성화</option><option value="UPDATING">업데이트중</option><option value="INACTIVE">비활성화</option></select></div>
-          <div className="field"><label>예상 종료</label><input className="input" name="operationEndsAt" defaultValue={initial.operationEndsAt ?? ""} placeholder="예: 18:30" /></div>
-        </div>
-        <div className="field"><label>안내 문구</label><textarea className="textarea" name="operationMessage" rows={3} defaultValue={initial.operationMessage ?? "현재 시스템 점검 중입니다."} /></div>
-      </section>
       <section className="panel-soft form-grid">
         <h2 className="panel-title mb-0">뽑기 & 교환 배너 문구</h2>
         <div className="field"><label>상단 제목</label><input className="input" name="playHeroTitle" defaultValue={initial.playHeroTitle ?? "내 추첨권으로 뽑기 & 교환하기"} /></div>

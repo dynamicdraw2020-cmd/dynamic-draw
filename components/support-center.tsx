@@ -2,7 +2,7 @@
 
 import { Image as ImageIcon, LoaderCircle, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 type Attachment = { name: string; type: string; size: number; dataUrl: string };
 type Ticket = { id: string; category: string; title: string; body: string; status: string; admin_reply: string | null; attachments?: Attachment[] | null; created_at: string; updated_at: string };
@@ -81,7 +81,27 @@ export function SupportCenter({ tickets }: { tickets: Ticket[] }) {
 
 export function AdminSupportManager({ tickets }: { tickets: Array<Ticket & { profiles?: { display_name?: string | null; username?: string | null } | null }> }) {
   const router = useRouter();
+  const [liveTickets, setLiveTickets] = useState<Array<Ticket & { profiles?: { display_name?: string | null; username?: string | null } | null }>>(tickets);
   const [loading, setLoading] = useState<string | null>(null);
+  const [listMessage, setListMessage] = useState("");
+
+  async function loadTickets() {
+    try {
+      setLoading("list");
+      const response = await fetch(`/api/admin/support/list?ts=${Date.now()}`, { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message ?? "문의 목록을 불러오지 못했습니다.");
+      setLiveTickets(body.data?.tickets ?? []);
+      setListMessage(`불러온 문의 ${Number(body.data?.count ?? 0).toLocaleString()}개`);
+    } catch (error) {
+      setListMessage(error instanceof Error ? error.message : "문의 목록을 불러오지 못했습니다.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  useEffect(() => { void loadTickets(); }, []);
+
   async function submit(event: FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -89,6 +109,7 @@ export function AdminSupportManager({ tickets }: { tickets: Array<Ticket & { pro
     try {
       setLoading(id);
       await postJson("/api/admin/support", { id, status: String(data.get("status") ?? "ANSWERED"), adminReply: String(data.get("adminReply") ?? "") });
+      await loadTickets();
       router.refresh();
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "답변을 저장하지 못했습니다.");
@@ -96,5 +117,26 @@ export function AdminSupportManager({ tickets }: { tickets: Array<Ticket & { pro
       setLoading(null);
     }
   }
-  return <section className="panel panel-pad"><h2 className="panel-title">문의센터 관리</h2><div className="grid gap-2 mt-3">{tickets.length ? tickets.map((ticket) => <article className="panel-soft" key={ticket.id}><strong>{ticket.title} · {ticket.status}</strong><p className="text-muted text-small">{ticket.profiles?.display_name ?? ticket.profiles?.username ?? "회원"} · {ticket.category} · {new Date(ticket.created_at).toLocaleString("ko-KR")}</p><p className="notice-body mt-2">{ticket.body}</p><AttachmentPreview items={ticket.attachments} /><form className="form-grid mt-2" onSubmit={(event) => submit(event, ticket.id)}><select className="select" name="status" defaultValue={ticket.status}><option value="OPEN">OPEN</option><option value="ANSWERED">ANSWERED</option><option value="CLOSED">CLOSED</option></select><textarea className="textarea" name="adminReply" defaultValue={ticket.admin_reply ?? ""} rows={3} placeholder="답변 또는 내부 처리 메모" /><button className="btn btn-secondary" disabled={loading === ticket.id}>{loading === ticket.id ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />} 저장</button></form></article>) : <div className="empty">접수된 문의가 없습니다.</div>}</div></section>;
+
+  return <section className="panel panel-pad admin-support-panel">
+    <div className="table-topbar">
+      <h2 className="panel-title mb-0">문의센터 관리</h2>
+      <button className="btn btn-secondary btn-sm" type="button" onClick={() => void loadTickets()} disabled={loading === "list"}>{loading === "list" ? <LoaderCircle size={15} className="spin" /> : <Send size={15} />} 새로고침</button>
+    </div>
+    {listMessage && <div className="form-message form-info mt-2">{listMessage}</div>}
+    <div className="grid gap-2 mt-3">
+      {liveTickets.length ? liveTickets.map((ticket) => <article className="panel-soft support-admin-card" key={ticket.id}>
+        <strong>{ticket.title} · {ticket.status}</strong>
+        <p className="support-meta">{ticket.profiles?.display_name ?? ticket.profiles?.username ?? "회원"} · {ticket.category} · {new Date(ticket.created_at).toLocaleString("ko-KR")}</p>
+        <p className="notice-body mt-2">{ticket.body}</p>
+        <AttachmentPreview items={ticket.attachments} />
+        <form className="form-grid mt-2" onSubmit={(event) => submit(event, ticket.id)}>
+          <select className="select" name="status" defaultValue={ticket.status}><option value="OPEN">OPEN</option><option value="ANSWERED">ANSWERED</option><option value="CLOSED">CLOSED</option></select>
+          <textarea className="textarea" name="adminReply" defaultValue={ticket.admin_reply ?? ""} rows={3} placeholder="답변 또는 내부 처리 메모" />
+          <button className="btn btn-secondary" disabled={loading === ticket.id}>{loading === ticket.id ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />} 저장</button>
+        </form>
+      </article>) : <div className="empty">접수된 문의가 없습니다. 유저 내 문의에 보이는데 이곳이 비면 SQL 핫픽스와 최신 GitHub 파일이 둘 다 적용됐는지 확인해 주세요.</div>}
+    </div>
+  </section>;
 }
+

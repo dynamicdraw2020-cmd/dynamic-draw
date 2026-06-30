@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "사이트 설정" };
 
 export default async function AdminSettingsPage() {
   await requireAdmin("SUPER_ADMIN");
-  const initial = { siteName: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event server", publicStats: true, operationMode: "ACTIVE", operationMessage: "현재 시스템 점검 중입니다.", operationEndsAt: "", playHeroTitle: "내 추첨권으로 뽑기 & 교환하기", playHeroDescription: "룰렛 칸은 모두 같은 크기로 보여 확률을 유추할 수 없습니다. 실제 결과는 서버 확률로 먼저 결정됩니다.", probabilityTitle: "상품 확률", probabilityDescription: "실제 확률은 아래 표 기준입니다. 애니메이션은 모든 칸을 동일 크기로 보여줍니다.", footerMessage: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 전용 이벤트 운영 사이트 · v1.0.3", monthlyRankImageUrl: "" };
+  const initial = { siteName: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroTitle: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃", heroDescription: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event server", publicStats: true, operationMode: "ACTIVE", operationMessage: "현재 시스템 점검 중입니다.", operationEndsAt: "", playHeroTitle: "내 추첨권으로 뽑기 & 교환하기", playHeroDescription: "", probabilityTitle: "상품 확률", probabilityDescription: "", footerMessage: "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 전용 이벤트 운영 사이트 · v1.0.3", monthlyRankImageUrl: "" };
   if (!demoMode) {
     const admin = createAdminClient();
     const { data } = await admin.from("site_settings").select("key,value").in("key", ["site_name", "hero_title", "hero_description", "public_stats", "operation_mode", "operation_message", "operation_ends_at", "footer_message", "monthly_rank_image_url", "play_hero_title", "play_hero_description", "probability_title", "probability_description"]);

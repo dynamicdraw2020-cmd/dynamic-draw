@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 async function getPlayCopy() {
   const fallback = {
     playHeroTitle: "내 추첨권으로 뽑기 & 교환하기",
-    playHeroDescription: "룰렛 칸은 모두 같은 크기로 보여 확률을 유추할 수 없습니다. 실제 결과는 서버 확률로 먼저 결정됩니다.",
+    playHeroDescription: "",
     probabilityTitle: "상품 확률",
-    probabilityDescription: "실제 확률은 아래 표 기준입니다. 애니메이션은 모든 칸을 동일 크기로 보여줍니다.",
+    probabilityDescription: "",
   };
   if (demoMode) return fallback;
   try {

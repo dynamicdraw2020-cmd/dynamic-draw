@@ -765,60 +765,71 @@ export async function getAdminResults(limit = 100) {
   if (demoMode) return mockResults;
   const admin = createAdminClient();
 
-  let rows: Array<Record<string, any>> = [];
+  async function mapRawRows(rows: Array<Record<string, any>>) {
+    if (!rows.length) return [];
+    const drawIds = Array.from(new Set(rows.map((row) => String(row.draw_id ?? row.drawId ?? "")).filter(Boolean)));
+    const rewardIds = Array.from(new Set(rows.map((row) => String(row.reward_id ?? row.rewardId ?? "")).filter(Boolean)));
+    const profileIds = Array.from(new Set(rows.map((row) => String(row.participant_id ?? row.profile_id ?? row.profileId ?? "")).filter(Boolean)));
+
+    const [drawResult, rewardResult, profileResult] = await Promise.all([
+      drawIds.length ? admin.from("draws").select("id,name").in("id", drawIds) : Promise.resolve({ data: [] }),
+      rewardIds.length ? admin.from("rewards").select("id,name,color").in("id", rewardIds) : Promise.resolve({ data: [] }),
+      profileIds.length ? admin.from("profiles").select("id,display_name,username,member_code").in("id", profileIds) : Promise.resolve({ data: [] }),
+    ]);
+
+    const drawMap = new Map(((drawResult.data ?? []) as Array<{ id: string; name?: string | null }>).map((row) => [row.id, row]));
+    const rewardMap = new Map(((rewardResult.data ?? []) as Array<{ id: string; name?: string | null; color?: string | null }>).map((row) => [row.id, row]));
+    const profileMap = new Map(((profileResult.data ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }>).map((row) => [row.id, row]));
+
+    return rows.map((row) => {
+      const drawId = String(row.draw_id ?? row.drawId ?? "");
+      const rewardId = String(row.reward_id ?? row.rewardId ?? "");
+      const profileId = String(row.participant_id ?? row.profile_id ?? row.profileId ?? "");
+      const draw = drawMap.get(drawId);
+      const reward = rewardMap.get(rewardId);
+      const profile = profileMap.get(profileId);
+      return {
+        ...row,
+        id: row.id,
+        created_at: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+        revealed_at: row.revealed_at ?? row.revealedAt ?? null,
+        voided_at: row.voided_at ?? row.voidedAt ?? null,
+        void_reason: row.void_reason ?? row.voidReason ?? null,
+        public_display_name: row.public_display_name ?? row.publicDisplayName ?? row.participant_name ?? null,
+        public_member_code: row.public_member_code ?? row.publicMemberCode ?? row.member_code ?? null,
+        draws: draw ? { name: draw.name ?? "-" } : row.draw_name ? { name: row.draw_name } : null,
+        rewards: reward ? { name: reward.name ?? "-", color: reward.color ?? "#111827" } : row.reward_name ? { name: row.reward_name, color: row.reward_color ?? "#111827" } : null,
+        profiles: profile ? { display_name: profile.display_name ?? profile.username ?? "회원", member_code: profile.member_code ?? null } : null,
+      };
+    });
+  }
+
   const rawResult = await admin
     .from("results")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (rawResult.error) {
-    const relationFallback = await admin
-      .from("results")
-      .select("id,created_at,revealed_at,voided_at,void_reason,public_display_name,public_member_code,draws(name),rewards(name,color),profiles(display_name,member_code)")
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    return relationFallback.data ?? [];
+  if (!rawResult.error && rawResult.data?.length) {
+    return mapRawRows((rawResult.data ?? []) as Array<Record<string, any>>);
   }
 
-  rows = (rawResult.data ?? []) as Array<Record<string, any>>;
-  if (!rows.length) return [];
+  const publicResult = await admin
+    .from("public_results")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
-  const drawIds = Array.from(new Set(rows.map((row) => String(row.draw_id ?? row.drawId ?? "")).filter(Boolean)));
-  const rewardIds = Array.from(new Set(rows.map((row) => String(row.reward_id ?? row.rewardId ?? "")).filter(Boolean)));
-  const profileIds = Array.from(new Set(rows.map((row) => String(row.participant_id ?? row.profile_id ?? row.profileId ?? "")).filter(Boolean)));
+  if (!publicResult.error && publicResult.data?.length) {
+    return mapRawRows((publicResult.data ?? []) as Array<Record<string, any>>);
+  }
 
-  const [drawResult, rewardResult, profileResult] = await Promise.all([
-    drawIds.length ? admin.from("draws").select("id,name").in("id", drawIds) : Promise.resolve({ data: [] }),
-    rewardIds.length ? admin.from("rewards").select("id,name,color").in("id", rewardIds) : Promise.resolve({ data: [] }),
-    profileIds.length ? admin.from("profiles").select("id,display_name,username,member_code").in("id", profileIds) : Promise.resolve({ data: [] }),
-  ]);
-
-  const drawMap = new Map(((drawResult.data ?? []) as Array<{ id: string; name?: string | null }>).map((row) => [row.id, row]));
-  const rewardMap = new Map(((rewardResult.data ?? []) as Array<{ id: string; name?: string | null; color?: string | null }>).map((row) => [row.id, row]));
-  const profileMap = new Map(((profileResult.data ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }>).map((row) => [row.id, row]));
-
-  return rows.map((row) => {
-    const drawId = String(row.draw_id ?? row.drawId ?? "");
-    const rewardId = String(row.reward_id ?? row.rewardId ?? "");
-    const profileId = String(row.participant_id ?? row.profile_id ?? row.profileId ?? "");
-    const draw = drawMap.get(drawId);
-    const reward = rewardMap.get(rewardId);
-    const profile = profileMap.get(profileId);
-    return {
-      ...row,
-      id: row.id,
-      created_at: row.created_at ?? row.createdAt ?? new Date().toISOString(),
-      revealed_at: row.revealed_at ?? row.revealedAt ?? null,
-      voided_at: row.voided_at ?? row.voidedAt ?? null,
-      void_reason: row.void_reason ?? row.voidReason ?? null,
-      public_display_name: row.public_display_name ?? row.publicDisplayName ?? null,
-      public_member_code: row.public_member_code ?? row.publicMemberCode ?? null,
-      draws: draw ? { name: draw.name ?? "-" } : null,
-      rewards: reward ? { name: reward.name ?? "-", color: reward.color ?? "#111827" } : null,
-      profiles: profile ? { display_name: profile.display_name ?? profile.username ?? "회원", member_code: profile.member_code ?? null } : null,
-    };
-  });
+  const relationFallback = await admin
+    .from("results")
+    .select("id,created_at,revealed_at,voided_at,void_reason,public_display_name,public_member_code,draws(name),rewards(name,color),profiles(display_name,member_code)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return relationFallback.data ?? [];
 }
 
 export async function getAdminLogs(limit = 100) {

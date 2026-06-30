@@ -54,9 +54,9 @@ export function SettingsForm({ initial }: { initial: { siteName: string; heroTit
       <section className="panel-soft form-grid">
         <h2 className="panel-title mb-0">뽑기 & 교환 배너 문구</h2>
         <div className="field"><label>상단 제목</label><input className="input" name="playHeroTitle" defaultValue={initial.playHeroTitle ?? "내 추첨권으로 뽑기 & 교환하기"} /></div>
-        <div className="field"><label>상단 설명</label><textarea className="textarea" name="playHeroDescription" rows={3} defaultValue={initial.playHeroDescription ?? "룰렛 칸은 모두 같은 크기로 보여 확률을 유추할 수 없습니다. 실제 결과는 서버 확률로 먼저 결정됩니다."} /></div>
+        <div className="field"><label>상단 설명</label><textarea className="textarea" name="playHeroDescription" rows={3} defaultValue={initial.playHeroDescription ?? ""} /></div>
         <div className="field"><label>상품 확률 제목</label><input className="input" name="probabilityTitle" defaultValue={initial.probabilityTitle ?? "상품 확률"} /></div>
-        <div className="field"><label>상품 확률 설명</label><textarea className="textarea" name="probabilityDescription" rows={3} defaultValue={initial.probabilityDescription ?? "실제 확률은 아래 표 기준입니다. 애니메이션은 모든 칸을 동일 크기로 보여줍니다."} /></div>
+        <div className="field"><label>상품 확률 설명</label><textarea className="textarea" name="probabilityDescription" rows={3} defaultValue={initial.probabilityDescription ?? ""} /></div>
       </section>
       <section className="panel-soft form-grid">
         <h2 className="panel-title mb-0">홈·하단 문구</h2>

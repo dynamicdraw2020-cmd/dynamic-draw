@@ -11,6 +11,7 @@ const groups = [
     description: "전체 상태와 기록 확인",
     items: [
       { href: "/admin", label: "관리 홈", icon: LayoutDashboard, minimum: "VIEWER" },
+      { href: "/admin/settings", label: "운영 모드 설정", icon: Settings, minimum: "SUPER_ADMIN" },
       { href: "/admin/stats", label: "통계", icon: BarChart3, minimum: "VIEWER" },
       { href: "/admin/operations", label: "운영 통계", icon: ClipboardList, minimum: "VIEWER" },
       { href: "/admin/activity", label: "유저 활동 로그", icon: Activity, minimum: "VIEWER" },
@@ -22,7 +23,7 @@ const groups = [
     items: [
       { href: "/admin/draws", label: "뽑기·교환·확률", icon: TicketCheck, minimum: "MANAGER" },
       { href: "/admin/live", label: "실시간 추첨", icon: Activity, minimum: "MANAGER" },
-      { href: "/admin/raffles", label: "추첨이벤트", icon: Trophy, minimum: "MANAGER" },
+      { href: "/admin/raffles", label: "추첨 이벤트", icon: Trophy, minimum: "MANAGER" },
       { href: "/admin/results", label: "결과 관리", icon: ListChecks, minimum: "VIEWER" },
       { href: "/admin/result-images", label: "결과 이미지 생성", icon: ImageIcon, minimum: "MANAGER" },
       { href: "/admin/probability-history", label: "확률 변경 기록", icon: FileClock, minimum: "VIEWER" },

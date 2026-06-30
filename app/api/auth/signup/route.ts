@@ -3,7 +3,7 @@ import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requ
 import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
+import { getStableReferralCode, nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 
 const schema = z.object({
   loginId: z.string().trim().min(1, "아이디를 입력해 주세요."),
@@ -99,12 +99,36 @@ export async function POST(request: Request) {
   }
   const normalizedReferral = normalizeReferralCodeInput(rawReferral);
   if (normalizedReferral) {
-    const { data: referrer } = await admin
-      .from("profiles")
-      .select("id,username,referral_code,status")
-      .eq("referral_code", normalizedReferral)
-      .eq("status", "APPROVED")
-      .maybeSingle();
+    let referrer: { id: string; username?: string | null; referral_code?: string | null; status?: string | null } | null = null;
+    try {
+      const { data: stableRef } = await admin
+        .from("profile_referral_codes")
+        .select("profile_id,referral_code")
+        .eq("referral_code", normalizedReferral)
+        .maybeSingle();
+      if (stableRef?.profile_id) {
+        const { data: profileRow } = await admin
+          .from("profiles")
+          .select("id,username,referral_code,status")
+          .eq("id", stableRef.profile_id)
+          .eq("status", "APPROVED")
+          .maybeSingle();
+        referrer = profileRow;
+      }
+    } catch {
+      // 안정 추천 ID 테이블 적용 전 호환: profiles.referral_code로 조회합니다.
+    }
+
+    if (!referrer) {
+      const { data: profileReferrer } = await admin
+        .from("profiles")
+        .select("id,username,referral_code,status")
+        .eq("referral_code", normalizedReferral)
+        .eq("status", "APPROVED")
+        .maybeSingle();
+      referrer = profileReferrer;
+    }
+
     if (!referrer) return fail("추천인 ID를 찾을 수 없습니다. 추천인에게 숫자 추천 ID를 다시 확인해 주세요.", 404, "REFERRER_NOT_FOUND");
     if (referrer.username === login.loginId) return fail("자기 자신은 추천인으로 입력할 수 없습니다.", 409, "SELF_REFERRAL_BLOCKED");
     referredBy = referrer.id;
@@ -152,6 +176,8 @@ export async function POST(request: Request) {
       profileError.code,
     );
   }
+
+  await getStableReferralCode(admin, created.user.id, ownReferralCode);
 
   if (referredBy) {
     await admin.from("referral_logs").insert({

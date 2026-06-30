@@ -10,9 +10,13 @@ export default async function AdminWorkspacePage() {
   await requireAdmin("MANAGER");
   const admin = createAdminClient();
   const [members, notes, meetings] = await Promise.all([
-    admin.from("profiles").select("id,display_name,username,email,role,status,member_code").order("created_at", { ascending: false }).limit(300),
-    admin.from("admin_notes").select("*,profiles(display_name,username),creator:profiles!admin_notes_created_by_fkey(display_name,username)").order("created_at", { ascending: false }).limit(160),
-    admin.from("admin_meetings").select("*,creator:profiles!admin_meetings_created_by_fkey(display_name,username)").order("created_at", { ascending: false }).limit(120),
+    admin.from("profiles").select("id,display_name,username,email,role,status,member_code").order("created_at", { ascending: false }).limit(500),
+    admin.from("admin_notes").select("*").order("created_at", { ascending: false }).limit(300),
+    admin.from("admin_meetings").select("*").order("created_at", { ascending: false }).limit(200),
   ]);
-  return <main><div className="page-heading"><h1>관리자 메모·회의록</h1><p>회원 관련 내부 메모와 운영 회의록을 관리합니다.</p></div><AdminWorkspace data={{ members: members.data ?? [], notes: notes.data ?? [], meetings: meetings.data ?? [] }} /></main>;
+  const profiles = (members.data ?? []) as Array<Record<string, unknown>>;
+  const profileMap = new Map(profiles.map((profile) => [String(profile.id), profile]));
+  const mappedNotes = ((notes.data ?? []) as Array<Record<string, unknown>>).map((note) => ({ ...note, profiles: note.profile_id ? profileMap.get(String(note.profile_id)) ?? null : null, creator: note.created_by ? profileMap.get(String(note.created_by)) ?? null : null }));
+  const mappedMeetings = ((meetings.data ?? []) as Array<Record<string, unknown>>).map((meeting) => ({ ...meeting, creator: meeting.created_by ? profileMap.get(String(meeting.created_by)) ?? null : null }));
+  return <main><div className="page-heading"><h1>관리자 메모·회의록</h1></div><AdminWorkspace data={{ members: profiles, notes: mappedNotes, meetings: mappedMeetings }} /></main>;
 }

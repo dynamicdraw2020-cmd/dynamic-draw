@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { AdminSupportManager } from "@/components/support-center";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminCapability } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "문의센터 관리" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminSupportPage() {
-  await requireAdmin("MANAGER");
+  await requireAdminCapability("SUPPORT_REPLY");
   const admin = createAdminClient();
-
   const { data: rpcData } = await admin.rpc("get_admin_support_tickets", { p_limit: 500 });
   let mapped = Array.isArray(rpcData) ? rpcData : [];
 
@@ -27,6 +26,7 @@ export default async function AdminSupportPage() {
       : { data: [] as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }> };
 
     const profileMap = new Map(((profiles ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }>).map((profile) => [profile.id, profile]));
+
     mapped = rows.map((ticket) => ({
       ...ticket,
       category: ticket.category ?? "기타",
@@ -39,10 +39,16 @@ export default async function AdminSupportPage() {
     }));
   }
 
-  return <main>
-    <div className="page-heading">
-      <h1>문의센터 관리</h1>
-    </div>
-    <AdminSupportManager tickets={mapped as never[]} />
-  </main>;
+  return (
+    <>
+      <section className="hero-card compact">
+        <div>
+          <p className="eyebrow">CS Center</p>
+          <h1>문의센터 관리</h1>
+          <p>CS매니저와 관리자가 회원 문의에 답변하고 내부 메모를 남깁니다.</p>
+        </div>
+      </section>
+      <AdminSupportManager tickets={mapped} />
+    </>
+  );
 }

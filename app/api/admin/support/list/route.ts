@@ -1,14 +1,14 @@
-import { fail, ok, requireApiAdmin } from "@/lib/api";
+import { fail, ok, requireApiCapability } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET() {
-  const guard = await requireApiAdmin("MANAGER");
+  const guard = await requireApiCapability("SUPPORT_REPLY");
   if ("error" in guard) return guard.error;
 
   try {
     const admin = createAdminClient();
-
     const { data: rpcData, error: rpcError } = await admin.rpc("get_admin_support_tickets", { p_limit: 500 });
+
     if (!rpcError && Array.isArray(rpcData)) {
       return ok({ tickets: rpcData, count: rpcData.length, source: "rpc" });
     }
@@ -18,6 +18,7 @@ export async function GET() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
+
     if (error) return fail(error.message, 500, "ADMIN_SUPPORT_LIST_DB_FAILED", { rpc: rpcError?.message });
 
     const rows = (tickets ?? []) as Array<Record<string, unknown>>;
@@ -27,6 +28,7 @@ export async function GET() {
       : { data: [] as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }> };
 
     const profileMap = new Map(((profiles ?? []) as Array<{ id: string; display_name?: string | null; username?: string | null; member_code?: string | null }>).map((profile) => [profile.id, profile]));
+
     const mapped = rows.map((ticket) => ({
       ...ticket,
       category: ticket.category ?? "기타",

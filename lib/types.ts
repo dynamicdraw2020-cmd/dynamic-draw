@@ -1,5 +1,5 @@
 export type ProfileStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED" | "DELETED";
-export type UserRole = "USER" | "VIEWER" | "MANAGER" | "SUPER_ADMIN";
+export type UserRole = "USER" | "VIEWER" | "CS_MANAGER" | "MANAGER" | "SUPER_ADMIN";
 export type DrawStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ENDED";
 
 export interface Profile {

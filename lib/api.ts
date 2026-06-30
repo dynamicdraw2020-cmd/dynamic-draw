@@ -3,6 +3,13 @@ import { demoMode, supabaseAdminConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile } from "@/lib/types";
+import {
+  type AdminCapability,
+  type AdminRole,
+  hasAnyAdminRole,
+  hasCapability,
+  hasMinimumRole,
+} from "@/lib/admin-capabilities";
 
 export function ok(data: unknown, status = 200) {
   return NextResponse.json({ ok: true, data }, { status });
@@ -19,54 +26,102 @@ export function rejectDemoMutation() {
 
 export async function getApiProfile(): Promise<{ profile: Profile; userId: string } | null> {
   if (demoMode) return null;
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) return null;
+
   const { data } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
   if (!data) return null;
+
   return { profile: data as Profile, userId: user.id };
 }
 
 export async function requireApiUser() {
   const auth = await getApiProfile();
   if (!auth) return { error: fail("로그인이 필요합니다.", 401, "UNAUTHORIZED") } as const;
+
   if (auth.profile.status !== "APPROVED") {
     return { error: fail("관리자 승인이 필요한 계정입니다.", 403, "ACCOUNT_NOT_APPROVED") } as const;
   }
+
   try {
     const admin = createAdminClient();
-    if (auth.profile.role === "USER") {
+
+    if (String(auth.profile.role) === "USER") {
       const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
       const mode = String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
-      if (mode === "UPDATING" || mode === "READ_ONLY") return { error: fail("현재 업데이트중입니다. 잠시 후 다시 이용해 주세요.", 503, "OPERATION_UPDATING") } as const;
-      if (mode === "INACTIVE" || mode === "MAINTENANCE") return { error: fail("현재 사이트가 비활성화되어 있습니다.", 503, "OPERATION_INACTIVE") } as const;
+
+      if (mode === "UPDATING" || mode === "READ_ONLY") {
+        return { error: fail("현재 업데이트중입니다.\n잠시 후 다시 이용해 주세요.", 503, "OPERATION_UPDATING") } as const;
+      }
+
+      if (mode === "INACTIVE" || mode === "MAINTENANCE") {
+        return { error: fail("현재 사이트가 비활성화되어 있습니다.", 503, "OPERATION_INACTIVE") } as const;
+      }
     }
-    const { count } = await admin.from("blacklist_entries").select("id", { count: "exact", head: true }).eq("profile_id", auth.profile.id).eq("status", "ACTIVE").in("scope", ["ALL", "LOGIN"]);
-    if ((count ?? 0) > 0) return { error: fail("운영 정책에 따라 이용이 제한된 계정입니다.", 403, "ACCOUNT_RESTRICTED") } as const;
+
+    const { count } = await admin
+      .from("blacklist_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", auth.profile.id)
+      .eq("status", "ACTIVE")
+      .in("scope", ["ALL", "LOGIN"]);
+
+    if ((count ?? 0) > 0) {
+      return { error: fail("운영 정책에 따라 이용이 제한된 계정입니다.", 403, "ACCOUNT_RESTRICTED") } as const;
+    }
   } catch {
-    // 블랙리스트 테이블이 아직 적용되지 않은 기존 설치와의 호환을 위해 무시합니다.
+    // 블랙리스트/운영 모드 테이블이 아직 적용되지 않은 기존 설치와의 호환을 위해 무시합니다.
   }
+
   return { auth } as const;
 }
 
-export async function requireApiAdmin(minimum: "VIEWER" | "MANAGER" | "SUPER_ADMIN" = "VIEWER") {
+export async function requireApiAdmin(minimum: AdminRole = "VIEWER") {
   const user = await requireApiUser();
   if ("error" in user) return user;
-  const rank = { USER: 0, VIEWER: 1, MANAGER: 2, SUPER_ADMIN: 3 } as const;
+
   try {
     const admin = createAdminClient();
     const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
     const mode = String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
-    if ((mode === "INACTIVE" || mode === "MAINTENANCE") && user.auth.profile.role !== "SUPER_ADMIN") {
+
+    if ((mode === "INACTIVE" || mode === "MAINTENANCE") && String(user.auth.profile.role) !== "SUPER_ADMIN") {
       return { error: fail("현재 사이트가 비활성화되어 최고 관리자만 접근할 수 있습니다.", 503, "OPERATION_ADMIN_BLOCKED") } as const;
     }
   } catch {}
-  if (rank[user.auth.profile.role] < rank[minimum]) {
+
+  if (!hasAnyAdminRole(user.auth.profile.role) || !hasMinimumRole(user.auth.profile.role, minimum)) {
     return { error: fail("이 작업을 수행할 권한이 없습니다.", 403, "FORBIDDEN") } as const;
   }
+
   return user;
+}
+
+export async function requireApiAdminAny(allowedRoles: readonly AdminRole[]) {
+  const guard = await requireApiAdmin("VIEWER");
+  if ("error" in guard) return guard;
+
+  if (!allowedRoles.includes(String(guard.auth.profile.role) as AdminRole)) {
+    return { error: fail("이 작업을 수행할 권한이 없습니다.", 403, "FORBIDDEN") } as const;
+  }
+
+  return guard;
+}
+
+export async function requireApiCapability(capability: AdminCapability) {
+  const guard = await requireApiAdmin("VIEWER");
+  if ("error" in guard) return guard;
+
+  if (!hasCapability(guard.auth.profile.role, capability)) {
+    return { error: fail("이 작업을 수행할 권한이 없습니다.", 403, "FORBIDDEN") } as const;
+  }
+
+  return guard;
 }
 
 export function requestMeta(request: Request) {
@@ -94,6 +149,7 @@ export function enforceSameOrigin(request: Request) {
   } catch {
     return fail("요청 출처를 확인할 수 없습니다.", 403, "CSRF_BLOCKED");
   }
+
   return null;
 }
 
@@ -111,7 +167,7 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
     if (error) {
       const candidate = error as RpcErrorLike;
       return fail(
-        "요청 제한 기능이 DB와 연결되지 않았습니다. 관리자에게 DB 보정 SQL 적용 여부를 확인해 달라고 알려 주세요.",
+        "요청 제한 기능이 DB와 연결되지 않았습니다.\n관리자에게 DB 보정 SQL 적용 여부를 확인해 달라고 알려 주세요.",
         503,
         "RATE_LIMIT_UNAVAILABLE",
         candidate.code ?? candidate.message,
@@ -125,26 +181,21 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    return fail(
-      "요청 제한 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      503,
-      "RATE_LIMIT_UNAVAILABLE",
-      message,
-    );
+    return fail("요청 제한 상태를 확인하지 못했습니다.\n잠시 후 다시 시도해 주세요.", 503, "RATE_LIMIT_UNAVAILABLE", message);
   }
 }
 
 export function databaseRpcErrorMessage(error: unknown, fallback: string) {
-  const candidate = error && typeof error === "object" ? error as RpcErrorLike : {};
+  const candidate = error && typeof error === "object" ? (error as RpcErrorLike) : {};
   const raw = [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(" ");
   const lowered = raw.toLowerCase();
 
   if (
-    lowered.includes("function digest")
-    || lowered.includes("gen_random_bytes")
-    || (lowered.includes("pgcrypto") && lowered.includes("does not exist"))
+    lowered.includes("function digest") ||
+    lowered.includes("gen_random_bytes") ||
+    (lowered.includes("pgcrypto") && lowered.includes("does not exist"))
   ) {
-    return "DB 보안 함수 연결을 수정해야 합니다. Supabase SQL Editor에서 4_DB_보정_v1.0.3.sql을 한 번 실행해 주세요.";
+    return "DB 보안 함수 연결을 수정해야 합니다.\nSupabase SQL Editor에서 4_DB_보정_v1.0.3.sql을 한 번 실행해 주세요.";
   }
 
   return candidate.message || fallback;

@@ -1,8 +1,14 @@
 "use client";
 
-import { ArrowRight, IdCard, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
+import { ArrowRight, ExternalLink, IdCard, KeyRound, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+
+type SignupSecretSettings = {
+  buttonLabel: string;
+  requestUrl: string;
+  helpText: string;
+};
 
 function simpleFingerprintSource() {
   if (typeof window === "undefined") return "server";
@@ -27,84 +33,171 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
   const [loading, setLoading] = useState(false);
   const [formVersion, setFormVersion] = useState(0);
   const [signupStartedAt, setSignupStartedAt] = useState("");
+  const [settings, setSettings] = useState<SignupSecretSettings>({
+    buttonLabel: "시크릿코드 신청하기",
+    requestUrl: "",
+    helpText: "관리자가 안내한 링크에서 CS에게 1회용 시크릿코드를 요청해 주세요.",
+  });
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
 
   useEffect(() => {
     if (mode === "signup") setSignupStartedAt(String(Date.now()));
   }, [mode, formVersion]);
 
+  useEffect(() => {
+    if (mode !== "signup") return;
+    let mounted = true;
+    fetch("/api/public/signup-secret-settings", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body) => {
+        if (!mounted || !body?.data) return;
+        setSettings({
+          buttonLabel: body.data.buttonLabel || "시크릿코드 신청하기",
+          requestUrl: body.data.requestUrl || "",
+          helpText: body.data.helpText || "관리자가 안내한 링크에서 CS에게 1회용 시크릿코드를 요청해 주세요.",
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, [mode]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setMessage(null);
+
     const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(form.entries());
+
     if (mode === "signup" && payload.password !== payload.passwordConfirm) {
       setMessage({ type: "error", text: "비밀번호 확인이 일치하지 않습니다." });
       setLoading(false);
       return;
     }
+
     const response = await fetch(`/api/auth/${mode}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...payload, nextPath, browserFingerprint: hashSmall(simpleFingerprintSource()) }),
     });
-    const body = await response.json();
+    const body = await response.json().catch(() => ({}));
+
     setLoading(false);
+
     if (!response.ok) {
       setMessage({ type: "error", text: body.error?.message ?? "처리 중 오류가 발생했습니다." });
       return;
     }
+
     if (mode === "signup") {
       setMessage({ type: "success", text: body.data?.message ?? "가입 신청이 완료되었습니다." });
       setFormVersion((version) => version + 1);
       if (typeof body.data?.redirectTo === "string") {
-        window.setTimeout(() => { router.push(body.data.redirectTo); router.refresh(); }, 1100);
+        window.setTimeout(() => {
+          router.push(body.data.redirectTo);
+          router.refresh();
+        }, 1100);
       }
       return;
     }
+
     router.push(body.data?.redirectTo ?? nextPath);
     router.refresh();
   }
 
   return (
-    <form key={`auth-form-${formVersion}`} className="form-grid" onSubmit={submit}>
-      {mode === "signup" && <>
-        <input className="bot-trap" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
-        <input type="hidden" name="signupStartedAt" value={signupStartedAt} readOnly />
-      </>}
+    <form className="auth-form form-grid" onSubmit={submit} key={formVersion}>
+      {mode === "signup" && <input type="hidden" name="signupStartedAt" value={signupStartedAt} readOnly />}
+      {mode === "signup" && <input className="sr-only" type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />}
+
       {mode === "signup" && (
-        <div className="field">
-          <label htmlFor="displayName">이름 또는 닉네임</label>
-          <div style={{ position: "relative" }}><UserRound size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="displayName" name="displayName" required minLength={2} maxLength={30} placeholder="운영에 표시될 이름" style={{ paddingLeft: 40 }} /></div>
-        </div>
+        <label className="field-label">
+          <span>
+            <UserRound size={16} /> 이름 또는 닉네임
+          </span>
+          <input className="input" name="displayName" minLength={2} maxLength={30} required placeholder="예: 다이나믹" />
+        </label>
       )}
-      <div className="field">
-        <label htmlFor="loginId">아이디</label>
-        <div style={{ position: "relative" }}><IdCard size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="loginId" name="loginId" required autoComplete="username" placeholder="영문·숫자 4~24자" minLength={4} maxLength={24} pattern="[A-Za-z0-9._-]+" style={{ paddingLeft: 40 }} /></div>
-        {mode === "signup" && <small>전화번호와 이메일은 받지 않습니다. 아이디, 이름/닉네임, 비밀번호만 사용합니다.</small>}
-      </div>
+
+      <label className="field-label">
+        <span>
+          <IdCard size={16} /> 아이디
+        </span>
+        <input
+          className="input"
+          name="loginId"
+          minLength={3}
+          maxLength={32}
+          required
+          autoComplete={mode === "login" ? "username" : "off"}
+          placeholder="영문 소문자, 숫자, _ 조합"
+        />
+      </label>
+
       {mode === "signup" && (
-        <div className="field">
-          <label htmlFor="referralCode">추천인 ID <span className="text-muted">선택</span></label>
-          <input className="input" id="referralCode" name="referralCode" maxLength={8} inputMode="numeric" pattern="[0-9]{1,8}" placeholder="예: 12345678" />
-          <small>추천인 ID는 8자리 이내 숫자입니다. 관리자 승인 후 양쪽 모두에게 설정된 보상이 지급됩니다.</small>
-        </div>
+        <>
+          <div className="notice-box compact">
+            전화번호와 이메일은 받지 않습니다. 아이디, 이름/닉네임, 비밀번호, 관리자 시크릿코드만 사용합니다.
+          </div>
+
+          <label className="field-label">
+            <span>
+              <KeyRound size={16} /> 가입 시크릿코드
+            </span>
+            <input
+              className="input"
+              name="secretCode"
+              required
+              autoComplete="one-time-code"
+              placeholder="CS에게 받은 1회용 코드"
+            />
+            <small>{settings.helpText}</small>
+          </label>
+
+          <div className="auth-secret-request-box">
+            {settings.requestUrl ? (
+              <a className="btn btn-secondary" href={settings.requestUrl} target="_blank" rel="noreferrer">
+                <ExternalLink size={16} /> {settings.buttonLabel}
+              </a>
+            ) : (
+              <button className="btn btn-secondary" type="button" disabled>
+                <ExternalLink size={16} /> 시크릿코드 신청 링크 준비중
+              </button>
+            )}
+            <span>발급된 코드는 4시간 동안만 유효하고 한 번만 사용할 수 있습니다.</span>
+          </div>
+
+          <label className="field-label">
+            <span>추천인 ID 선택</span>
+            <input className="input" name="referralCode" maxLength={20} placeholder="선택 입력" />
+            <small>추천인 ID는 선택 사항입니다. 승인 후 설정된 보상이 지급됩니다.</small>
+          </label>
+        </>
       )}
-      <div className="field">
-        <label htmlFor="password">비밀번호</label>
-        <div style={{ position: "relative" }}><LockKeyhole size={17} style={{ position: "absolute", left: 13, top: 14, color: "#64748b" }} /><input className="input" id="password" name="password" type="password" required minLength={8} maxLength={72} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="8자 이상" style={{ paddingLeft: 40 }} /></div>
-      </div>
+
+      <label className="field-label">
+        <span>
+          <LockKeyhole size={16} /> 비밀번호
+        </span>
+        <input className="input" name="password" type="password" minLength={8} maxLength={72} required autoComplete={mode === "login" ? "current-password" : "new-password"} />
+      </label>
+
       {mode === "signup" && (
-        <div className="field">
-          <label htmlFor="passwordConfirm">비밀번호 확인</label>
-          <input className="input" id="passwordConfirm" name="passwordConfirm" type="password" required minLength={8} maxLength={72} autoComplete="new-password" placeholder="비밀번호를 한 번 더 입력" />
+        <label className="field-label">
+          <span>비밀번호 확인</span>
+          <input className="input" name="passwordConfirm" type="password" minLength={8} maxLength={72} required autoComplete="new-password" />
           <small>가입 신청 후 관리자가 승인하고 고유 회원 ID를 발급합니다.</small>
-        </div>
+        </label>
       )}
-      {message && <div className={`form-message form-${message.type}`}>{message.text}</div>}
-      <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={loading}>
-        {loading ? <LoaderCircle size={18} className="spin" /> : <>{mode === "login" ? "로그인" : "가입 신청"}<ArrowRight size={18} /></>}
+
+      {message && <div className={`form-message ${message.type}`}>{message.text}</div>}
+
+      <button className="btn btn-primary" disabled={loading}>
+        {loading ? <LoaderCircle size={17} className="spin" /> : <ArrowRight size={17} />}
+        {mode === "login" ? "로그인" : "가입 신청"}
       </button>
     </form>
   );

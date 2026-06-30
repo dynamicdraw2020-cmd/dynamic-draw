@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Medal, Sparkles, Trophy, Zap } from "lucide-react";
+import { CalendarCheck2, Medal, Trophy, Zap } from "lucide-react";
 import { getCurrentProfile } from "@/lib/auth";
 import { getPublicRankings, type PublicRankingEntry } from "@/lib/data";
 
@@ -57,11 +57,11 @@ export default async function RankingsPage() {
       <div className="public-page-heading ranking-title-block">
         <span className="section-kicker"><Trophy size={14} /> Ranking</span>
         <h1>랭킹</h1>
-        <p>레벨, 경험치 획득, 주간 뽑기 시도 랭킹를 확인합니다.</p>
+        <p>레벨, 출석, 주간 뽑기 시도 랭킹을 확인합니다.</p>
       </div>
       <div className="ranking-grid">
         <RankingSection title="레벨 랭킹" description="현재 레벨과 누적 EXP 기준으로 정렬됩니다." metricLabel="레벨 / EXP" metric={(entry) => `Lv.${entry.levelNo} · ${entry.expTotal.toLocaleString()} EXP`} entries={rankings.level} icon={<Medal size={22} />} currentProfileId={profile?.id} />
-        <RankingSection title="경험치 획득 랭킹" description="누적 양수 EXP 로그 기준으로 정렬됩니다." metricLabel="획득 EXP" metric={(entry) => `${entry.gainedExp.toLocaleString()} EXP`} entries={rankings.exp} icon={<Sparkles size={22} />} currentProfileId={profile?.id} />
+        <RankingSection title="출석 랭킹" description="누적 출석 횟수 기준으로 정렬됩니다." metricLabel="출석" metric={(entry) => `${entry.attendanceCount.toLocaleString()}회`} entries={rankings.attendance} icon={<CalendarCheck2 size={22} />} currentProfileId={profile?.id} />
         <RankingSection title="주간 뽑기 시도 랭킹" description="최근 7일간 공개 유효 결과 기준으로 정렬됩니다." metricLabel="최근 7일" metric={(entry) => `${entry.weeklyDraws.toLocaleString()}회`} entries={rankings.weeklyDraws} icon={<Zap size={22} />} currentProfileId={profile?.id} />
       </div>
     </div>

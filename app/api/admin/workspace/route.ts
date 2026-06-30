@@ -24,6 +24,24 @@ export async function POST(request: Request) {
     if (error) return fail("회의록을 저장하지 못했습니다.", 400, "MEETING_CREATE_FAILED", error.message);
     return ok(data, 201);
   }
+  if (body.action === "acknowledge-note") {
+    const input = z.object({ id: z.uuid() }).parse(body);
+    const { data, error } = await admin
+      .from("admin_note_reads")
+      .upsert({ note_id: input.id, admin_id: guard.auth.userId, read_at: new Date().toISOString() }, { onConflict: "note_id,admin_id" })
+      .select("*")
+      .single();
+    if (error) return fail("메모 확인 처리를 저장하지 못했습니다.", 400, "NOTE_ACK_FAILED", error.message);
+    return ok(data, 201);
+  }
+
+  if (body.action === "unacknowledge-note") {
+    const input = z.object({ id: z.uuid() }).parse(body);
+    const { error } = await admin.from("admin_note_reads").delete().eq("note_id", input.id).eq("admin_id", guard.auth.userId);
+    if (error) return fail("메모 확인 취소를 저장하지 못했습니다.", 400, "NOTE_ACK_CANCEL_FAILED", error.message);
+    return ok({ removed: true });
+  }
+
   if (body.action === "delete-note") {
     const input = z.object({ id: z.uuid() }).parse(body);
     const { error } = await admin.from("admin_notes").delete().eq("id", input.id);

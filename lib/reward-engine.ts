@@ -1,4 +1,4 @@
-import { createHash, randomInt } from "crypto";
+import { createHash, randomInt, randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type AdminClient = SupabaseClient;
@@ -88,28 +88,54 @@ export function isNumericReferralCode(value: string | null | undefined) {
   return typeof value === "string" && /^[0-9]{1,8}$/.test(value);
 }
 
-async function nextNumericReferralCode(admin: AdminClient, seed: string) {
+export async function nextNumericReferralCode(admin: AdminClient, seed = "") {
   const { data } = await admin.rpc("next_numeric_referral_code");
-  if (typeof data === "string" && /^[0-9]{1,8}$/.test(data)) return data;
-  for (let i = 0; i < 8; i += 1) {
-    const code = makeReferralCode(`${seed}:${i}:${Date.now()}`);
+  if (typeof data === "string" && /^[0-9]{8}$/.test(data)) return data;
+  for (let i = 0; i < 20; i += 1) {
+    const code = String(Math.floor(Math.random() * 100_000_000)).padStart(8, "0");
     const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("referral_code", code);
     if ((count ?? 0) === 0) return code;
   }
-  return makeReferralCode(`${seed}:fallback:${Math.random()}`);
+  for (let i = 0; i < 20; i += 1) {
+    const code = makeReferralCode(`${seed}:${i}:${profileSafeRandomSeed()}`);
+    const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("referral_code", code);
+    if ((count ?? 0) === 0) return code;
+  }
+  return makeReferralCode(`${seed}:fallback`);
+}
+
+function profileSafeRandomSeed() {
+  try { return randomUUID(); } catch { return `${Date.now()}:${Math.random()}`; }
 }
 
 export async function ensureReferralCode(admin: AdminClient, profile: ProfileLite) {
-  if (isNumericReferralCode(profile.referral_code)) return profile.referral_code;
-  const base = profile.username || profile.display_name || profile.id;
-  for (let i = 0; i < 6; i += 1) {
-    const code = await nextNumericReferralCode(admin, `${base}-${profile.id}-${i}`);
-    const { error } = await admin.from("profiles").update({ referral_code: code }).eq("id", profile.id);
-    if (!error) return code;
+  // 중요: 화면 조회/로그인 과정에서 전달받은 profile.referral_code가 비어 있어도 바로 재발급하지 않습니다.
+  // 먼저 DB의 현재 값을 다시 확인해서 기존 추천 ID를 계정 고유값으로 보존합니다.
+  const { data: current } = await admin
+    .from("profiles")
+    .select("referral_code")
+    .eq("id", profile.id)
+    .maybeSingle();
+  const currentCode = (current as { referral_code?: string | null } | null)?.referral_code ?? profile.referral_code ?? null;
+  if (isNumericReferralCode(currentCode) && currentCode.length === 8) return currentCode;
+
+  const code = await nextNumericReferralCode(admin, profile.id);
+  const { data: updated, error } = await admin
+    .from("profiles")
+    .update({ referral_code: code })
+    .eq("id", profile.id)
+    .is("referral_code", null)
+    .select("referral_code")
+    .maybeSingle();
+
+  if (!error && isNumericReferralCode((updated as { referral_code?: string | null } | null)?.referral_code)) {
+    return String((updated as { referral_code: string }).referral_code);
   }
-  const fallback = makeReferralCode(`${base}-${profile.id}-final`);
-  await admin.from("profiles").update({ referral_code: fallback }).eq("id", profile.id);
-  return fallback;
+
+  const { data: after } = await admin.from("profiles").select("referral_code").eq("id", profile.id).maybeSingle();
+  const afterCode = (after as { referral_code?: string | null } | null)?.referral_code;
+  if (isNumericReferralCode(afterCode)) return afterCode;
+  return code;
 }
 
 export async function getRewardSettings(admin: AdminClient) {

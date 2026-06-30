@@ -3,7 +3,7 @@ import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requ
 import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { makeReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
+import { nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 
 const schema = z.object({
   loginId: z.string().trim().min(1, "아이디를 입력해 주세요."),
@@ -122,10 +122,7 @@ export async function POST(request: Request) {
 
   if (createError || !created.user) return signupError(createError);
 
-  const { data: nextReferralCode } = await admin.rpc("next_numeric_referral_code");
-  const ownReferralCode = typeof nextReferralCode === "string" && /^[0-9]{1,8}$/.test(nextReferralCode)
-    ? nextReferralCode
-    : makeReferralCode(created.user.id);
+  const ownReferralCode = await nextNumericReferralCode(admin, created.user.id);
 
   const { error: profileError } = await admin
     .from("profiles")

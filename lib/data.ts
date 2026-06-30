@@ -1048,7 +1048,7 @@ export async function getRewardCenterData(profile: Profile): Promise<RewardCente
   const admin = createAdminClient();
   const today = kstDateString();
   const [profileResult, referralCountResult, boxesResult, todayResult, recentResult, notificationsResult, promoCodesResult, promoUseResult] = await Promise.all([
-    admin.from("profiles").select("referral_code,referred_by,referrer:profiles!profiles_referred_by_fkey(display_name,username)").eq("id", profile.id).maybeSingle(),
+    admin.from("profiles").select("referral_code,referred_by").eq("id", profile.id).maybeSingle(),
     admin.from("referral_logs").select("id", { count: "exact", head: true }).eq("referrer_id", profile.id).eq("status", "APPROVED"),
     admin.from("user_random_boxes").select("id,profile_id,box_id,quantity,source,updated_at,box:random_boxes(id,name,description,image_url,is_active,is_signup_reward,starts_at,ends_at,sort_order,created_at,deleted_at)").eq("profile_id", profile.id).gt("quantity", 0).order("updated_at", { ascending: false }),
     admin.from("attendance_logs").select("id,profile_id,attendance_date,source,streak_count,reward_snapshot,created_at").eq("profile_id", profile.id).eq("attendance_date", today).maybeSingle(),
@@ -1057,16 +1057,20 @@ export async function getRewardCenterData(profile: Profile): Promise<RewardCente
     admin.from("promo_codes").select("id,code,name,description,code_type,target_mode,target_profile_id,target_role,event_id,starts_at,ends_at,max_uses,per_user_limit,used_count,rewards,is_active,created_at,deleted_at").eq("is_active", true).is("deleted_at", null).order("created_at", { ascending: false }).limit(30),
     admin.from("promo_redemptions").select("promo_id").eq("profile_id", profile.id),
   ]);
-  const p = profileResult.data as { referral_code?: string | null; referrer?: { display_name?: string | null; username?: string | null } | Array<{ display_name?: string | null; username?: string | null }> | null } | null;
-  const referrer = Array.isArray(p?.referrer) ? p?.referrer[0] : p?.referrer;
-  const referralCode = isNumericReferralCode(p?.referral_code)
-    ? p?.referral_code ?? null
+  const p = profileResult.data as { referral_code?: string | null; referred_by?: string | null } | null;
+  let referrer: { display_name?: string | null; username?: string | null } | null = null;
+  if (p?.referred_by) {
+    const { data: referrerRow } = await admin.from("profiles").select("display_name,username").eq("id", p.referred_by).maybeSingle();
+    referrer = referrerRow as { display_name?: string | null; username?: string | null } | null;
+  }
+  const referralCode = isNumericReferralCode(p?.referral_code) && p?.referral_code?.length === 8
+    ? p.referral_code
     : await ensureReferralCode(admin, {
       id: profile.id,
       display_name: profile.display_name,
       username: profile.username,
       referral_code: p?.referral_code ?? null,
-      referred_by: null,
+      referred_by: p?.referred_by ?? null,
     });
   const boxes = ((boxesResult.data ?? []) as Array<UserRandomBox & { box?: RandomBox | RandomBox[] | null }>).map((row) => {
     const box = Array.isArray(row.box) ? row.box[0] : row.box;
@@ -1105,6 +1109,7 @@ export type PublicRankingEntry = {
   expTotal: number;
   gainedExp: number;
   weeklyDraws: number;
+  attendanceCount: number;
   badges: Array<{ name: string; icon: string | null; labelColor: string | null }>;
 };
 
@@ -1120,15 +1125,16 @@ function isPublicRankingProfile(profile: { role?: string | null; status?: string
   return profile?.status === "APPROVED" && profile?.role === "USER";
 }
 
-export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]; exp: PublicRankingEntry[]; weeklyDraws: PublicRankingEntry[] }> {
-  if (demoMode) return { level: [], exp: [], weeklyDraws: [] };
+export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]; attendance: PublicRankingEntry[]; weeklyDraws: PublicRankingEntry[] }> {
+  if (demoMode) return { level: [], attendance: [], weeklyDraws: [] };
   const admin = createAdminClient();
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
-  const [profilesResult, growthResult, expResult, weeklyDrawResult, badgeResult] = await Promise.all([
+  const [profilesResult, growthResult, expResult, attendanceResult, weeklyDrawResult, badgeResult] = await Promise.all([
     admin.from("profiles").select("id,display_name,username,email,member_code,role,status").eq("status", "APPROVED").eq("role", "USER").limit(5000),
     admin.from("profile_growth").select("profile_id,level_no,exp_total").order("level_no", { ascending: false }).order("exp_total", { ascending: false }).limit(5000),
     admin.from("exp_logs").select("profile_id,amount").gt("amount", 0).order("created_at", { ascending: false }).limit(5000),
+    admin.from("attendance_logs").select("profile_id,attendance_date").order("attendance_date", { ascending: false }).limit(20000),
     admin.from("results").select("participant_id,created_at").gte("created_at", weekAgo).is("voided_at", null).limit(5000),
     admin.from("profile_badges").select("profile_id,badges(name,icon,label_color)").order("granted_at", { ascending: false }).limit(3000),
   ]);
@@ -1161,6 +1167,7 @@ export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]
       expTotal: Number(row.exp_total ?? 0),
       gainedExp: 0,
       weeklyDraws: 0,
+      attendanceCount: 0,
       badges: badgeMap.get(row.profile_id) ?? [],
     });
   }
@@ -1168,7 +1175,7 @@ export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]
   for (const [profileId, profile] of profileMap) {
     if (!baseFromGrowth.has(profileId)) {
       const label = rankingProfileLabel(profile);
-      baseFromGrowth.set(profileId, { profileId, displayName: label.displayName, loginId: label.loginId, memberCode: label.memberCode, levelNo: 1, expTotal: 0, gainedExp: 0, weeklyDraws: 0, badges: badgeMap.get(profileId) ?? [] });
+      baseFromGrowth.set(profileId, { profileId, displayName: label.displayName, loginId: label.loginId, memberCode: label.memberCode, levelNo: 1, expTotal: 0, gainedExp: 0, weeklyDraws: 0, attendanceCount: 0, badges: badgeMap.get(profileId) ?? [] });
     }
   }
 
@@ -1178,6 +1185,15 @@ export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]
     const base = expAgg.get(row.profile_id) ?? baseFromGrowth.get(row.profile_id);
     if (!base) continue;
     expAgg.set(row.profile_id, { ...base, gainedExp: base.gainedExp + Number(row.amount ?? 0) });
+  }
+
+
+  const attendanceAgg = new Map<string, PublicRankingEntry>();
+  for (const row of (attendanceResult.data ?? []) as Array<{ profile_id: string }>) {
+    if (!profileMap.has(row.profile_id)) continue;
+    const base = attendanceAgg.get(row.profile_id) ?? baseFromGrowth.get(row.profile_id);
+    if (!base) continue;
+    attendanceAgg.set(row.profile_id, { ...base, attendanceCount: base.attendanceCount + 1 });
   }
 
   const drawAgg = new Map<string, PublicRankingEntry>();
@@ -1190,7 +1206,7 @@ export async function getPublicRankings(): Promise<{ level: PublicRankingEntry[]
 
   return {
     level: Array.from(baseFromGrowth.values()).sort((a, b) => b.levelNo - a.levelNo || b.expTotal - a.expTotal).slice(0, 5000),
-    exp: Array.from(expAgg.values()).sort((a, b) => b.gainedExp - a.gainedExp || b.expTotal - a.expTotal).slice(0, 5000),
+    attendance: Array.from(attendanceAgg.values()).sort((a, b) => b.attendanceCount - a.attendanceCount || b.expTotal - a.expTotal).slice(0, 5000),
     weeklyDraws: Array.from(drawAgg.values()).sort((a, b) => b.weeklyDraws - a.weeklyDraws || b.expTotal - a.expTotal).slice(0, 5000),
   };
 }

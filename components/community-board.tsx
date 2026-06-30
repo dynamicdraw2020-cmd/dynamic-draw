@@ -3,6 +3,7 @@
 import { Flag, LoaderCircle, MessageCircle, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { formatDateTime } from "@/lib/utils";
 
 type CommentRow = { id: string; body: string; nickname: string | null; created_at: string };
 type PostRow = { id: string; title: string; body: string; nickname: string | null; created_at: string; comments?: CommentRow[] };
@@ -83,9 +84,9 @@ export function CommunityBoard({ posts, signedIn }: CommunityBoardProps) {
 
     <section className="grid gap-2">
       {posts.length ? posts.map((post) => <article className="panel panel-pad" key={post.id}>
-        <div className="flex items-center justify-between gap-2"><div><h3 className="panel-title mb-0">{post.title}</h3><p className="text-muted text-small mt-1">{post.nickname || "익명"} · {new Date(post.created_at).toLocaleString("ko-KR")}</p></div><button className="btn btn-secondary btn-sm" onClick={() => reportPost(post.id)} disabled={loading === `report-${post.id}`}><Flag size={14} /> 신고</button></div>
+        <div className="flex items-center justify-between gap-2"><div><h3 className="panel-title mb-0">{post.title}</h3><p className="text-muted text-small mt-1">{post.nickname || "익명"} · {formatDateTime(post.created_at)}</p></div><button className="btn btn-secondary btn-sm" onClick={() => reportPost(post.id)} disabled={loading === `report-${post.id}`}><Flag size={14} /> 신고</button></div>
         <p className="notice-body mt-3">{post.body}</p>
-        <div className="result-list mt-3">{(post.comments ?? []).map((comment) => <div className="result-row" key={comment.id}><div className="result-icon"><MessageCircle size={15} /></div><div className="result-main"><strong>{comment.nickname || "익명"}</strong><span>{comment.body}</span></div><time className="result-time">{new Date(comment.created_at).toLocaleString("ko-KR")}</time></div>)}</div>
+        <div className="result-list mt-3">{(post.comments ?? []).map((comment) => <div className="result-row" key={comment.id}><div className="result-icon"><MessageCircle size={15} /></div><div className="result-main"><strong>{comment.nickname || "익명"}</strong><span>{comment.body}</span></div><time className="result-time">{formatDateTime(comment.created_at)}</time></div>)}</div>
         {signedIn && <form className="form-row mt-3" onSubmit={(event) => createComment(event, post.id)}><input className="input" name="nickname" placeholder="닉네임" maxLength={30} /><input className="input" name="body" placeholder="댓글 작성" required maxLength={500} /><button className="btn btn-secondary" disabled={loading === `comment-${post.id}`}>{loading === `comment-${post.id}` ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />} 댓글</button></form>}
       </article>) : <div className="panel empty">아직 커뮤니티 글이 없습니다.</div>}
     </section>
@@ -106,5 +107,5 @@ export function AdminCommunityManager({ posts }: { posts: Array<PostRow & { repo
       setLoading(null);
     }
   }
-  return <section className="panel panel-pad"><h2 className="panel-title">커뮤니티 관리</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>글</th><th>닉네임</th><th>신고</th><th>작성</th><th>관리</th></tr></thead><tbody>{posts.length ? posts.map((post) => <tr key={post.id}><td><strong>{post.title}</strong><div className="text-muted text-small">{post.body.slice(0, 80)}</div></td><td>{post.nickname || "익명"}</td><td>{post.report_count ?? 0}</td><td>{new Date(post.created_at).toLocaleString("ko-KR")}</td><td><button className="btn btn-danger btn-sm" onClick={() => confirm("게시글을 삭제할까요?") && run("delete-post", post.id)} disabled={loading === `delete-post-${post.id}`}><Trash2 size={14} /> 삭제</button></td></tr>) : <tr><td colSpan={5}><div className="empty">게시글이 없습니다.</div></td></tr>}</tbody></table></div></section>;
+  return <section className="panel panel-pad"><h2 className="panel-title">커뮤니티 관리</h2><div className="table-wrap mt-3"><table className="table"><thead><tr><th>글</th><th>닉네임</th><th>신고</th><th>작성</th><th>관리</th></tr></thead><tbody>{posts.length ? posts.map((post) => <tr key={post.id}><td><strong>{post.title}</strong><div className="text-muted text-small">{post.body.slice(0, 80)}</div></td><td>{post.nickname || "익명"}</td><td>{post.report_count ?? 0}</td><td>{formatDateTime(post.created_at)}</td><td><button className="btn btn-danger btn-sm" onClick={() => confirm("게시글을 삭제할까요?") && run("delete-post", post.id)} disabled={loading === `delete-post-${post.id}`}><Trash2 size={14} /> 삭제</button></td></tr>) : <tr><td colSpan={5}><div className="empty">게시글이 없습니다.</div></td></tr>}</tbody></table></div></section>;
 }

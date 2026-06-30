@@ -55,8 +55,8 @@ function makeDraftId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
-function emptyRewardDraft(): RewardDraft {
-  return { id: makeDraftId(), type: "RANDOM_BOX", amount: 1, currencyId: "", drawId: "", rewardId: "", boxId: "", label: "" };
+function emptyRewardDraft(id?: string): RewardDraft {
+  return { id: id ?? makeDraftId(), type: "RANDOM_BOX", amount: 1, currencyId: "", drawId: "", rewardId: "", boxId: "", label: "" };
 }
 
 function cleanRewardDrafts(rewards: RewardDraft[]) {
@@ -162,8 +162,8 @@ export function GrowthManager({ data }: { data: GrowthData }) {
   const [tab, setTab] = useState<Tab>("레벨");
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [levelRewards, setLevelRewards] = useState<RewardDraft[]>([emptyRewardDraft()]);
-  const [vipRewards, setVipRewards] = useState<RewardDraft[]>([emptyRewardDraft()]);
+  const [levelRewards, setLevelRewards] = useState<RewardDraft[]>([emptyRewardDraft("level-initial")]);
+  const [vipRewards, setVipRewards] = useState<RewardDraft[]>([emptyRewardDraft("vip-initial")]);
   const members = useMemo(() => data.members.filter((member) => member.status === "APPROVED"), [data.members]);
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string, success: string) {

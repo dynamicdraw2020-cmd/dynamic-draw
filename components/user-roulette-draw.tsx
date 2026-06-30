@@ -48,7 +48,7 @@ export function UserRouletteDraw({ draws, tickets, currencies, exchangeRates, co
       setLiveTickets(body.data?.tickets ?? []);
       setLiveCurrencies(body.data?.currencies ?? []);
       setLiveExchangeRates(body.data?.exchangeRates ?? []);
-      setSyncMessage(`최근 동기화 ${new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`);
+      setSyncMessage("최근 동기화 완료");
     } catch (error) {
       setSyncMessage((error as Error).message);
     } finally {

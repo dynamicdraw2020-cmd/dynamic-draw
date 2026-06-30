@@ -2,7 +2,7 @@
 
 import { ArrowRight, IdCard, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 function simpleFingerprintSource() {
   if (typeof window === "undefined") return "server";
@@ -26,7 +26,12 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formVersion, setFormVersion] = useState(0);
+  const [signupStartedAt, setSignupStartedAt] = useState("");
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (mode === "signup") setSignupStartedAt(String(Date.now()));
+  }, [mode, formVersion]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,6 +69,10 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
 
   return (
     <form key={`auth-form-${formVersion}`} className="form-grid" onSubmit={submit}>
+      {mode === "signup" && <>
+        <input className="bot-trap" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+        <input type="hidden" name="signupStartedAt" value={signupStartedAt} readOnly />
+      </>}
       {mode === "signup" && (
         <div className="field">
           <label htmlFor="displayName">이름 또는 닉네임</label>

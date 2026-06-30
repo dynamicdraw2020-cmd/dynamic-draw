@@ -13,6 +13,7 @@ const groups = [
       { href: "/admin", label: "관리 홈", icon: LayoutDashboard, minimum: "VIEWER" },
       { href: "/admin/stats", label: "통계", icon: BarChart3, minimum: "VIEWER" },
       { href: "/admin/operations", label: "운영 통계", icon: ClipboardList, minimum: "VIEWER" },
+      { href: "/admin/security", label: "보안 방어", icon: ShieldAlert, minimum: "MANAGER" },
       { href: "/admin/activity", label: "유저 활동 로그", icon: Activity, minimum: "VIEWER" },
     ],
   },

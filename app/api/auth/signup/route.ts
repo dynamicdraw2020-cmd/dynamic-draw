@@ -11,9 +11,66 @@ const schema = z.object({
   password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다.").max(72),
   referralCode: z.string().trim().max(8, "추천인 ID는 8자리 이내 숫자만 입력해 주세요.").optional().default(""),
   browserFingerprint: z.string().trim().max(120).optional().default(""),
+  website: z.string().trim().max(200).optional().default(""),
+  signupStartedAt: z.string().trim().max(30).optional().default(""),
 });
 
 type AuthAdminError = { code?: string; message?: string; status?: number };
+
+function looksAutomatedSignup(loginId: string, displayName: string) {
+  const id = loginId.toLowerCase();
+  const name = displayName.toLowerCase();
+  const patterns = [
+    /^user\d+[_-][a-z0-9]{4,}$/i,
+    /^u_mr0[a-z0-9_]{5,}$/i,
+    /^user_?[a-z0-9]{8,}$/i,
+    /^test[_-]?bot/i,
+  ];
+  const displayPatterns = [
+    /^user\d+[_-][a-z0-9]{4,}$/i,
+    /^user_?[a-z0-9]{8,}$/i,
+  ];
+  return patterns.some((pattern) => pattern.test(id)) || displayPatterns.some((pattern) => pattern.test(name));
+}
+
+function signupElapsedMs(value: string) {
+  const started = Number(value);
+  if (!Number.isFinite(started) || started <= 0) return null;
+  const elapsed = Date.now() - started;
+  return Number.isFinite(elapsed) ? elapsed : null;
+}
+
+async function logSecurityEvent(admin: ReturnType<typeof createAdminClient>, payload: Record<string, unknown>) {
+  try {
+    await admin.from("security_events").insert({
+      event_type: payload.eventType ?? "SIGNUP_GUARD",
+      severity: payload.severity ?? "MEDIUM",
+      ip_address: payload.ip ?? "unknown",
+      browser_fingerprint: payload.browserFingerprint ?? "unknown",
+      login_id: payload.loginId ?? null,
+      display_name: payload.displayName ?? null,
+      reason: payload.reason ?? "security guard",
+      details: payload,
+    });
+  } catch {
+    // security_events 테이블 적용 전에도 회원가입 로직은 계속 동작하게 둡니다.
+  }
+}
+
+async function temporaryBlock(admin: ReturnType<typeof createAdminClient>, kind: string, value: string, reason: string, minutes = 30) {
+  if (!value || value === "unknown") return;
+  try {
+    await admin.from("security_blocklist").insert({
+      kind,
+      value,
+      reason,
+      expires_at: new Date(Date.now() + minutes * 60 * 1000).toISOString(),
+      is_active: true,
+    });
+  } catch {
+    // 중복 또는 테이블 미적용 시 무시
+  }
+}
 
 function signupError(error: AuthAdminError | null) {
   const text = String(error?.message ?? "").toLowerCase();
@@ -68,6 +125,44 @@ export async function POST(request: Request) {
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
   let riskScore = 0;
   const riskFlags: string[] = [];
+  const elapsed = signupElapsedMs(parsed.data.signupStartedAt);
+
+  if (!signupBypassBySuperAdmin && parsed.data.website.trim()) {
+    await logSecurityEvent(admin, { eventType: "SIGNUP_HONEYPOT_BLOCK", severity: "HIGH", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, reason: "honeypot field filled" });
+    await temporaryBlock(admin, "IP", ip, "자동 가입 방어: honeypot 입력", 60);
+    return fail("자동 가입으로 의심되어 가입 신청이 차단되었습니다.", 429, "SIGNUP_BOT_BLOCKED");
+  }
+
+  if (!signupBypassBySuperAdmin && elapsed !== null && elapsed < 2500) {
+    await logSecurityEvent(admin, { eventType: "SIGNUP_TOO_FAST_BLOCK", severity: "HIGH", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, elapsedMs: elapsed, reason: "form submitted too quickly" });
+    await temporaryBlock(admin, "FINGERPRINT", fingerprint, "자동 가입 방어: 비정상적으로 빠른 제출", 30);
+    return fail("가입 신청 속도가 비정상적으로 빠릅니다. 3분 뒤에 다시 시도해 주세요.", 429, "SIGNUP_TOO_FAST");
+  }
+
+  if (!signupBypassBySuperAdmin && looksAutomatedSignup(login.loginId, parsed.data.displayName)) {
+    await logSecurityEvent(admin, { eventType: "SIGNUP_PATTERN_BLOCK", severity: "HIGH", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, reason: "automated login/display pattern" });
+    await temporaryBlock(admin, "IP", ip, "자동 가입 방어: 봇 계정명 패턴", 60);
+    return fail("자동 생성 계정으로 의심되어 가입 신청이 차단되었습니다.", 429, "SIGNUP_PATTERN_BLOCKED");
+  }
+
+  try {
+    const { data: blockedRows } = await admin
+      .from("security_blocklist")
+      .select("id,kind,value,reason,expires_at")
+      .eq("is_active", true)
+      .in("kind", ["IP", "FINGERPRINT", "LOGIN_ID"])
+      .in("value", [ip, fingerprint, login.loginId.toLowerCase()])
+      .limit(20);
+    const now = Date.now();
+    const blocked = ((blockedRows ?? []) as Array<{ reason?: string | null; expires_at?: string | null }>).find((row) => !row.expires_at || new Date(row.expires_at).getTime() > now);
+    if (!signupBypassBySuperAdmin && blocked) {
+      await logSecurityEvent(admin, { eventType: "SIGNUP_BLOCKLIST_HIT", severity: "HIGH", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, reason: blocked.reason ?? "blocklist hit" });
+      return fail("현재 가입 신청이 잠시 제한되었습니다. 잠시 후 다시 시도해 주세요.", 429, "SIGNUP_BLOCKLISTED");
+    }
+  } catch {
+    // 보안 테이블 적용 전 호환
+  }
+
   try {
     const cooldownSince = new Date(Date.now() - 3 * 60 * 1000).toISOString();
     const [recentDevice, recentIp] = await Promise.all([
@@ -84,8 +179,30 @@ export async function POST(request: Request) {
     ]);
     if ((sameIp.count ?? 0) >= 2) { riskScore += 35; riskFlags.push("동일 IP 24시간 내 다중 가입"); }
     if (fingerprint !== "unknown" && (sameFingerprint.count ?? 0) >= 1) { riskScore += 45; riskFlags.push("동일 브라우저 지문 재가입 의심"); }
+
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const [tenMinuteIp, tenMinuteFp] = await Promise.all([
+      admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", tenMinutesAgo),
+      admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", tenMinutesAgo),
+    ]);
+    if (!signupBypassBySuperAdmin && (tenMinuteIp.count ?? 0) >= 3) {
+      await logSecurityEvent(admin, { eventType: "SIGNUP_IP_BURST_BLOCK", severity: "CRITICAL", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, count: tenMinuteIp.count, reason: "too many signups from same IP" });
+      await temporaryBlock(admin, "IP", ip, "10분 내 가입 신청 과다", 60);
+      return fail("같은 네트워크에서 가입 신청이 너무 많습니다. 1시간 뒤에 다시 시도해 주세요.", 429, "SIGNUP_IP_BURST_BLOCKED");
+    }
+    if (!signupBypassBySuperAdmin && fingerprint !== "unknown" && (tenMinuteFp.count ?? 0) >= 1) {
+      await logSecurityEvent(admin, { eventType: "SIGNUP_DEVICE_REPEAT_BLOCK", severity: "HIGH", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, count: tenMinuteFp.count, reason: "same device repeated signup" });
+      await temporaryBlock(admin, "FINGERPRINT", fingerprint, "동일 기기 반복 가입 신청", 180);
+      return fail("이미 이 기기에서 가입 신청을 요청했습니다. 잠시 후 다시 시도해 주세요.", 429, "SIGNUP_DEVICE_REPEAT_BLOCKED");
+    }
   } catch {
     // 중복가입 위험도 테이블이 아직 적용되지 않은 기존 설치와의 호환을 위해 무시합니다.
+  }
+
+  if (!signupBypassBySuperAdmin && riskScore >= 70) {
+    await logSecurityEvent(admin, { eventType: "SIGNUP_RISK_BLOCK", severity: "HIGH", ip, browserFingerprint: fingerprint, loginId: login.loginId, displayName: parsed.data.displayName, riskScore, riskFlags, reason: "risk score threshold exceeded" });
+    await temporaryBlock(admin, "IP", ip, "가입 위험도 초과", 60);
+    return fail("중복 가입 또는 자동 가입으로 의심되어 가입 신청이 차단되었습니다.", 429, "SIGNUP_RISK_BLOCKED");
   }
 
   const authEmail = loginIdToAuthEmail(login.loginId);

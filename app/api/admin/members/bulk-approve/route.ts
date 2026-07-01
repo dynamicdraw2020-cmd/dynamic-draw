@@ -6,6 +6,7 @@ import { handleApprovalRewards } from "@/lib/reward-engine";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({ memberIds: z.array(z.uuid()).min(1).max(300) });
 
 type AdminClient = ReturnType<typeof createAdminClient>;

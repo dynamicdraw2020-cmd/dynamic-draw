@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 
 const schema = z.object({
   confirm: z.string().trim().refine((value) => value === "DELETE_REJECTED", "확인 문구가 일치하지 않습니다."),

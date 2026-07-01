@@ -7,6 +7,7 @@ import { handleApprovalRewards } from "@/lib/reward-engine";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const approveSchema = z.object({
   memberCode: z
     .string()

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({
   loginId: z.string().trim().min(1),
   password: z.string().min(1),

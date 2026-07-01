@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({
   loginId: z.string().trim().min(1, "아이디를 입력해 주세요."),
   displayName: z.string().trim().min(2, "이름 또는 닉네임은 2자 이상 입력해 주세요.").max(30),

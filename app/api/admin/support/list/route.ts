@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 async function getHandler() {
   const guard = await requireApiCapability("SUPPORT_REPLY");
   if ("error" in guard) return guard.error;

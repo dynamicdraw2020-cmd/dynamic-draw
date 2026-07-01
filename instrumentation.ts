@@ -1,17 +1,22 @@
-import { runtimeLog } from "@/lib/ops/logger";
-
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const runtime = process.env.NEXT_RUNTIME;
 
-  const globalWithFlag = globalThis as typeof globalThis & { __dynamicdInstrumentationRegistered?: boolean };
-  if (globalWithFlag.__dynamicdInstrumentationRegistered) return;
-  globalWithFlag.__dynamicdInstrumentationRegistered = true;
+  if (runtime === "nodejs") {
+    try {
+      const { registerNodeInstrumentation } = await import("./lib/ops/instrumentation-node");
+      registerNodeInstrumentation();
+    } catch (error) {
+      console.error(JSON.stringify({ ts: new Date().toISOString(), service: "dynamic-draw", level: "ERROR", event: "NODE_INSTRUMENTATION_REGISTER_FAILED", error: error instanceof Error ? { name: error.name, message: error.message } : String(error) }));
+    }
+    return;
+  }
 
-  process.on("unhandledRejection", (reason) => {
-    runtimeLog({ level: "ERROR", event: "UNHANDLED_PROMISE_REJECTION", error: reason });
-  });
-
-  process.on("uncaughtException", (error) => {
-    runtimeLog({ level: "CRITICAL", event: "UNCAUGHT_EXCEPTION", error });
-  });
+  if (runtime === "edge") {
+    try {
+      const { registerEdgeInstrumentation } = await import("./lib/ops/instrumentation-edge");
+      registerEdgeInstrumentation();
+    } catch {
+      // Edge runtime에서는 Node API를 쓰지 않고 조용히 no-op 처리합니다.
+    }
+  }
 }

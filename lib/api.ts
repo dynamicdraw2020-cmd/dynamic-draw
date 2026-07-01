@@ -12,7 +12,7 @@ import {
 } from "@/lib/admin-capabilities";
 import { consumeLocalRateLimit, rateLimitHeaders } from "@/lib/ops/rate-limit";
 import { createRequestId, logSlowOperation, runtimeLog } from "@/lib/ops/logger";
-import { RUNTIME_LIMITS, publicErrorCode, publicErrorMessage, safeDiagnostics, withTimeout } from "@/lib/ops/runtime";
+import { OperationTimeoutError, RUNTIME_LIMITS, publicErrorCode, publicErrorMessage, safeDiagnostics, withTimeout } from "@/lib/ops/runtime";
 import { getRequestFingerprint, inspectAttackSurface, isSuspiciousUserAgent, securityHeaders } from "@/lib/ops/security";
 import { recordAuditEventSoon, recordRuntimeEventSoon } from "@/lib/ops/db-events";
 
@@ -39,7 +39,7 @@ function jsonHeaders(extra?: HeadersInit) {
 function attachRuntimeHeaders(response: Response, requestId?: string, durationMs?: number) {
   try {
     for (const [key, value] of Object.entries(securityHeaders())) response.headers.set(key, value);
-    response.headers.set("X-DynamicD-Api-Guard", "v1.7.1");
+    response.headers.set("X-DynamicD-Api-Guard", "v1.7.2");
     if (requestId) response.headers.set("X-Request-ID", requestId);
     if (durationMs != null) response.headers.set("X-Response-Time-Ms", String(durationMs));
     if (!response.headers.get("cache-control")) response.headers.set("cache-control", "no-store, max-age=0");
@@ -74,13 +74,50 @@ export function requestMeta(request: Request) {
   };
 }
 
-export async function readJsonWithLimit<T = unknown>(request: Request, maxBytes = RUNTIME_LIMITS.maxJsonBytes): Promise<T | null> {
+async function readRequestTextWithLimit(request: Request, maxBytes: number, timeoutMs: number) {
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (Number.isFinite(contentLength) && contentLength > maxBytes) throw Object.assign(new Error("request body too large"), { status: 413, code: "REQUEST_BODY_TOO_LARGE" });
-  const text = await withTimeout(request.text(), RUNTIME_LIMITS.defaultTimeoutMs, "read request body");
-  if (text.length > maxBytes) throw Object.assign(new Error("request body too large"), { status: 413, code: "REQUEST_BODY_TOO_LARGE" });
+
+  if (!request.body) {
+    return await withTimeout(request.text(), timeoutMs, "read request body");
+  }
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let received = 0;
+  const started = Date.now();
+
+  try {
+    while (true) {
+      const remainingMs = timeoutMs - (Date.now() - started);
+      if (remainingMs <= 0) throw new OperationTimeoutError("read request body", timeoutMs);
+
+      const { value, done } = await withTimeout(reader.read(), remainingMs, "read request body chunk");
+      if (done) break;
+      if (value) {
+        received += value.byteLength;
+        if (received > maxBytes) throw Object.assign(new Error("request body too large"), { status: 413, code: "REQUEST_BODY_TOO_LARGE" });
+        chunks.push(decoder.decode(value, { stream: true }));
+      }
+    }
+    chunks.push(decoder.decode());
+    return chunks.join("");
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {}
+  }
+}
+
+export async function readJsonWithLimit<T = unknown>(request: Request, maxBytes = RUNTIME_LIMITS.maxJsonBytes): Promise<T | null> {
+  const text = await readRequestTextWithLimit(request, maxBytes, RUNTIME_LIMITS.defaultTimeoutMs);
   if (!text.trim()) return null;
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    throw Object.assign(new Error("invalid json body"), { status: 400, code: "INVALID_JSON_BODY", cause: error });
+  }
 }
 
 export function enforceSameOrigin(request: Request) {

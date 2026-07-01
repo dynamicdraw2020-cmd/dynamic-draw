@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({
   drawId: z.uuid(),
   profileId: z.uuid(),

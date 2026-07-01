@@ -39,7 +39,16 @@ export function sleep(ms: number) {
 
 export function timeoutSignal(timeoutMs: number, original?: AbortSignal | null) {
   const safeTimeout = Math.max(1, timeoutMs);
-  const timeout = AbortSignal.timeout(safeTimeout);
+  let timeout: AbortSignal;
+
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    timeout = AbortSignal.timeout(safeTimeout);
+  } else {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new OperationTimeoutError("abort signal", safeTimeout)), safeTimeout);
+    timeout = controller.signal;
+  }
+
   if (!original) return timeout;
   if (original.aborted) return original;
   if (typeof AbortSignal.any === "function") return AbortSignal.any([original, timeout]);

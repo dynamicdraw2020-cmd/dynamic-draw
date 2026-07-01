@@ -8,7 +8,7 @@ const STATIC_EXTENSION = /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|
 
 function applyHeaders(response: NextResponse, requestId: string) {
   for (const [key, value] of Object.entries(securityHeaders())) response.headers.set(key, value);
-  response.headers.set("X-DynamicD-Runtime-Guard", "v1.7.1");
+  response.headers.set("X-DynamicD-Runtime-Guard", "v1.7.2");
   response.headers.set("X-Request-ID", requestId);
   return response;
 }

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({
   reason: z.string().trim().max(200).optional().default("관리자 회수"),
 });

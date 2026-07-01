@@ -6,6 +6,7 @@ import { safeRows } from "@/lib/ops/safe-query";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({ action: z.string().trim().min(1) }).passthrough();
 const superOnlyActions = new Set(["allow-one-signup", "unblock", "permanent-unblock"]);
 

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
+export const runtime = "nodejs";
 const schema = z.object({
   requestUrl: z.string().trim().max(500).optional().default(""),
   buttonLabel: z.string().trim().min(2).max(40).optional().default("시크릿코드 신청하기"),

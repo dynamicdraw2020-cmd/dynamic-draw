@@ -1,1 +1,1 @@
-export { dynamic, maxDuration, POST } from "../delete-rejected/route";
+export { dynamic, maxDuration, runtime, POST } from "../delete-rejected/route";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
 import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
-import { getStableReferralCode, nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
+import { ensureReferralCode, nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -428,7 +428,7 @@ export async function POST(request: Request) {
     return fail(consumeError.message || "시크릿코드가 유효하지 않습니다.", 403, "SIGNUP_SECRET_INVALID", consumeError.code);
   }
 
-  await getStableReferralCode(admin, created.user.id, ownReferralCode);
+  await ensureReferralCode(admin, { id: created.user.id, referral_code: ownReferralCode });
 
   if (referredBy) {
     await admin.from("referral_logs").insert({

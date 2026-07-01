@@ -110,6 +110,7 @@ const groups: Array<{ title: string; description: string; items: MenuItem[] }> =
     title: "시스템",
     description: "로그와 전체 설정",
     items: [
+      { href: "/admin/server-status", label: "서버 상태", icon: Activity, roles: ["VIEWER", "CS_MANAGER", "MANAGER", "SUPER_ADMIN"] },
       { href: "/admin/logs", label: "관리자 로그", icon: Logs, minimum: "VIEWER" },
       { href: "/admin/operation-mode", label: "운영 모드", icon: ShieldAlert, minimum: "SUPER_ADMIN" },
       { href: "/admin/settings", label: "설정", icon: Settings, minimum: "SUPER_ADMIN" },

@@ -53,7 +53,7 @@ export default async function AdminSignupSecretCodesPage() {
     .select("key,value")
     .in("key", ["signup_secret_request_url", "signup_secret_request_button_label", "signup_secret_request_help_text"]);
 
-  const settingMap = new Map((settingRows ?? []).map((row: { key: string; value: unknown }) => [row.key, cleanValue(row.value)]));
+  const settingMap = new Map<string, string>((settingRows ?? []).map((row: { key: string; value: unknown }) => [row.key, cleanValue(row.value)]));
 
   return (
     <>

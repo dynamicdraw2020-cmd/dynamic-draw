@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins, LoaderCircle, Ticket, UserRoundCheck, WalletCards } from "lucide-react";
+import { Coins, LoaderCircle, Ticket, WalletCards } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import type { AdminCurrencyBalance, AdminTicketBalance, Draw, Profile, VirtualCurrency } from "@/lib/types";
@@ -94,11 +94,9 @@ export function CsGrantManager({
       <section className="panel panel-pad">
         <div className="section-head">
           <div>
-            <p className="eyebrow">CS Grant</p>
             <h2 className="panel-title">CS 지급 콘솔</h2>
             <p className="muted">CS매니저는 승인된 회원 1명에게만 추첨권과 포인트를 지급할 수 있습니다. 전체 지급과 화폐 설정은 일반 관리자 이상 전용입니다.</p>
           </div>
-          <UserRoundCheck size={28} />
         </div>
 
         <label className="field-label mt-4">

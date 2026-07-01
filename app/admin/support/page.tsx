@@ -41,13 +41,6 @@ export default async function AdminSupportPage() {
 
   return (
     <>
-      <section className="hero-card compact">
-        <div>
-          <p className="eyebrow">CS Center</p>
-          <h1>문의센터 관리</h1>
-          <p>CS매니저와 관리자가 회원 문의에 답변하고 내부 메모를 남깁니다.</p>
-        </div>
-      </section>
       <AdminSupportManager tickets={mapped} />
     </>
   );

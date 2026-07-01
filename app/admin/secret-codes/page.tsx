@@ -57,11 +57,6 @@ export default async function AdminSignupSecretCodesPage() {
 
   return (
     <>
-      <section className="panel panel-pad">
-        <h1>가입 시크릿코드</h1>
-        <p className="muted">회원가입은 관리자가 발급한 1회용 시크릿코드를 입력해야 완료됩니다.</p>
-      </section>
-
       {dbError ? (
         <section className="panel panel-pad">
           <h2 className="panel-title">DB 보정 SQL 적용 필요</h2>

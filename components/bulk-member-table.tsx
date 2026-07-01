@@ -127,7 +127,6 @@ export function BulkMemberTable({ members, currentAdmin }: { members: Profile[];
     <section className="panel panel-pad">
       <div className="section-head">
         <div>
-          <p className="eyebrow">일괄 회원 승인</p>
           <h2 className="panel-title">회원 목록</h2>
           <p className="muted">승인 대기 회원을 체크박스로 선택해 한 번에 처리합니다.</p>
         </div>

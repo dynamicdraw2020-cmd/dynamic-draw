@@ -23,13 +23,6 @@ export default async function AdminServerStatusPage() {
 
   return (
     <>
-      <section className="hero-card compact">
-        <div>
-          <p className="eyebrow">Server Monitor</p>
-          <h1>서버 상태</h1>
-          <p>앱 ping, DB ping, 주요 테이블 상태, 트래픽 위험도를 한 화면에서 확인합니다.</p>
-        </div>
-      </section>
       <ServerStatusPanel initialData={initialData} />
     </>
   );

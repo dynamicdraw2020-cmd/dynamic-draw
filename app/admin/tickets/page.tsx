@@ -130,18 +130,6 @@ export default async function AdminTicketsPage() {
 
   return (
     <>
-      <section className="hero-card compact">
-        <div>
-          <p className="eyebrow">Reward Center</p>
-          <h1>{fullManager ? "추첨권·화폐 관리" : "CS 보상 지급"}</h1>
-          <p>
-            {fullManager
-              ? "추첨권 지급, 전체 지급, 운영용 화폐 설정, 화폐→추첨권 교환 비율을 관리합니다."
-              : "CS매니저는 승인 회원 1명에게만 추첨권과 포인트를 지급할 수 있습니다."}
-          </p>
-        </div>
-      </section>
-
       {fullManager ? (
         <TicketGrantManager
           draws={data.draws}

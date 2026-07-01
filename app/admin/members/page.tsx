@@ -27,15 +27,6 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <section className="hero-card compact">
-        <div>
-          <p className="eyebrow">회원 운영</p>
-          <h1>회원 관리</h1>
-          <p>가입 승인, 이용정지, 정지 해제를 처리합니다. CS매니저는 일반 회원 상태 처리만 가능합니다.</p>
-        </div>
-        <Link className="btn btn-secondary" href="/admin/secret-codes">가입 시크릿코드</Link>
-      </section>
-
       <form className="panel panel-pad filter-grid" action="/admin/members">
         <label>
           회원 검색

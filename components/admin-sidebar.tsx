@@ -5,6 +5,8 @@ import {
   ArrowLeftRight,
   BarChart3,
   CalendarClock,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   FileClock,
   Gift,
@@ -28,6 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import type { Profile } from "@/lib/types";
 import {
@@ -49,8 +52,18 @@ type MenuItem = {
   roles?: readonly AdminRole[];
 };
 
-const groups: Array<{ title: string; description: string; items: MenuItem[] }> = [
+type MenuGroup = {
+  key: string;
+  title: string;
+  description: string;
+  items: MenuItem[];
+};
+
+const STORAGE_KEY = "dynamicd.admin.sidebar.collapsed.v162";
+
+const groups: MenuGroup[] = [
   {
+    key: "overview",
     title: "운영 현황",
     description: "전체 상태와 기록 확인",
     items: [
@@ -62,7 +75,8 @@ const groups: Array<{ title: string; description: string; items: MenuItem[] }> =
     ],
   },
   {
-    title: "이벤트·추첨",
+    key: "draws",
+    title: "뽑기·라이브·결과 관리",
     description: "뽑기, 라이브, 결과 관리",
     items: [
       { href: "/admin/draws", label: "뽑기·교환·확률", icon: TicketCheck, minimum: "MANAGER" },
@@ -74,7 +88,8 @@ const groups: Array<{ title: string; description: string; items: MenuItem[] }> =
     ],
   },
   {
-    title: "보상·경제",
+    key: "rewards",
+    title: "추첨권·포인트·추천 보상",
     description: "추첨권, 포인트, 추천 보상",
     items: [
       { href: "/admin/tickets", label: "추첨권·포인트", icon: Tickets, capability: "GRANT_REWARD" },
@@ -84,7 +99,8 @@ const groups: Array<{ title: string; description: string; items: MenuItem[] }> =
     ],
   },
   {
-    title: "콘텐츠·회원",
+    key: "members",
+    title: "공지·문의·회원 운영",
     description: "공지, 문의, 회원 운영",
     items: [
       { href: "/admin/contents", label: "공지·이벤트", icon: Megaphone, minimum: "MANAGER" },
@@ -98,7 +114,8 @@ const groups: Array<{ title: string; description: string; items: MenuItem[] }> =
     ],
   },
   {
-    title: "운영 조직",
+    key: "workspace",
+    title: "권한·메모·회의록",
     description: "권한, 메모, 회의록",
     items: [
       { href: "/admin/permissions", label: "관리자 권한", icon: ShieldCheck, minimum: "SUPER_ADMIN" },
@@ -107,7 +124,8 @@ const groups: Array<{ title: string; description: string; items: MenuItem[] }> =
     ],
   },
   {
-    title: "시스템",
+    key: "system",
+    title: "로그와 전체 설정",
     description: "로그와 전체 설정",
     items: [
       { href: "/admin/server-status", label: "서버 상태", icon: Activity, roles: ["VIEWER", "CS_MANAGER", "MANAGER", "SUPER_ADMIN"] },
@@ -127,37 +145,123 @@ function canSeeItem(role: string, item: MenuItem) {
   return hasMinimumRole(role, item.minimum ?? "VIEWER");
 }
 
+function isActivePath(pathname: string, href: string) {
+  return href === "/admin" ? pathname === href : pathname.startsWith(href);
+}
+
+function saveCollapsedGroups(next: Set<string>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(next)));
+}
+
 export function AdminSidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname();
   const role = normalizeRole(profile.role);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set<string>());
+
+  const visibleGroups = useMemo(
+    () =>
+      groups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => canSeeItem(role, item)),
+        }))
+        .filter((group) => group.items.length > 0),
+    [role],
+  );
+
+  const activeGroupKey = useMemo(() => {
+    return visibleGroups.find((group) => group.items.some((item) => isActivePath(pathname, item.href)))?.key ?? null;
+  }, [pathname, visibleGroups]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setCollapsedGroups(new Set<string>(parsed.filter((value): value is string => typeof value === "string")));
+    } catch {
+      setCollapsedGroups(new Set<string>());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeGroupKey) return;
+    setCollapsedGroups((previous) => {
+      if (!previous.has(activeGroupKey)) return previous;
+      const next = new Set<string>(previous);
+      next.delete(activeGroupKey);
+      saveCollapsedGroups(next);
+      return next;
+    });
+  }, [activeGroupKey]);
+
+  function toggleGroup(groupKey: string) {
+    setCollapsedGroups((previous) => {
+      const next = new Set<string>(previous);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      saveCollapsedGroups(next);
+      return next;
+    });
+  }
 
   return (
     <aside className="admin-sidebar">
-      <div className="admin-profile-card">
+      <div className="admin-user">
         <strong>{profile.display_name}</strong>
         <span>{ROLE_LABELS[role] ?? role}</span>
       </div>
 
-      <nav className="admin-nav-groups">
-        {groups.map((group) => {
-          const visibleItems = group.items.filter((item) => canSeeItem(role, item));
-          if (!visibleItems.length) return null;
-          const groupActive = visibleItems.some((item) => (item.href === "/admin" ? pathname === item.href : pathname.startsWith(item.href)));
+      <nav className="admin-nav" aria-label="관리자 메뉴">
+        {visibleGroups.map((group) => {
+          const groupActive = group.items.some((item) => isActivePath(pathname, item.href));
+          const isCollapsed = collapsedGroups.has(group.key) && !groupActive;
+          const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
 
           return (
-            <section className={groupActive ? "admin-nav-group active" : "admin-nav-group"} key={group.title}>
+            <section className={groupActive ? "admin-nav-group active" : "admin-nav-group"} key={group.key}>
               <div className="admin-nav-group-title">
-                <span>{group.title}</span>
-                <small>{group.description}</small>
+                <button
+                  type="button"
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`admin-nav-${group.key}`}
+                  onClick={() => toggleGroup(group.key)}
+                  style={{
+                    alignItems: "center",
+                    appearance: "none",
+                    background: "transparent",
+                    border: 0,
+                    color: "inherit",
+                    cursor: "pointer",
+                    display: "flex",
+                    gap: 8,
+                    justifyContent: "space-between",
+                    padding: 0,
+                    textAlign: "left",
+                    width: "100%",
+                  }}
+                >
+                  <strong>{group.title}</strong>
+                  <small style={{ alignItems: "center", display: "inline-flex", gap: 3, whiteSpace: "nowrap" }}>
+                    <ToggleIcon size={13} /> {isCollapsed ? "펼치기" : "접기"}
+                  </small>
+                </button>
+                <span>{group.description}</span>
               </div>
-              {visibleItems.map(({ href, label, icon: Icon }) => {
-                const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
-                return (
-                  <Link className={active ? "admin-nav-link active" : "admin-nav-link"} href={href} key={href}>
-                    <Icon size={17} /> {label}
-                  </Link>
-                );
-              })}
+
+              {!isCollapsed && (
+                <div className="admin-nav-group-links" id={`admin-nav-${group.key}`}>
+                  {group.items.map(({ href, label, icon: Icon }) => {
+                    const active = isActivePath(pathname, href);
+                    return (
+                      <Link className={active ? "active" : undefined} href={href} key={href}>
+                        <Icon size={17} /> {label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           );
         })}

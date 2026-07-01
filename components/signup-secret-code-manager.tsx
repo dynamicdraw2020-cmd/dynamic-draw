@@ -145,7 +145,6 @@ export function SignupSecretCodeManager({
       <section className="panel panel-pad">
         <div className="section-head">
           <div>
-            <p className="eyebrow">Signup Gate</p>
             <h2 className="panel-title">가입 시크릿코드 발급</h2>
             <p className="muted">모든 관리자가 발급할 수 있습니다. 코드는 1회용이며 발급 후 4시간이 지나면 자동으로 사용할 수 없습니다.</p>
           </div>
@@ -186,7 +185,6 @@ export function SignupSecretCodeManager({
       <section className="panel panel-pad">
         <div className="section-head">
           <div>
-            <p className="eyebrow">CS Button</p>
             <h2 className="panel-title">회원가입 화면 신청 버튼</h2>
             <p className="muted">회원가입 화면에서 사용자가 누를 CS 연결 버튼입니다.</p>
           </div>
@@ -220,7 +218,6 @@ export function SignupSecretCodeManager({
       <section className="panel panel-pad">
         <div className="section-head">
           <div>
-            <p className="eyebrow">Issued Codes</p>
             <h2 className="panel-title">시크릿코드 현황</h2>
             <p className="muted">사용 가능 {activeCount.toLocaleString()}개 / 최근 {codes.length.toLocaleString()}개 표시</p>
           </div>

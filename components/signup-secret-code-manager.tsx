@@ -1,6 +1,6 @@
 "use client";
 
-import { Clipboard, ExternalLink, KeyRound, LoaderCircle, RotateCcw, Settings, ShieldCheck } from "lucide-react";
+import { Clipboard, ExternalLink, KeyRound, LoaderCircle, RotateCcw, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { formatDateTime } from "@/lib/utils";
@@ -221,7 +221,6 @@ export function SignupSecretCodeManager({
             <h2 className="panel-title">시크릿코드 현황</h2>
             <p className="muted">사용 가능 {activeCount.toLocaleString()}개 / 최근 {codes.length.toLocaleString()}개 표시</p>
           </div>
-          <ShieldCheck size={28} />
         </div>
 
         <div className="table-wrap mt-4">

@@ -60,7 +60,7 @@ export default async function AdminSignupSecretCodesPage() {
       {dbError ? (
         <section className="panel panel-pad">
           <h2 className="panel-title">DB 보정 SQL 적용 필요</h2>
-          <p className="muted">시크릿코드 테이블을 찾지 못했습니다. 먼저 v1.6.2 SQL 교체용 메모장 파일을 Supabase SQL Editor에서 실행해 주세요.</p>
+          <p className="muted">시크릿코드 테이블을 찾지 못했습니다. 먼저 v1.6.1 이상 SQL 교체용 메모장 파일을 Supabase SQL Editor에서 실행해 주세요.</p>
           <pre className="code-block">{dbError}</pre>
         </section>
       ) : (

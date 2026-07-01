@@ -4,7 +4,15 @@ import { TicketGrantManager } from "@/components/ticket-grant-manager";
 import { hasMinimumRole } from "@/lib/admin-capabilities";
 import { requireAdminCapability } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AdminCurrencyBalance, AdminTicketBalance, Draw, Profile, TicketExchangeRate, VirtualCurrency } from "@/lib/types";
+import type {
+  AdminCurrencyBalance,
+  AdminRewardRecoveryLog,
+  AdminTicketBalance,
+  Draw,
+  Profile,
+  TicketExchangeRate,
+  VirtualCurrency,
+} from "@/lib/types";
 
 export const metadata: Metadata = { title: "추첨권·화폐" };
 export const dynamic = "force-dynamic";
@@ -14,6 +22,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 type RawTicketBalance = { profile_id: string; draw_id: string; quantity: number; updated_at: string | null };
 type RawCurrencyBalance = { profile_id: string; currency_id: string; balance: number; updated_at: string | null };
 type RawExchangeRate = TicketExchangeRate & { deleted_at?: string | null };
+type RawRecoveryLog = Omit<AdminRewardRecoveryLog, "profile_name" | "profile_email" | "profile_username" | "member_code" | "draw_name" | "currency_name" | "currency_symbol" | "admin_name">;
 
 async function safeList<T>(promise: Promise<{ data: unknown; error: unknown }>): Promise<T[]> {
   try {
@@ -26,7 +35,7 @@ async function safeList<T>(promise: Promise<{ data: unknown; error: unknown }>):
 }
 
 async function loadTicketPageData(admin: AdminClient) {
-  const [draws, members, rawBalances, currencies, rawCurrencyBalances, rawExchangeRates] = await Promise.all([
+  const [draws, members, rawBalances, currencies, rawCurrencyBalances, rawExchangeRates, rawRecoveryLogs] = await Promise.all([
     safeList<Draw>(
       admin
         .from("draws")
@@ -60,6 +69,13 @@ async function loadTicketPageData(admin: AdminClient) {
         .from("ticket_exchange_rates")
         .select("id,draw_id,currency_id,currency_cost,ticket_quantity,is_active,sort_order,deleted_at")
         .order("sort_order", { ascending: true }) as unknown as Promise<{ data: unknown; error: unknown }>,
+    ),
+    safeList<RawRecoveryLog>(
+      admin
+        .from("admin_reward_recovery_logs")
+        .select("id,kind,profile_id,draw_id,currency_id,amount_recovered,balance_before,balance_after,reason,memo,created_by,ip_address,user_agent,details,created_at")
+        .order("created_at", { ascending: false })
+        .limit(100) as unknown as Promise<{ data: unknown; error: unknown }>,
     ),
   ]);
 
@@ -119,7 +135,28 @@ async function loadTicketPageData(admin: AdminClient) {
       };
     });
 
-  return { draws, members, balances, currencies, currencyBalances, exchangeRates };
+  const recoveryLogs: AdminRewardRecoveryLog[] = rawRecoveryLogs.map((log) => {
+    const profile = profileMap.get(log.profile_id);
+    const adminProfile = log.created_by ? profileMap.get(log.created_by) : null;
+    const draw = log.draw_id ? drawMap.get(log.draw_id) : null;
+    const currency = log.currency_id ? currencyMap.get(log.currency_id) : null;
+    return {
+      ...log,
+      amount_recovered: Number(log.amount_recovered ?? 0),
+      balance_before: Number(log.balance_before ?? 0),
+      balance_after: Number(log.balance_after ?? 0),
+      profile_name: profile?.display_name ?? null,
+      profile_email: profile?.email ?? null,
+      profile_username: profile?.username ?? null,
+      member_code: profile?.member_code ?? null,
+      draw_name: draw?.name ?? null,
+      currency_name: currency?.name ?? null,
+      currency_symbol: currency?.symbol ?? null,
+      admin_name: adminProfile?.display_name ?? null,
+    };
+  });
+
+  return { draws, members, balances, currencies, currencyBalances, exchangeRates, recoveryLogs };
 }
 
 export default async function AdminTicketsPage() {
@@ -128,26 +165,24 @@ export default async function AdminTicketsPage() {
   const data = await loadTicketPageData(admin);
   const fullManager = hasMinimumRole(profile.role, "MANAGER");
 
-  return (
-    <>
-      {fullManager ? (
-        <TicketGrantManager
-          draws={data.draws}
-          members={data.members}
-          balances={data.balances}
-          currencies={data.currencies}
-          currencyBalances={data.currencyBalances}
-          exchangeRates={data.exchangeRates}
-        />
-      ) : (
-        <CsGrantManager
-          draws={data.draws}
-          members={data.members}
-          balances={data.balances}
-          currencies={data.currencies}
-          currencyBalances={data.currencyBalances}
-        />
-      )}
-    </>
+  return fullManager ? (
+    <TicketGrantManager
+      draws={data.draws}
+      members={data.members}
+      balances={data.balances}
+      currencies={data.currencies}
+      currencyBalances={data.currencyBalances}
+      exchangeRates={data.exchangeRates}
+      recoveryLogs={data.recoveryLogs}
+    />
+  ) : (
+    <CsGrantManager
+      draws={data.draws}
+      members={data.members}
+      balances={data.balances}
+      currencies={data.currencies}
+      currencyBalances={data.currencyBalances}
+      recoveryLogs={data.recoveryLogs}
+    />
   );
 }

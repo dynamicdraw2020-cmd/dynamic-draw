@@ -423,3 +423,29 @@ export interface AdminRewardSystemData {
     referralReferredBoxAmount: number;
   };
 }
+
+export interface AdminRewardRecoveryLog {
+  id: string;
+  kind: "TICKET" | "CURRENCY";
+  profile_id: string;
+  draw_id: string | null;
+  currency_id: string | null;
+  amount_recovered: number;
+  balance_before: number;
+  balance_after: number;
+  reason: string;
+  memo: string | null;
+  created_by: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+  profile_name?: string | null;
+  profile_email?: string | null;
+  profile_username?: string | null;
+  member_code?: string | null;
+  draw_name?: string | null;
+  currency_name?: string | null;
+  currency_symbol?: string | null;
+  admin_name?: string | null;
+}

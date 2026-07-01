@@ -18,9 +18,10 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   const status = first(params.status);
   const loginState = first(params.loginState);
   const allMembers = await getAdminMembers();
+  const rejectedMemberCount = allMembers.filter((member) => member.status === "REJECTED" && member.role === "USER" && member.id !== currentAdmin.id).length;
   const members = allMembers.filter((member) => {
     const matchesText = !query || [member.display_name, displayLoginId(member), member.member_code ?? ""].some((value) => value.toLowerCase().includes(query));
-    const matchesStatus = !status || member.status === status;
+    const matchesStatus = status ? member.status === status : member.status !== "DELETED";
     const matchesLoginState = !loginState || member.login_state === loginState;
     return matchesText && matchesStatus && matchesLoginState;
   });
@@ -40,6 +41,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
             <option value="APPROVED">승인</option>
             <option value="REJECTED">반려</option>
             <option value="SUSPENDED">정지</option>
+            <option value="DELETED">삭제 처리</option>
           </select>
         </label>
         <label>
@@ -59,7 +61,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
         <p className="muted">검색 결과 {members.length.toLocaleString()}명 / 전체 {allMembers.length.toLocaleString()}명</p>
       </form>
 
-      <BulkMemberTable members={members} currentAdmin={currentAdmin} />
+      <BulkMemberTable members={members} currentAdmin={currentAdmin} rejectedMemberCount={rejectedMemberCount} />
     </>
   );
 }

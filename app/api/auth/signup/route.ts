@@ -141,7 +141,7 @@ export async function POST(request: Request) {
 
   if (secretStatusError) {
     return fail(
-      "가입 시크릿코드 검증 기능이 DB에 아직 적용되지 않았습니다.\n관리자에게 v1.6.2 SQL 적용 여부를 확인해 주세요.",
+      "가입 시크릿코드 검증 기능이 DB에 아직 적용되지 않았습니다.\n관리자에게 v1.6.1 이상 SQL 적용 여부를 확인해 주세요.",
       503,
       "SIGNUP_SECRET_SQL_REQUIRED",
       secretStatusError.message,

@@ -3,6 +3,7 @@
 import { ArrowRight, ExternalLink, IdCard, KeyRound, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 type SignupSecretSettings = {
   buttonLabel: string;
@@ -47,8 +48,7 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
   useEffect(() => {
     if (mode !== "signup") return;
     let mounted = true;
-    fetch("/api/public/signup-secret-settings", { cache: "no-store" })
-      .then((response) => response.json())
+    clientJsonRequest<{ data?: Partial<SignupSecretSettings> }>("/api/public/signup-secret-settings", { cache: "no-store", timeoutMs: 5000 })
       .then((body) => {
         if (!mounted || !body?.data) return;
         setSettings({
@@ -78,19 +78,21 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
       return;
     }
 
-    const response = await fetch(`/api/auth/${mode}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...payload, nextPath, browserFingerprint: hashSmall(simpleFingerprintSource()) }),
-    });
-    const body = await response.json().catch(() => ({}));
-
-    setLoading(false);
-
-    if (!response.ok) {
-      setMessage({ type: "error", text: body.error?.message ?? "처리 중 오류가 발생했습니다." });
+    let body: { data?: { message?: string; redirectTo?: string } };
+    try {
+      body = await clientJsonRequest(`/api/auth/${mode}`, {
+        method: "POST",
+        json: { ...payload, nextPath, browserFingerprint: hashSmall(simpleFingerprintSource()) },
+        timeoutMs: 5000,
+        fallbackMessage: "처리 중 오류가 발생했습니다.",
+      });
+    } catch (error) {
+      setLoading(false);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "처리 중 오류가 발생했습니다." });
       return;
     }
+
+    setLoading(false);
 
     if (mode === "signup") {
       setMessage({ type: "success", text: body.data?.message ?? "가입 신청이 완료되었습니다." });

@@ -1,7 +1,10 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({
   requestUrl: z.string().trim().max(500).optional().default(""),
   buttonLabel: z.string().trim().min(2).max(40).optional().default("시크릿코드 신청하기"),
@@ -18,7 +21,7 @@ function validateUrl(value: string) {
   }
 }
 
-export async function PATCH(request: Request) {
+async function patchHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -28,7 +31,7 @@ export async function PATCH(request: Request) {
   const guard = await requireApiCapability("SIGNUP_SECRET_SETTINGS");
   if ("error" in guard) return guard.error;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("시크릿코드 신청 버튼 설정을 확인해 주세요.", 422, "VALIDATION_ERROR", parsed.error.flatten());
   if (!validateUrl(parsed.data.requestUrl)) return fail("신청 링크는 https:// 주소 또는 사이트 내부 /경로 형식이어야 합니다.", 422, "INVALID_REQUEST_URL");
 
@@ -67,3 +70,5 @@ export async function PATCH(request: Request) {
 
   return ok(parsed.data);
 }
+
+export const PATCH = withApiRoute(patchHandler, { routeName: "/api/admin/signup-secret-settings", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

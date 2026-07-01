@@ -1,7 +1,10 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({
   drawId: z.uuid(),
   targetMode: z.enum(["ONE", "ALL"]).optional().default("ONE"),
@@ -10,7 +13,7 @@ const schema = z.object({
   memo: z.string().trim().max(200).optional().nullable(),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
   const guard = await requireApiCapability("GRANT_REWARD");
   if ("error" in guard) return guard.error;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "추첨권 지급 정보를 확인해 주세요.", 422, "VALIDATION_ERROR", parsed.error.flatten());
   if (parsed.data.targetMode === "ONE" && !parsed.data.profileId) return fail("지급할 회원을 선택해 주세요.", 422, "PROFILE_REQUIRED");
 
@@ -55,3 +58,5 @@ export async function POST(request: Request) {
 
   return ok(data, 201);
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/tickets", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

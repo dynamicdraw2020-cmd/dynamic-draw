@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireApiAdmin, requestMeta } from "@/lib/api";
+import { requireApiAdmin, requestMeta, withApiRoute } from "@/lib/api";
 import { publicEnv, supabaseAdminConfigured, supabaseConfigured } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const maxDuration = 5;
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -79,6 +81,11 @@ async function countTable(table: string): Promise<CountResult> {
   }
 }
 
+
+function settledValue<T>(result: PromiseSettledResult<T>, fallback: T) {
+  return result.status === "fulfilled" ? result.value : fallback;
+}
+
 function trafficEstimate(counts: CountResult[], db: CheckResult) {
   const dbMs = db.ok ? db.ms : 9999;
   const hasCoreTables = counts.filter((item) => item.ok).length >= 4;
@@ -103,7 +110,7 @@ function trafficEstimate(counts: CountResult[], db: CheckResult) {
   };
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const started = nowMs();
   const guard = await requireApiAdmin("VIEWER");
   if ("error" in guard) return guard.error;
@@ -122,7 +129,7 @@ export async function GET(request: Request) {
 
   const dbCheck = await checkDatabase();
   const rpcCheck = await checkRpc();
-  const counts = await Promise.all([
+  const countResults = await Promise.allSettled([
     countTable("profiles"),
     countTable("draws"),
     countTable("results"),
@@ -130,6 +137,15 @@ export async function GET(request: Request) {
     countTable("signup_secret_codes"),
     countTable("security_events"),
   ]);
+  const fallbackCount = (table: string): CountResult => ({ table, ok: false, count: null, ms: 0, message: "fallback" });
+  const counts = [
+    settledValue(countResults[0], fallbackCount("profiles")),
+    settledValue(countResults[1], fallbackCount("draws")),
+    settledValue(countResults[2], fallbackCount("results")),
+    settledValue(countResults[3], fallbackCount("support_tickets")),
+    settledValue(countResults[4], fallbackCount("signup_secret_codes")),
+    settledValue(countResults[5], fallbackCount("security_events")),
+  ];
 
   const checks = [appCheck, dbCheck, rpcCheck];
   const healthy = appCheck.ok && dbCheck.ok && counts.some((item) => item.table === "profiles" && item.ok);
@@ -167,3 +183,5 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ ok: healthy, data: payload }, { status: healthy ? 200 : 207 });
 }
+
+export const GET = withApiRoute(getHandler, { routeName: "/api/admin/server-status", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

@@ -1,7 +1,10 @@
-import { fail, ok, requireApiCapability } from "@/lib/api";
+import { fail, ok, requireApiCapability, withApiRoute } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function GET() {
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
+async function getHandler() {
   const guard = await requireApiCapability("SUPPORT_REPLY");
   if ("error" in guard) return guard.error;
 
@@ -45,3 +48,5 @@ export async function GET() {
     return fail(error instanceof Error ? error.message : "문의 목록을 불러오지 못했습니다.", 500, "ADMIN_SUPPORT_LIST_FAILED");
   }
 }
+
+export const GET = withApiRoute(getHandler, { routeName: "/api/admin/support/list", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

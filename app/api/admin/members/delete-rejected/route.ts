@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 5;
 
 const schema = z.object({
   confirm: z.string().trim().refine((value) => value === "DELETE_REJECTED", "확인 문구가 일치하지 않습니다."),
@@ -17,7 +17,7 @@ type DeleteRejectedResult = {
   deleteMode?: string;
 };
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const guard = await requireApiAdmin("SUPER_ADMIN");
   if ("error" in guard) return guard.error;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "요청 값을 확인해 주세요.", 422, "INVALID_REJECTED_DELETE_REQUEST");
   }
@@ -80,3 +80,5 @@ export async function POST(request: Request) {
     deleteMode: result.deleteMode ?? "SOFT_DELETE",
   });
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/members/delete-rejected", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

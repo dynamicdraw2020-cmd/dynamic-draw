@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import type { AdminCurrencyBalance, AdminRewardRecoveryLog, AdminTicketBalance, Draw, Profile, TicketExchangeRate, VirtualCurrency } from "@/lib/types";
 import { displayLoginId } from "@/lib/identity";
 import { formatDateTime } from "@/lib/utils";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 type AdminExchangeRate = TicketExchangeRate & { draw_name?: string; currency_name?: string; currency_symbol?: string };
 
@@ -49,14 +50,12 @@ const compactActionsStyle: CSSProperties = {
 const fullButtonStyle: CSSProperties = { width: "100%", justifyContent: "center" };
 
 async function jsonRequest(url: string, body: unknown = {}, method = "POST") {
-  const response = await fetch(url, {
+  return clientJsonRequest<{ data?: Record<string, unknown> }>(url, {
     method,
-    headers: { "content-type": "application/json" },
-    body: method === "DELETE" ? undefined : JSON.stringify(body),
+    json: method === "DELETE" ? undefined : body,
+    timeoutMs: 5000,
+    fallbackMessage: "요청을 처리하지 못했습니다.",
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error?.message ?? "요청을 처리하지 못했습니다.");
-  return data;
 }
 
 function recoveryKindLabel(kind: AdminRewardRecoveryLog["kind"]) {

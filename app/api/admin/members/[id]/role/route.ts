@@ -1,10 +1,13 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({ role: z.enum(["USER", "VIEWER", "CS_MANAGER", "MANAGER", "SUPER_ADMIN"]) });
 
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+async function patchHandler(request: Request, context: { params: Promise<{ id: string }> }) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -17,7 +20,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const { id } = await context.params;
   if (!z.uuid().safeParse(id).success) return fail("잘못된 회원 ID입니다.", 400);
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("변경할 역할을 확인해 주세요.", 422);
 
   if (id === guard.auth.userId && parsed.data.role !== "SUPER_ADMIN") {
@@ -59,3 +62,5 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   return ok(data);
 }
+
+export const PATCH = withApiRoute(patchHandler, { routeName: "/api/admin/members/[id]/role", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

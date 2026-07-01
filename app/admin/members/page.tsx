@@ -18,7 +18,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   const query = first(params.q).trim().toLowerCase();
   const status = first(params.status);
   const loginState = first(params.loginState);
-  const allMembers = await getAdminMembers();
+  const allMembers = await getAdminMembers().catch(() => []);
   const rejectedMemberCount = allMembers.filter((member) => member.status === "REJECTED" && member.role === "USER" && member.id !== currentAdmin.id).length;
   const members = allMembers.filter((member) => {
     const matchesText = !query || [member.display_name, displayLoginId(member), member.member_code ?? ""].some((value) => value.toLowerCase().includes(query));

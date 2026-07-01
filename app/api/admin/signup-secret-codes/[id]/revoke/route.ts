@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({
   reason: z.string().trim().max(200).optional().default("관리자 회수"),
 });
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+async function postHandler(request: Request, context: { params: Promise<{ id: string }> }) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -19,7 +22,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   if (!z.uuid().safeParse(id).success) return fail("잘못된 시크릿코드 ID입니다.", 400, "INVALID_SECRET_CODE_ID");
 
-  const parsed = schema.safeParse(await request.json().catch(() => ({})));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => ({})));
   if (!parsed.success) return fail("회수 사유를 확인해 주세요.", 422, "VALIDATION_ERROR");
 
   const admin = createAdminClient();
@@ -65,3 +68,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   return ok(data);
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/signup-secret-codes/[id]/revoke", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

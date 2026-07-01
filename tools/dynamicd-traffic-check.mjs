@@ -35,7 +35,7 @@ async function one(index) {
   const started = performance.now();
   try {
     const response = await fetch(`${target}${target.includes("?") ? "&" : "?"}trafficCheck=${Date.now()}-${index}`, {
-      headers: { "user-agent": "DynamicD-Traffic-Check/1.6.1" },
+      headers: { "user-agent": "DynamicD-Traffic-Check/1.7.1" },
       cache: "no-store",
     });
     const ms = performance.now() - started;

@@ -3,6 +3,7 @@ import { SignupSecretCodeManager } from "@/components/signup-secret-code-manager
 import { hasCapability } from "@/lib/admin-capabilities";
 import { requireAdminCapability } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fulfilledValue, safeRows } from "@/lib/ops/safe-query";
 
 export const metadata: Metadata = { title: "가입 시크릿코드" };
 export const dynamic = "force-dynamic";
@@ -36,24 +37,28 @@ export default async function AdminSignupSecretCodesPage() {
   const profile = await requireAdminCapability("SIGNUP_SECRET_CODES");
   const admin = createAdminClient();
 
-  let codes: SecretCodeRow[] = [];
-  let dbError = "";
+  const [codesResult, settingRowsResult] = await Promise.allSettled([
+    safeRows<SecretCodeRow>(
+      admin
+        .from("signup_secret_codes")
+        .select("id,code_label,issued_by,issued_to_note,expires_at,used_by,used_login_id,used_at,revoked_at,revoked_by,revoke_reason,created_at")
+        .order("created_at", { ascending: false })
+        .limit(300),
+      "signup secret codes page",
+    ),
+    safeRows<{ key: string; value: unknown }>(
+      admin
+        .from("site_settings")
+        .select("key,value")
+        .in("key", ["signup_secret_request_url", "signup_secret_request_button_label", "signup_secret_request_help_text"]),
+      "signup secret settings page",
+    ),
+  ]);
 
-  const { data, error } = await admin
-    .from("signup_secret_codes")
-    .select("id,code_label,issued_by,issued_to_note,expires_at,used_by,used_login_id,used_at,revoked_at,revoked_by,revoke_reason,created_at")
-    .order("created_at", { ascending: false })
-    .limit(300);
-
-  if (error) dbError = error.message;
-  else codes = (data ?? []) as SecretCodeRow[];
-
-  const { data: settingRows } = await admin
-    .from("site_settings")
-    .select("key,value")
-    .in("key", ["signup_secret_request_url", "signup_secret_request_button_label", "signup_secret_request_help_text"]);
-
-  const settingMap = new Map<string, string>((settingRows ?? []).map((row: { key: string; value: unknown }) => [row.key, cleanValue(row.value)]));
+  const codes = fulfilledValue(codesResult, [] as SecretCodeRow[]);
+  const settingRows = fulfilledValue(settingRowsResult, [] as Array<{ key: string; value: unknown }>);
+  const dbError = "";
+  const settingMap = new Map<string, string>(settingRows.map((row) => [row.key, cleanValue(row.value)]));
 
   return (
     <>

@@ -3,6 +3,7 @@
 import { Check, LoaderCircle, ShieldBan, Trash2, UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 function allowedActionsForRole(adminRole: string) {
   if (adminRole === "CS_MANAGER") return new Set(["approve", "suspend", "restore"]);
@@ -44,17 +45,20 @@ export function MemberActions({
     }
 
     setLoading(type);
-    const response = await fetch(`/api/admin/members/${memberId}/${type}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json().catch(() => ({}));
-    setLoading(null);
-
-    if (!response.ok) return window.alert(body.error?.message ?? "처리하지 못했습니다.");
-    if (type === "approve") window.alert(`승인 완료 · 고유 ID ${body.data?.member_code ?? "자동 발급"}`);
-    router.refresh();
+    try {
+      const body = await clientJsonRequest<{ data?: { member_code?: string } }>(`/api/admin/members/${memberId}/${type}`, {
+        method: "POST",
+        json: payload,
+        timeoutMs: 5000,
+        fallbackMessage: "처리하지 못했습니다.",
+      });
+      if (type === "approve") window.alert(`승인 완료 · 고유 ID ${body.data?.member_code ?? "자동 발급"}`);
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "처리하지 못했습니다.");
+    } finally {
+      setLoading(null);
+    }
   }
 
   if (!canManage) return <span>보호된 계정</span>;

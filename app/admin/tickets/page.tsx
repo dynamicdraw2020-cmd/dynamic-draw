@@ -34,8 +34,12 @@ async function safeList<T>(promise: Promise<{ data: unknown; error: unknown }>):
   }
 }
 
+function settledList<T>(result: PromiseSettledResult<T[]>): T[] {
+  return result.status === "fulfilled" ? result.value : [];
+}
+
 async function loadTicketPageData(admin: AdminClient) {
-  const [draws, members, rawBalances, currencies, rawCurrencyBalances, rawExchangeRates, rawRecoveryLogs] = await Promise.all([
+  const [drawsResult, membersResult, rawBalancesResult, currenciesResult, rawCurrencyBalancesResult, rawExchangeRatesResult, rawRecoveryLogsResult] = await Promise.allSettled([
     safeList<Draw>(
       admin
         .from("draws")
@@ -78,6 +82,14 @@ async function loadTicketPageData(admin: AdminClient) {
         .limit(100) as unknown as Promise<{ data: unknown; error: unknown }>,
     ),
   ]);
+
+  const draws = settledList<Draw>(drawsResult);
+  const members = settledList<Profile>(membersResult);
+  const rawBalances = settledList<RawTicketBalance>(rawBalancesResult);
+  const currencies = settledList<VirtualCurrency>(currenciesResult);
+  const rawCurrencyBalances = settledList<RawCurrencyBalance>(rawCurrencyBalancesResult);
+  const rawExchangeRates = settledList<RawExchangeRate>(rawExchangeRatesResult);
+  const rawRecoveryLogs = settledList<RawRecoveryLog>(rawRecoveryLogsResult);
 
   const profileMap = new Map(members.map((member) => [member.id, member]));
   const drawMap = new Map(draws.map((draw) => [draw.id, draw]));

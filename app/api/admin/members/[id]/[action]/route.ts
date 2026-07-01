@@ -1,9 +1,12 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { canManageMemberStatus } from "@/lib/admin-capabilities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { handleApprovalRewards } from "@/lib/reward-engine";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const approveSchema = z.object({
   memberCode: z
     .string()
@@ -34,7 +37,7 @@ async function obtainMemberCode(admin: AdminClient, requested?: string) {
   return data;
 }
 
-export async function POST(request: Request, context: { params: Promise<{ id: string; action: string }> }) {
+async function postHandler(request: Request, context: { params: Promise<{ id: string; action: string }> }) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -75,7 +78,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if ((count ?? 0) <= 1) return fail("최고 관리자는 최소 한 명이 남아 있어야 합니다.", 409, "LAST_SUPER_ADMIN");
   }
 
-  const body = await request.json().catch(() => ({}));
+  const body = await readJsonWithLimit(request).catch(() => ({}));
   let update: Record<string, unknown>;
   let logAction: string;
 
@@ -175,3 +178,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   return ok(data);
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/members/[id]/[action]", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

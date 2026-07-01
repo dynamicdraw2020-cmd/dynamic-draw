@@ -1,10 +1,13 @@
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
+import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { isAdminRole } from "@/lib/admin-capabilities";
 import { credentialToAuthEmail } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({
   loginId: z.string().trim().min(1),
   password: z.string().min(1),
@@ -12,7 +15,7 @@ const schema = z.object({
   browserFingerprint: z.string().trim().max(120).optional().default(""),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit(`login:v160:${meta.ip}`, 10, 60 * 10);
   if (limited) return limited;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("아이디와 비밀번호를 확인해 주세요.", 422, "VALIDATION_ERROR");
 
   const supabase = await createClient();
@@ -114,3 +117,5 @@ export async function POST(request: Request) {
 
   return ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 10, windowSeconds: 60 } });

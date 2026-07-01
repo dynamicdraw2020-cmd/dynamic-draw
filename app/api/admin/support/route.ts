@@ -1,7 +1,10 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({
   id: z.uuid(),
   status: z.enum(["OPEN", "ANSWERED", "CLOSED"]),
@@ -9,7 +12,7 @@ const schema = z.object({
   internalMemo: z.string().trim().max(2000).optional().default(""),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -19,7 +22,7 @@ export async function POST(request: Request) {
   const guard = await requireApiCapability("SUPPORT_REPLY");
   if ("error" in guard) return guard.error;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("요청값을 확인해 주세요.", 422, "VALIDATION_ERROR", parsed.error.flatten());
 
   const { error } = await createAdminClient()
@@ -36,3 +39,5 @@ export async function POST(request: Request) {
   if (error) return fail("문의 답변을 저장하지 못했습니다.", 400, "SUPPORT_UPDATE_FAILED", error.message);
   return ok({ id: parsed.data.id });
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/support", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

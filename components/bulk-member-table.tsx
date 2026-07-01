@@ -4,6 +4,7 @@ import { CheckSquare, LoaderCircle, RotateCcw, ShieldBan, Square, Trash2 } from 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { MemberActions } from "@/components/member-actions";
+import { clientJsonRequest } from "@/lib/client-fetch";
 import { RoleManager } from "@/components/role-manager";
 import { StatusBadge } from "@/components/status-badge";
 import { displayLoginId } from "@/lib/identity";
@@ -48,10 +49,12 @@ export function BulkMemberTable({
   }
 
   async function jsonPost(url: string, body: unknown) {
-    const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error?.message ?? "처리하지 못했습니다.");
-    return data;
+    return clientJsonRequest<{ data?: Record<string, unknown> }>(url, {
+      method: "POST",
+      json: body,
+      timeoutMs: 5000,
+      fallbackMessage: "처리하지 못했습니다.",
+    });
   }
 
   async function deleteNonSuperAdmins() {

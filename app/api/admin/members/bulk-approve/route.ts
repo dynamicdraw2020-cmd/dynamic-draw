@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { handleApprovalRewards } from "@/lib/reward-engine";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({ memberIds: z.array(z.uuid()).min(1).max(300) });
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -13,7 +16,7 @@ async function nextMemberCode(admin: AdminClient) {
   return data;
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
   const guard = await requireApiCapability("MEMBER_STATUS");
   if ("error" in guard) return guard.error;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("승인할 회원을 선택해 주세요.", 422, "VALIDATION_ERROR");
 
   const ids = Array.from(new Set(parsed.data.memberIds));
@@ -72,3 +75,5 @@ export async function POST(request: Request) {
 
   return ok({ approvedCount: approved.length, approved });
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/members/bulk-approve", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

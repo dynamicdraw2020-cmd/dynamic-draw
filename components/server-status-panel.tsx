@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 type CheckResult = { name: string; ok: boolean; ms: number; message: string; details?: unknown };
 type CountResult = { table: string; ok: boolean; count: number | null; ms: number; message: string };
@@ -37,9 +38,11 @@ export function ServerStatusPanel({ initialData }: { initialData: ServerStatusPa
     setLoading(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/admin/server-status?ts=${Date.now()}`, { cache: "no-store" });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok && response.status !== 207) throw new Error(body.error?.message ?? "서버 상태를 불러오지 못했습니다.");
+      const body = await clientJsonRequest<{ data?: ServerStatusPayload | null }>(`/api/admin/server-status?ts=${Date.now()}`, {
+        cache: "no-store",
+        timeoutMs: 5000,
+        fallbackMessage: "서버 상태를 불러오지 못했습니다.",
+      });
       setData(body.data ?? null);
       setMessage(`갱신 완료 · ${new Date().toLocaleTimeString("ko-KR")}`);
     } catch (error) {

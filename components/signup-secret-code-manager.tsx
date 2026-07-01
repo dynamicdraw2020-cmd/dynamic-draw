@@ -4,6 +4,7 @@ import { Clipboard, ExternalLink, KeyRound, LoaderCircle, RotateCcw, Settings } 
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { formatDateTime } from "@/lib/utils";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 type SecretCode = {
   id: string;
@@ -42,14 +43,12 @@ function statusOf(code: SecretCode) {
 }
 
 async function jsonRequest(url: string, body: unknown = {}, method = "POST") {
-  const response = await fetch(url, {
+  return clientJsonRequest<{ data?: Record<string, unknown> }>(url, {
     method,
-    headers: { "content-type": "application/json" },
-    body: method === "GET" ? undefined : JSON.stringify(body),
+    json: method === "GET" ? undefined : body,
+    timeoutMs: 5000,
+    fallbackMessage: "요청을 처리하지 못했습니다.",
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error?.message ?? "요청을 처리하지 못했습니다.");
-  return data;
 }
 
 export function SignupSecretCodeManager({

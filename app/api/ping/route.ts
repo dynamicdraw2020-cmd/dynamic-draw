@@ -1,9 +1,12 @@
+import { withApiRoute } from "@/lib/api";
 import { NextResponse } from "next/server";
 
+
+export const maxDuration = 5;
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+async function getHandler() {
   const now = new Date();
   return NextResponse.json({
     ok: true,
@@ -15,3 +18,5 @@ export async function GET() {
     deployment: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? null,
   });
 }
+
+export const GET = withApiRoute(getHandler, { routeName: "/api/ping", rateLimit: false });

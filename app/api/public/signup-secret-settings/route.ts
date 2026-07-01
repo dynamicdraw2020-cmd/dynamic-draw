@@ -1,6 +1,10 @@
-import { ok } from "@/lib/api";
+import { ok, withApiRoute } from "@/lib/api";
+import { cached } from "@/lib/ops/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const defaults = {
   requestUrl: "",
   buttonLabel: "시크릿코드 신청하기",
@@ -17,22 +21,27 @@ function cleanValue(value: unknown) {
   }
 }
 
-export async function GET() {
-  try {
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("site_settings")
-      .select("key,value")
-      .in("key", ["signup_secret_request_url", "signup_secret_request_button_label", "signup_secret_request_help_text"]);
+async function loadSettings() {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("site_settings")
+    .select("key,value")
+    .in("key", ["signup_secret_request_url", "signup_secret_request_button_label", "signup_secret_request_help_text"]);
 
-    const map = new Map((data ?? []).map((row: { key: string; value: unknown }) => [row.key, cleanValue(row.value)]));
+  const map = new Map((data ?? []).map((row: { key: string; value: unknown }) => [row.key, cleanValue(row.value)]));
 
-    return ok({
-      requestUrl: map.get("signup_secret_request_url") || defaults.requestUrl,
-      buttonLabel: map.get("signup_secret_request_button_label") || defaults.buttonLabel,
-      helpText: map.get("signup_secret_request_help_text") || defaults.helpText,
-    });
-  } catch {
-    return ok(defaults);
-  }
+  return {
+    requestUrl: map.get("signup_secret_request_url") || defaults.requestUrl,
+    buttonLabel: map.get("signup_secret_request_button_label") || defaults.buttonLabel,
+    helpText: map.get("signup_secret_request_help_text") || defaults.helpText,
+  };
 }
+
+async function getHandler() {
+  const settings = await cached("public:signup-secret-settings", 60, loadSettings, defaults);
+  const response = ok(settings);
+  response.headers.set("cache-control", "public, s-maxage=60, stale-while-revalidate=300");
+  return response;
+}
+
+export const GET = withApiRoute(getHandler, { routeName: "/api/public/signup-secret-settings", rateLimit: { kind: "api", limit: 60, windowSeconds: 60 } });

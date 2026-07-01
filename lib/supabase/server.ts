@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { publicEnv, supabaseConfigured } from "@/lib/env";
+import { createSupabaseFetch } from "@/lib/ops/safe-fetch";
+import { RUNTIME_LIMITS } from "@/lib/ops/runtime";
 
 export async function createClient() {
   if (!supabaseConfigured) {
@@ -10,6 +12,15 @@ export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
+    global: {
+      fetch: createSupabaseFetch({
+        label: "supabase-server",
+        timeoutMs: RUNTIME_LIMITS.defaultTimeoutMs,
+        retries: RUNTIME_LIMITS.retryCount,
+        circuitKey: "supabase-server",
+        returnFallbackResponse: true,
+      }),
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();

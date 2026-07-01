@@ -1,7 +1,10 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiCapability, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const createSchema = z.object({
   quantity: z.number().int().min(1).max(20).optional().default(1),
   note: z.string().trim().max(120).optional().default(""),
@@ -22,7 +25,7 @@ type SecretRow = {
   created_at: string;
 };
 
-export async function GET() {
+async function getHandler() {
   const guard = await requireApiCapability("SIGNUP_SECRET_CODES");
   if ("error" in guard) return guard.error;
 
@@ -38,7 +41,7 @@ export async function GET() {
   return ok({ codes: (data ?? []) as SecretRow[] });
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
   const guard = await requireApiCapability("SIGNUP_SECRET_CODES");
   if ("error" in guard) return guard.error;
 
-  const parsed = createSchema.safeParse(await request.json().catch(() => null));
+  const parsed = createSchema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("발급 수량과 메모를 확인해 주세요.", 422, "VALIDATION_ERROR", parsed.error.flatten());
 
   const admin = createAdminClient();
@@ -77,3 +80,7 @@ export async function POST(request: Request) {
 
   return ok({ issued }, 201);
 }
+
+export const GET = withApiRoute(getHandler, { routeName: "/api/admin/signup-secret-codes", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/admin/signup-secret-codes", rateLimit: { kind: "admin", limit: 20, windowSeconds: 60 } });

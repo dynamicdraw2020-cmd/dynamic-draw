@@ -4,16 +4,15 @@ import { AlertTriangle, LoaderCircle, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { UserRole } from "@/lib/types";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 async function jsonPost(url: string, body: unknown) {
-  const response = await fetch(url, {
+  return clientJsonRequest<{ data?: { deletedCount?: number } }>(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    json: body,
+    timeoutMs: 5000,
+    fallbackMessage: "처리하지 못했습니다.",
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error?.message ?? "처리하지 못했습니다.");
-  return data;
 }
 
 export function RejectedMembersCleanup({

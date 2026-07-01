@@ -1,10 +1,13 @@
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
+import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
 import { ensureReferralCode, nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 5;
 const schema = z.object({
   loginId: z.string().trim().min(1, "아이디를 입력해 주세요."),
   displayName: z.string().trim().min(2, "이름 또는 닉네임은 2자 이상 입력해 주세요.").max(30),
@@ -17,8 +20,20 @@ const schema = z.object({
 });
 
 type AdminClient = ReturnType<typeof createAdminClient>;
+
+function settledCount(result: PromiseSettledResult<{ count?: number | null }>) {
+  return result.status === "fulfilled" ? Number(result.value.count ?? 0) : 0;
+}
 type AuthAdminError = { code?: string; message?: string; status?: number } | null;
 type SecretValidation = { valid?: boolean; reason?: string; expiresAt?: string; codeLabel?: string } | null;
+type SignupGuardRelease = {
+  allowed?: boolean;
+  releaseId?: string;
+  kind?: string;
+  value?: string;
+  usesRemaining?: number;
+  expiresAt?: string;
+} | null;
 
 function looksAutomatedSignup(loginId: string, displayName: string) {
   const id = loginId.toLowerCase();
@@ -64,6 +79,26 @@ async function temporaryBlock(admin: AdminClient, kind: string, value: string, r
     });
   } catch {
     // 중복 또는 테이블 미적용 시 무시합니다.
+  }
+}
+
+async function consumeSignupGuardRelease(
+  admin: AdminClient,
+  payload: { loginId: string; ip: string; browserFingerprint: string; reason: string },
+): Promise<SignupGuardRelease> {
+  try {
+    const { data, error } = await admin.rpc("consume_signup_guard_release", {
+      p_login_id: payload.loginId.toLowerCase(),
+      p_ip: payload.ip,
+      p_browser_fingerprint: payload.browserFingerprint,
+      p_reason: payload.reason,
+    });
+
+    if (error) return null;
+    return (data ?? null) as SignupGuardRelease;
+  } catch {
+    // v1.6.8 SQL 적용 전에는 기존 방어 로직 그대로 동작합니다.
+    return null;
   }
 }
 
@@ -114,14 +149,14 @@ async function cleanupFailedSignup(admin: AdminClient, profileId: string) {
   } catch {}
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
 
   const csrf = enforceSameOrigin(request);
   if (csrf) return csrf;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "입력값을 확인해 주세요.", 422, "VALIDATION_ERROR", parsed.error.flatten());
   }
@@ -130,10 +165,54 @@ export async function POST(request: Request) {
   if (!login.ok) return fail(login.message, 422, "LOGIN_ID_INVALID");
 
   const { ip, userAgent } = requestMeta(request);
-  const limited = await enforceRateLimit(`signup:v160:${ip}`, 8, 60 * 10);
-  if (limited) return limited;
-
   const admin = createAdminClient();
+  const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
+  let riskScore = 0;
+  const riskFlags: string[] = [];
+
+  let signupBypassBySuperAdmin = false;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: adminProfile } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      signupBypassBySuperAdmin = adminProfile?.role === "SUPER_ADMIN";
+    }
+  } catch {}
+
+  let signupGuardRelease: SignupGuardRelease = null;
+
+  async function allowOneReleasedSignupAttempt(reason: string) {
+    if (signupBypassBySuperAdmin) return true;
+    if (signupGuardRelease?.allowed) return true;
+
+    const release = await consumeSignupGuardRelease(admin, {
+      loginId: login.loginId,
+      ip,
+      browserFingerprint: fingerprint,
+      reason,
+    });
+
+    if (!release?.allowed) return false;
+    signupGuardRelease = release;
+    riskFlags.push(`최고관리자 1회 해제권 사용: ${reason}`);
+    await logSecurityEvent(admin, {
+      eventType: "SIGNUP_GUARD_RELEASE_CONSUMED",
+      severity: "LOW",
+      ip,
+      browserFingerprint: fingerprint,
+      loginId: login.loginId,
+      displayName: parsed.data.displayName,
+      reason,
+      release,
+    });
+    return true;
+  }
+
+  const limited = await enforceRateLimit(`signup:v168:${ip}`, 8, 60 * 10);
+  if (limited && !(await allowOneReleasedSignupAttempt("RATE_LIMIT"))) return limited;
 
   const { data: secretStatus, error: secretStatusError } = await admin.rpc("validate_signup_secret_code", {
     p_code: parsed.data.secretCode,
@@ -153,24 +232,9 @@ export async function POST(request: Request) {
     return fail(secretValidationMessage(secretValidation), 403, "SIGNUP_SECRET_INVALID", secretValidation?.reason);
   }
 
-  let signupBypassBySuperAdmin = false;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const { data: adminProfile } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
-      signupBypassBySuperAdmin = adminProfile?.role === "SUPER_ADMIN";
-    }
-  } catch {}
-
-  const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
-  let riskScore = 0;
-  const riskFlags: string[] = [];
   const elapsed = signupElapsedMs(parsed.data.signupStartedAt);
 
-  if (!signupBypassBySuperAdmin && parsed.data.website.trim()) {
+  if (!signupBypassBySuperAdmin && parsed.data.website.trim() && !(await allowOneReleasedSignupAttempt("HONEYPOT_BLOCK"))) {
     await logSecurityEvent(admin, {
       eventType: "SIGNUP_HONEYPOT_BLOCK",
       severity: "HIGH",
@@ -184,7 +248,7 @@ export async function POST(request: Request) {
     return fail("자동 가입으로 의심되어 가입 신청이 차단되었습니다.", 429, "SIGNUP_BOT_BLOCKED");
   }
 
-  if (!signupBypassBySuperAdmin && elapsed !== null && elapsed < 2500) {
+  if (!signupBypassBySuperAdmin && elapsed !== null && elapsed < 2500 && !(await allowOneReleasedSignupAttempt("TOO_FAST_BLOCK"))) {
     await logSecurityEvent(admin, {
       eventType: "SIGNUP_TOO_FAST_BLOCK",
       severity: "HIGH",
@@ -199,7 +263,7 @@ export async function POST(request: Request) {
     return fail("가입 신청 속도가 비정상적으로 빠릅니다.\n3분 뒤에 다시 시도해 주세요.", 429, "SIGNUP_TOO_FAST");
   }
 
-  if (!signupBypassBySuperAdmin && looksAutomatedSignup(login.loginId, parsed.data.displayName)) {
+  if (!signupBypassBySuperAdmin && looksAutomatedSignup(login.loginId, parsed.data.displayName) && !(await allowOneReleasedSignupAttempt("PATTERN_BLOCK"))) {
     await logSecurityEvent(admin, {
       eventType: "SIGNUP_PATTERN_BLOCK",
       severity: "HIGH",
@@ -227,7 +291,7 @@ export async function POST(request: Request) {
       (row) => !row.expires_at || new Date(row.expires_at).getTime() > now,
     );
 
-    if (!signupBypassBySuperAdmin && blocked) {
+    if (!signupBypassBySuperAdmin && blocked && !(await allowOneReleasedSignupAttempt("BLOCKLIST_HIT"))) {
       await logSecurityEvent(admin, {
         eventType: "SIGNUP_BLOCKLIST_HIT",
         severity: "HIGH",
@@ -245,37 +309,43 @@ export async function POST(request: Request) {
 
   try {
     const cooldownSince = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-    const [recentDevice, recentIp] = await Promise.all([
+    const [recentDeviceResult, recentIpResult] = await Promise.allSettled([
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", cooldownSince),
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", cooldownSince),
     ]);
+    const recentDeviceCount = settledCount(recentDeviceResult);
+    const recentIpCount = settledCount(recentIpResult);
 
-    if (!signupBypassBySuperAdmin && ((fingerprint !== "unknown" && (recentDevice.count ?? 0) > 0) || (recentIp.count ?? 0) > 0)) {
+    if (!signupBypassBySuperAdmin && ((fingerprint !== "unknown" && recentDeviceCount > 0) || recentIpCount > 0) && !(await allowOneReleasedSignupAttempt("DEVICE_COOLDOWN"))) {
       return fail("이미 회원가입을 요청하였습니다.\n3분 뒤에 재시도 해주세요.", 429, "SIGNUP_DEVICE_COOLDOWN");
     }
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const [sameIp, sameFingerprint] = await Promise.all([
+    const [sameIpResult, sameFingerprintResult] = await Promise.allSettled([
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", since),
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", since),
     ]);
+    const sameIpCount = settledCount(sameIpResult);
+    const sameFingerprintCount = settledCount(sameFingerprintResult);
 
-    if ((sameIp.count ?? 0) >= 2) {
+    if (sameIpCount >= 2) {
       riskScore += 35;
       riskFlags.push("동일 IP 24시간 내 다중 가입");
     }
-    if (fingerprint !== "unknown" && (sameFingerprint.count ?? 0) >= 1) {
+    if (fingerprint !== "unknown" && sameFingerprintCount >= 1) {
       riskScore += 45;
       riskFlags.push("동일 브라우저 지문 재가입 의심");
     }
 
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const [tenMinuteIp, tenMinuteFp] = await Promise.all([
+    const [tenMinuteIpResult, tenMinuteFpResult] = await Promise.allSettled([
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("ip_address", ip).gte("created_at", tenMinutesAgo),
       admin.from("signup_risk_assessments").select("id", { count: "exact", head: true }).eq("browser_fingerprint", fingerprint).gte("created_at", tenMinutesAgo),
     ]);
+    const tenMinuteIpCount = settledCount(tenMinuteIpResult);
+    const tenMinuteFpCount = settledCount(tenMinuteFpResult);
 
-    if (!signupBypassBySuperAdmin && (tenMinuteIp.count ?? 0) >= 3) {
+    if (!signupBypassBySuperAdmin && tenMinuteIpCount >= 3 && !(await allowOneReleasedSignupAttempt("IP_BURST_BLOCK"))) {
       await logSecurityEvent(admin, {
         eventType: "SIGNUP_IP_BURST_BLOCK",
         severity: "CRITICAL",
@@ -283,14 +353,14 @@ export async function POST(request: Request) {
         browserFingerprint: fingerprint,
         loginId: login.loginId,
         displayName: parsed.data.displayName,
-        count: tenMinuteIp.count,
+        count: tenMinuteIpCount,
         reason: "too many signups from same IP",
       });
       await temporaryBlock(admin, "IP", ip, "10분 내 가입 신청 과다", 60);
       return fail("같은 네트워크에서 가입 신청이 너무 많습니다.\n1시간 뒤에 다시 시도해 주세요.", 429, "SIGNUP_IP_BURST_BLOCKED");
     }
 
-    if (!signupBypassBySuperAdmin && fingerprint !== "unknown" && (tenMinuteFp.count ?? 0) >= 1) {
+    if (!signupBypassBySuperAdmin && fingerprint !== "unknown" && tenMinuteFpCount >= 1 && !(await allowOneReleasedSignupAttempt("DEVICE_REPEAT_BLOCK"))) {
       await logSecurityEvent(admin, {
         eventType: "SIGNUP_DEVICE_REPEAT_BLOCK",
         severity: "HIGH",
@@ -298,7 +368,7 @@ export async function POST(request: Request) {
         browserFingerprint: fingerprint,
         loginId: login.loginId,
         displayName: parsed.data.displayName,
-        count: tenMinuteFp.count,
+        count: tenMinuteFpCount,
         reason: "same device repeated signup",
       });
       await temporaryBlock(admin, "FINGERPRINT", fingerprint, "동일 기기 반복 가입 신청", 180);
@@ -308,7 +378,7 @@ export async function POST(request: Request) {
     // 중복가입 위험도 테이블이 아직 적용되지 않은 기존 설치와의 호환을 위해 무시합니다.
   }
 
-  if (!signupBypassBySuperAdmin && riskScore >= 70) {
+  if (!signupBypassBySuperAdmin && riskScore >= 70 && !(await allowOneReleasedSignupAttempt("RISK_SCORE_BLOCK"))) {
     await logSecurityEvent(admin, {
       eventType: "SIGNUP_RISK_BLOCK",
       severity: "HIGH",
@@ -376,6 +446,7 @@ export async function POST(request: Request) {
       display_name: parsed.data.displayName,
       username: login.loginId,
       signup_secret_verified: true,
+      signup_guard_release_id: signupGuardRelease?.releaseId ?? null,
     },
   });
 
@@ -462,3 +533,5 @@ export async function POST(request: Request) {
     201,
   );
 }
+
+export const POST = withApiRoute(postHandler, { routeName: "/api/auth/signup", rateLimit: { kind: "api", limit: 60, windowSeconds: 60 } });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CSSProperties, FormEvent } from "react";
 import { useMemo, useState } from "react";
 import type { AdminCurrencyBalance, AdminRewardRecoveryLog, AdminTicketBalance, Draw, Profile, VirtualCurrency } from "@/lib/types";
+import { clientJsonRequest } from "@/lib/client-fetch";
 import { displayLoginId } from "@/lib/identity";
 import { formatDateTime } from "@/lib/utils";
 
@@ -26,14 +27,12 @@ const formStackStyle: CSSProperties = { display: "grid", gap: 10 };
 const fullButtonStyle: CSSProperties = { width: "100%", justifyContent: "center" };
 
 async function jsonRequest(url: string, body: unknown = {}) {
-  const response = await fetch(url, {
+  return clientJsonRequest<{ data?: Record<string, unknown> }>(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    json: body,
+    timeoutMs: 5000,
+    fallbackMessage: "요청을 처리하지 못했습니다.",
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error?.message ?? "요청을 처리하지 못했습니다.");
-  return data;
 }
 
 function recoveryKindLabel(kind: AdminRewardRecoveryLog["kind"]) {

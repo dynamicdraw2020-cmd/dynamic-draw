@@ -4,6 +4,7 @@ import { LoaderCircle, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ROLE_LABELS } from "@/lib/admin-capabilities";
+import { clientJsonRequest } from "@/lib/client-fetch";
 
 const roleOptions = [
   { value: "USER", label: ROLE_LABELS.USER },
@@ -28,20 +29,20 @@ export function RoleManager({ memberId, role, canManage }: { memberId: string; r
     }
 
     setLoading(true);
-    const response = await fetch(`/api/admin/members/${memberId}/role`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ role: selected }),
-    });
-    const body = await response.json().catch(() => ({}));
-    setLoading(false);
-
-    if (!response.ok) {
+    try {
+      await clientJsonRequest(`/api/admin/members/${memberId}/role`, {
+        method: "PATCH",
+        json: { role: selected },
+        timeoutMs: 5000,
+        fallbackMessage: "권한을 변경하지 못했습니다.",
+      });
+      router.refresh();
+    } catch (error) {
       setSelected(role);
-      return window.alert(body.error?.message ?? "권한을 변경하지 못했습니다.");
+      window.alert(error instanceof Error ? error.message : "권한을 변경하지 못했습니다.");
+    } finally {
+      setLoading(false);
     }
-
-    router.refresh();
   }
 
   return (

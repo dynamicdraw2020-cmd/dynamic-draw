@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BulkMemberTable } from "@/components/bulk-member-table";
+import { RejectedMembersCleanup } from "@/components/rejected-members-cleanup";
 import { requireAdminCapability } from "@/lib/auth";
 import { getAdminMembers } from "@/lib/data";
 import { displayLoginId } from "@/lib/identity";
@@ -60,6 +61,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
         </div>
         <p className="muted">검색 결과 {members.length.toLocaleString()}명 / 전체 {allMembers.length.toLocaleString()}명</p>
       </form>
+
+      <RejectedMembersCleanup currentAdminRole={currentAdmin.role} rejectedMemberCount={rejectedMemberCount} />
 
       <BulkMemberTable members={members} currentAdmin={currentAdmin} rejectedMemberCount={rejectedMemberCount} />
     </>

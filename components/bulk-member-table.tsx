@@ -33,7 +33,6 @@ export function BulkMemberTable({
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [bulkDeletingRejected, setBulkDeletingRejected] = useState(false);
   const [bulkSuspending, setBulkSuspending] = useState(false);
   const [bulkRestoring, setBulkRestoring] = useState(false);
 
@@ -53,31 +52,6 @@ export function BulkMemberTable({
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error?.message ?? "처리하지 못했습니다.");
     return data;
-  }
-
-  async function deleteRejectedMembers() {
-    if (currentAdmin.role !== "SUPER_ADMIN") return window.alert("반려 가입 전체 삭제는 최고 관리자만 가능합니다.");
-    if (!rejectedMemberCount) return window.alert("삭제할 반려 회원이 없습니다.");
-
-    const confirmText = window.prompt(
-      `검색 조건과 관계없이 반려 상태의 일반 회원 ${rejectedMemberCount.toLocaleString()}명을 삭제 처리합니다.\n계속하려면 DELETE_REJECTED를 정확히 입력해 주세요.`,
-    );
-    if (confirmText !== "DELETE_REJECTED") return;
-
-    const reason = window.prompt("반려 가입 전체 삭제 사유를 입력해 주세요.")?.trim();
-    if (!reason) return;
-
-    setBulkDeletingRejected(true);
-    try {
-      const body = await jsonPost("/api/admin/members/delete-rejected", { confirm: "DELETE_REJECTED", reason });
-      window.alert(`반려 가입 전체 삭제 완료: ${Number(body.data?.deletedCount ?? rejectedMemberCount).toLocaleString()}명`);
-      setSelected([]);
-      router.refresh();
-    } catch (error) {
-      window.alert((error as Error).message);
-    } finally {
-      setBulkDeletingRejected(false);
-    }
   }
 
   async function deleteNonSuperAdmins() {
@@ -171,11 +145,6 @@ export function BulkMemberTable({
           <button className="btn btn-primary" type="button" onClick={() => void approveSelected()} disabled={loading || !selectedPending.length}>
             {loading ? <LoaderCircle size={16} className="spin" /> : <CheckSquare size={16} />} 선택 {selectedPending.length}명 승인
           </button>
-          {currentAdmin.role === "SUPER_ADMIN" && (
-            <button className="btn btn-secondary" type="button" onClick={() => void deleteRejectedMembers()} disabled={bulkDeletingRejected || !rejectedMemberCount}>
-              {bulkDeletingRejected ? <LoaderCircle size={16} className="spin" /> : <Trash2 size={16} />} 반려 가입 전체 삭제 ({rejectedMemberCount.toLocaleString()}명)
-            </button>
-          )}
           {currentAdmin.role === "SUPER_ADMIN" && (
             <button className="btn btn-secondary" type="button" onClick={() => void restoreAllRegularMembers()} disabled={bulkRestoring}>
               {bulkRestoring ? <LoaderCircle size={16} className="spin" /> : <RotateCcw size={16} />} 일반 회원 정지 해지

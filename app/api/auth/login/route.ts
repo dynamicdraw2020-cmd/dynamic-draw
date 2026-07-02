@@ -4,6 +4,7 @@ import { isAdminRole } from "@/lib/admin-capabilities";
 import { credentialToAuthEmail } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { trackStepMission } from "@/lib/step-events";
 
 
 export const dynamic = "force-dynamic";
@@ -105,6 +106,19 @@ async function postHandler(request: Request) {
       p_details: { loginId: profile.username ?? profile.email, role: profile.role },
       p_ip: meta.ip,
       p_user_agent: meta.userAgent,
+    });
+  }
+
+  if (profile.status === "APPROVED") {
+    await trackStepMission({
+      admin,
+      profileId: data.user.id,
+      missionType: "LOGIN",
+      amount: 1,
+      sourceType: "LOGIN",
+      sourceId: data.user.id,
+      autoClaim: true,
+      details: { loginId: profile.username ?? parsed.data.loginId, ip: meta.ip },
     });
   }
 

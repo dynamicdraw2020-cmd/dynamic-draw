@@ -4,6 +4,7 @@ import { loginIdToAuthEmail, validateLoginId } from "@/lib/identity";
 import { ensureReferralCode, nextNumericReferralCode, normalizeReferralCodeInput } from "@/lib/reward-engine";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { trackStepMission } from "@/lib/step-events";
 
 
 export const dynamic = "force-dynamic";
@@ -524,6 +525,17 @@ async function postHandler(request: Request) {
   } catch {
     // 보정 SQL 적용 전 호환
   }
+
+  await trackStepMission({
+    admin,
+    profileId: created.user.id,
+    missionType: "SIGNUP",
+    amount: 1,
+    sourceType: "SIGNUP",
+    sourceId: created.user.id,
+    autoClaim: true,
+    details: { loginId: login.loginId, referredBy, riskScore },
+  });
 
   return ok(
     {

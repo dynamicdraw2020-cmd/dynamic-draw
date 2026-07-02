@@ -94,6 +94,8 @@ const groups: MenuGroup[] = [
     items: [
       { href: "/admin/tickets", label: "추첨권·포인트", icon: Tickets, capability: "GRANT_REWARD" },
       { href: "/admin/rewards", label: "추천·보상", icon: Gift, minimum: "MANAGER" },
+      { href: "/admin/step-events", label: "스탭업 미션", icon: ListChecks, minimum: "MANAGER" },
+      { href: "/admin/coupons", label: "쿠폰 공개 설정", icon: Gift, minimum: "MANAGER" },
       { href: "/admin/growth", label: "레벨·VIP·배지", icon: Sparkles, minimum: "MANAGER" },
       { href: "/admin/exchanges", label: "교환 시스템", icon: ArrowLeftRight, minimum: "MANAGER" },
     ],

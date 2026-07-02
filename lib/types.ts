@@ -362,6 +362,7 @@ export interface PromoCode {
   name: string;
   description: string | null;
   code_type: "COUPON" | "EVENT_CODE";
+  visibility?: "public" | "hidden" | "admin_only" | "event_only" | null;
   target_mode: "ALL" | "PROFILE" | "ROLE";
   target_profile_id: string | null;
   target_role: UserRole | null;

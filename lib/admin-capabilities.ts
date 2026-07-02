@@ -4,8 +4,6 @@ export type AppRole = "USER" | AdminRole;
 
 export type AdminCapability =
   | "ADMIN_HOME"
-  | "SIGNUP_SECRET_CODES"
-  | "SIGNUP_SECRET_SETTINGS"
   | "MEMBER_STATUS"
   | "SUPPORT_REPLY"
   | "GRANT_REWARD"
@@ -29,10 +27,6 @@ export const ROLE_RANK: Record<string, number> = {
 
 export const CAPABILITY_ROLES: Record<AdminCapability, readonly AdminRole[]> = {
   ADMIN_HOME: ["VIEWER", "CS_MANAGER", "MANAGER", "SUPER_ADMIN"],
-  // 사용자가 요청한 "모든 관리자가 시크릿코드 발급 가능" 원칙을 반영합니다.
-  SIGNUP_SECRET_CODES: ["VIEWER", "CS_MANAGER", "MANAGER", "SUPER_ADMIN"],
-  // 신청 버튼 링크/문구 설정은 운영 설정 변경이므로 일반 관리자 이상으로 제한합니다.
-  SIGNUP_SECRET_SETTINGS: ["MANAGER", "SUPER_ADMIN"],
   MEMBER_STATUS: ["CS_MANAGER", "MANAGER", "SUPER_ADMIN"],
   SUPPORT_REPLY: ["CS_MANAGER", "MANAGER", "SUPER_ADMIN"],
   GRANT_REWARD: ["CS_MANAGER", "MANAGER", "SUPER_ADMIN"],

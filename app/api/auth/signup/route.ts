@@ -15,7 +15,6 @@ const schema = z.object({
   displayName: z.string().trim().min(2, "이름 또는 닉네임은 2자 이상 입력해 주세요.").max(30),
   password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다.").max(72),
   referralCode: z.string().trim().max(8, "추천인 ID는 8자리 이내 숫자만 입력해 주세요.").optional().default(""),
-  secretCode: z.string().trim().min(6, "관리자에게 받은 시크릿코드를 입력해 주세요.").max(40),
   browserFingerprint: z.string().trim().max(120).optional().default(""),
   website: z.string().trim().max(200).optional().default(""),
   signupStartedAt: z.string().trim().max(30).optional().default(""),
@@ -27,7 +26,6 @@ function settledCount(result: PromiseSettledResult<{ count?: number | null }>) {
   return result.status === "fulfilled" ? Number(result.value.count ?? 0) : 0;
 }
 type AuthAdminError = { code?: string; message?: string; status?: number } | null;
-type SecretValidation = { valid?: boolean; reason?: string; expiresAt?: string; codeLabel?: string } | null;
 type SignupGuardRelease = {
   allowed?: boolean;
   releaseId?: string;
@@ -131,16 +129,6 @@ function signupError(error: AuthAdminError) {
   return fail("가입 신청을 처리하지 못했습니다.\n잠시 후 다시 시도해 주세요.", 400, "SIGNUP_FAILED", technicalCode);
 }
 
-function secretValidationMessage(result: SecretValidation) {
-  if (!result?.valid) {
-    if (result?.reason === "USED") return "이미 사용된 시크릿코드입니다. 코드는 1회만 사용할 수 있습니다.";
-    if (result?.reason === "EXPIRED") return "만료된 시크릿코드입니다. 코드는 발급 후 4시간만 유효합니다.";
-    if (result?.reason === "REVOKED") return "회수된 시크릿코드입니다. CS에게 새 코드를 요청해 주세요.";
-    return "시크릿코드가 올바르지 않습니다.";
-  }
-  return "";
-}
-
 async function cleanupFailedSignup(admin: AdminClient, profileId: string) {
   try {
     await admin.from("profiles").delete().eq("id", profileId);
@@ -215,24 +203,6 @@ async function postHandler(request: Request) {
 
   const limited = await enforceRateLimit(`signup:v168:${ip}`, 8, 60 * 10);
   if (limited && !(await allowOneReleasedSignupAttempt("RATE_LIMIT"))) return limited;
-
-  const { data: secretStatus, error: secretStatusError } = await admin.rpc("validate_signup_secret_code", {
-    p_code: parsed.data.secretCode,
-  });
-
-  if (secretStatusError) {
-    return fail(
-      "가입 시크릿코드 검증 기능이 DB에 아직 적용되지 않았습니다.\n관리자에게 v1.6.1 이상 SQL 적용 여부를 확인해 주세요.",
-      503,
-      "SIGNUP_SECRET_SQL_REQUIRED",
-      secretStatusError.message,
-    );
-  }
-
-  const secretValidation = secretStatus as SecretValidation;
-  if (!secretValidation?.valid) {
-    return fail(secretValidationMessage(secretValidation), 403, "SIGNUP_SECRET_INVALID", secretValidation?.reason);
-  }
 
   const elapsed = signupElapsedMs(parsed.data.signupStartedAt);
 
@@ -447,7 +417,6 @@ async function postHandler(request: Request) {
     user_metadata: {
       display_name: parsed.data.displayName,
       username: login.loginId,
-      signup_secret_verified: true,
       signup_guard_release_id: signupGuardRelease?.releaseId ?? null,
     },
   });
@@ -485,20 +454,6 @@ async function postHandler(request: Request) {
       duplicate ? "LOGIN_ID_ALREADY_REGISTERED" : "PROFILE_CREATE_FAILED",
       profileError.code,
     );
-  }
-
-  const { error: consumeError } = await admin.rpc("consume_signup_secret_code", {
-    p_code: parsed.data.secretCode,
-    p_profile_id: created.user.id,
-    p_login_id: login.loginId,
-    p_ip: ip,
-    p_user_agent: userAgent,
-    p_browser_fingerprint: fingerprint,
-  });
-
-  if (consumeError) {
-    await cleanupFailedSignup(admin, created.user.id);
-    return fail(consumeError.message || "시크릿코드가 유효하지 않습니다.", 403, "SIGNUP_SECRET_INVALID", consumeError.code);
   }
 
   await ensureReferralCode(admin, { id: created.user.id, referral_code: ownReferralCode });

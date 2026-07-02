@@ -1,15 +1,9 @@
 "use client";
 
-import { ArrowRight, ExternalLink, IdCard, KeyRound, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
+import { ArrowRight, IdCard, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { clientJsonRequest } from "@/lib/client-fetch";
-
-type SignupSecretSettings = {
-  buttonLabel: string;
-  requestUrl: string;
-  helpText: string;
-};
 
 function simpleFingerprintSource() {
   if (typeof window === "undefined") return "server";
@@ -34,35 +28,11 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
   const [loading, setLoading] = useState(false);
   const [formVersion, setFormVersion] = useState(0);
   const [signupStartedAt, setSignupStartedAt] = useState("");
-  const [settings, setSettings] = useState<SignupSecretSettings>({
-    buttonLabel: "시크릿코드 신청하기",
-    requestUrl: "",
-    helpText: "관리자가 안내한 링크에서 CS에게 1회용 시크릿코드를 요청해 주세요.",
-  });
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
 
   useEffect(() => {
     if (mode === "signup") setSignupStartedAt(String(Date.now()));
   }, [mode, formVersion]);
-
-  useEffect(() => {
-    if (mode !== "signup") return;
-    let mounted = true;
-    clientJsonRequest<{ data?: Partial<SignupSecretSettings> }>("/api/public/signup-secret-settings", { cache: "no-store", timeoutMs: 5000 })
-      .then((body) => {
-        if (!mounted || !body?.data) return;
-        setSettings({
-          buttonLabel: body.data.buttonLabel || "시크릿코드 신청하기",
-          requestUrl: body.data.requestUrl || "",
-          helpText: body.data.helpText || "관리자가 안내한 링크에서 CS에게 1회용 시크릿코드를 요청해 주세요.",
-        });
-      })
-      .catch(() => undefined);
-
-    return () => {
-      mounted = false;
-    };
-  }, [mode]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -141,36 +111,7 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
 
       {mode === "signup" && (
         <>
-          <div className="notice-box compact">
-            전화번호와 이메일은 받지 않습니다. 아이디, 이름/닉네임, 비밀번호, 관리자 시크릿코드만 사용합니다.
-          </div>
-
-          <label className="field-label">
-            <span>
-              <KeyRound size={16} /> 가입 시크릿코드
-            </span>
-            <input
-              className="input"
-              name="secretCode"
-              required
-              autoComplete="one-time-code"
-              placeholder="CS에게 받은 1회용 코드"
-            />
-            <small>{settings.helpText}</small>
-          </label>
-
-          <div className="auth-secret-request-box">
-            {settings.requestUrl ? (
-              <a className="btn btn-secondary" href={settings.requestUrl} target="_blank" rel="noreferrer">
-                <ExternalLink size={16} /> {settings.buttonLabel}
-              </a>
-            ) : (
-              <button className="btn btn-secondary" type="button" disabled>
-                <ExternalLink size={16} /> 시크릿코드 신청 링크 준비중
-              </button>
-            )}
-            <span>발급된 코드는 4시간 동안만 유효하고 한 번만 사용할 수 있습니다.</span>
-          </div>
+          <div className="notice-box compact">전화번호와 이메일은 받지 않습니다. 아이디, 이름/닉네임, 비밀번호로 가입 신청을 접수합니다.</div>
 
           <label className="field-label">
             <span>추천인 ID 선택</span>

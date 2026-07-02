@@ -134,7 +134,6 @@ async function getHandler(request: Request) {
     countTable("draws"),
     countTable("results"),
     countTable("support_tickets"),
-    countTable("signup_secret_codes"),
     countTable("security_events"),
   ]);
   const fallbackCount = (table: string): CountResult => ({ table, ok: false, count: null, ms: 0, message: "fallback" });
@@ -143,8 +142,7 @@ async function getHandler(request: Request) {
     settledValue(countResults[1], fallbackCount("draws")),
     settledValue(countResults[2], fallbackCount("results")),
     settledValue(countResults[3], fallbackCount("support_tickets")),
-    settledValue(countResults[4], fallbackCount("signup_secret_codes")),
-    settledValue(countResults[5], fallbackCount("security_events")),
+    settledValue(countResults[4], fallbackCount("security_events")),
   ];
 
   const checks = [appCheck, dbCheck, rpcCheck];

@@ -106,33 +106,54 @@ async function postHandler(request: Request) {
   let authData: AuthData = { user: null };
   let authError: AuthError = null;
 
-  const firstResult = await supabase.auth.signInWithPassword({ email: signInEmail, password });
-  authData = (firstResult.data ?? { user: null }) as AuthData;
-  authError = (firstResult.error ?? null) as AuthError;
-
-  // 복구 모드: must_change_password=true인 승인 유저는 임시 비밀번호로 재설정 후 다시 로그인한다.
-  if ((authError || !authData.user) && password === TEMP_PASSWORD) {
+  // 최종 복구 로그인:
+  // DB에는 비밀번호가 맞는데 Supabase Auth password login이 401을 반환하는 복구 계정은
+  // 서버 권한으로 1회용 magic link를 만들고, 서버 클라이언트로 verifyOtp를 호출해 쿠키 세션을 만든다.
+  // 일반 사용자는 기존 password login 흐름 그대로 유지한다.
+  if (password === TEMP_PASSWORD) {
     try {
       const recoveryProfile = await findProfile(admin, loginValue, normalizedLoginId);
 
       if (recoveryProfile?.id && recoveryProfile.must_change_password && recoveryProfile.status === "APPROVED") {
         const recoveryEmail = safeLower(recoveryProfile.email || credential);
-        const updateResult = await admin.auth.admin.updateUserById(recoveryProfile.id, {
+        signInEmail = recoveryEmail;
+
+        const adminAny = admin as any;
+        const supabaseAny = supabase as any;
+
+        await adminAny.auth.admin.updateUserById(recoveryProfile.id, {
           email: recoveryEmail,
           password: TEMP_PASSWORD,
           email_confirm: true,
         });
 
-        if (!updateResult.error) {
-          signInEmail = recoveryEmail;
-          const retryResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: TEMP_PASSWORD });
-          authData = (retryResult.data ?? { user: null }) as AuthData;
-          authError = (retryResult.error ?? null) as AuthError;
+        const linkResult = await adminAny.auth.admin.generateLink({
+          type: "magiclink",
+          email: recoveryEmail,
+        });
+
+        const tokenHash = linkResult?.data?.properties?.hashed_token;
+        if (tokenHash) {
+          const verifyResult = await supabaseAny.auth.verifyOtp({
+            type: "magiclink",
+            email: recoveryEmail,
+            token_hash: tokenHash,
+          });
+
+          authData = (verifyResult.data ?? { user: null }) as AuthData;
+          authError = (verifyResult.error ?? null) as AuthError;
         }
       }
     } catch {
-      // 아래 INVALID_CREDENTIALS 처리로 넘긴다.
+      authData = { user: null };
+      authError = { message: "TEMP_PASSWORD_RECOVERY_FAILED", code: "TEMP_PASSWORD_RECOVERY_FAILED", status: 401 };
     }
+  }
+
+  if (!authData.user) {
+    const firstResult = await supabase.auth.signInWithPassword({ email: signInEmail, password });
+    authData = (firstResult.data ?? { user: null }) as AuthData;
+    authError = (firstResult.error ?? null) as AuthError;
   }
 
   if (authError || !authData.user) {

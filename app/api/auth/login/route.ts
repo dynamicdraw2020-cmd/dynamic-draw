@@ -118,23 +118,20 @@ async function postHandler(request: Request) {
         const recoveryEmail = safeLower(recoveryProfile.email || credential);
         signInEmail = recoveryEmail;
 
-        const adminAny = admin as any;
-        const supabaseAny = supabase as any;
-
-        await adminAny.auth.admin.updateUserById(recoveryProfile.id, {
+        await admin.auth.admin.updateUserById(recoveryProfile.id, {
           email: recoveryEmail,
           password: TEMP_PASSWORD,
           email_confirm: true,
         });
 
-        const linkResult = await adminAny.auth.admin.generateLink({
+        const linkResult = await admin.auth.admin.generateLink({
           type: "magiclink",
           email: recoveryEmail,
         });
 
         const tokenHash = linkResult?.data?.properties?.hashed_token;
         if (tokenHash) {
-          const verifyResult = await supabaseAny.auth.verifyOtp({
+          const verifyResult = await supabase.auth.verifyOtp({
             type: "magiclink",
             email: recoveryEmail,
             token_hash: tokenHash,

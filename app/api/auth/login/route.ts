@@ -2,7 +2,6 @@ import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { isAdminRole } from "@/lib/admin-capabilities";
 import { credentialToAuthEmail, normalizeLoginId } from "@/lib/identity";
-import { isTemporaryPassword, mustChangePassword } from "@/lib/password-reset";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { trackStepMission } from "@/lib/step-events";
@@ -11,45 +10,7 @@ import { trackStepMission } from "@/lib/step-events";
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
 export const runtime = "nodejs";
-type LoginProfile = {
-  id: string;
-  email: string | null;
-  username?: string | null;
-  display_name?: string | null;
-  role?: string | null;
-  status?: string | null;
-  must_change_password?: boolean | null;
-  password_changed_at?: string | null;
-};
-
-async function resolveCredentialProfile(admin: ReturnType<typeof createAdminClient>, loginId: string) {
-  const raw = String(loginId ?? "").trim().toLowerCase();
-  const username = normalizeLoginId(raw);
-  const authEmail = raw.includes("@") ? raw : credentialToAuthEmail(username || raw);
-
-  let profile: LoginProfile | null = null;
-
-  if (username) {
-    const { data } = await admin
-      .from("profiles")
-      .select("id,email,username,display_name,role,status,must_change_password,password_changed_at")
-      .eq("username", username)
-      .maybeSingle();
-    profile = (data as LoginProfile | null) ?? null;
-  }
-
-  if (!profile) {
-    const { data } = await admin
-      .from("profiles")
-      .select("id,email,username,display_name,role,status,must_change_password,password_changed_at")
-      .eq("email", authEmail)
-      .maybeSingle();
-    profile = (data as LoginProfile | null) ?? null;
-  }
-
-  const email = String(profile?.email ?? authEmail).trim().toLowerCase();
-  return { profile, email: email || authEmail };
-}
+const TEMP_PASSWORD = "DynamicD2026!reset";
 
 const schema = z.object({
   loginId: z.string().trim().min(1),
@@ -75,7 +36,9 @@ async function postHandler(request: Request) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
-  const { profile: preAuthProfile, email: credential } = await resolveCredentialProfile(admin, parsed.data.loginId);
+  const credential = credentialToAuthEmail(parsed.data.loginId);
+  const loginValue = String(parsed.data.loginId || "").trim().toLowerCase();
+  const normalizedLoginId = normalizeLoginId(loginValue);
 
   await admin.from("login_activity_logs").insert({
     login_id: parsed.data.loginId,
@@ -85,31 +48,47 @@ async function postHandler(request: Request) {
     user_agent: meta.userAgent,
   });
 
-  const preAuthNeedsPasswordChange = mustChangePassword(preAuthProfile);
+  let signInEmail = credential;
+  let signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: parsed.data.password });
+  let data = signInResult.data;
+  let error = signInResult.error;
 
-  // 복구 모드: 비밀번호가 비어 있는 복구 계정은 로그인 시점에만 공통 임시 비밀번호를 Supabase Auth에 적용한다.
-  // 외부 스크립트 없이 GitHub/Vercel 코드만으로 처리하기 위한 안전장치다.
-  if (preAuthProfile && preAuthNeedsPasswordChange && isTemporaryPassword(parsed.data.password)) {
-    const email = String(preAuthProfile.email ?? credential).trim().toLowerCase();
-    const { error: tempPasswordError } = await admin.auth.admin.updateUserById(preAuthProfile.id, {
-      email,
-      password: parsed.data.password,
-      email_confirm: true,
-      user_metadata: { username: preAuthProfile.username ?? undefined, displayName: preAuthProfile.display_name ?? undefined },
-    });
-    if (tempPasswordError) {
-      await admin.from("login_activity_logs").insert({
-        login_id: parsed.data.loginId,
-        ip_address: meta.ip,
-        browser_fingerprint: fingerprint,
-        status: "FAILED",
-        user_agent: meta.userAgent,
+  // 복구 모드: 기존 auth.users에 비밀번호가 없던 계정은 임시 비밀번호로 1회 로그인 가능하게 만든다.
+  // 조건: profiles.must_change_password = true 이고 입력 비밀번호가 TEMP_PASSWORD일 때만 작동.
+  if ((error || !data.user) && parsed.data.password === TEMP_PASSWORD) {
+    let recoveryProfile: { id: string; email: string | null; username: string | null; status: string | null; must_change_password?: boolean | null } | null = null;
+
+    if (loginValue.includes("@")) {
+      const { data: byEmail } = await admin
+        .from("profiles")
+        .select("id,email,username,status,must_change_password")
+        .eq("email", loginValue)
+        .maybeSingle();
+      recoveryProfile = byEmail;
+    } else {
+      const { data: byUsername } = await admin
+        .from("profiles")
+        .select("id,email,username,status,must_change_password")
+        .eq("username", normalizedLoginId)
+        .maybeSingle();
+      recoveryProfile = byUsername;
+    }
+
+    if (recoveryProfile?.must_change_password && recoveryProfile.status === "APPROVED") {
+      const recoveryEmail = String(recoveryProfile.email || credential).toLowerCase();
+      const updateResult = await admin.auth.admin.updateUserById(recoveryProfile.id, {
+        email: recoveryEmail,
+        password: TEMP_PASSWORD,
       });
-      return fail("복구 계정의 임시 비밀번호를 적용하지 못했습니다. 관리자에게 문의해 주세요.", 500, "TEMP_PASSWORD_APPLY_FAILED", tempPasswordError.message);
+
+      if (!updateResult.error) {
+        signInEmail = recoveryEmail;
+        signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: TEMP_PASSWORD });
+        data = signInResult.data;
+        error = signInResult.error;
+      }
     }
   }
-
-  const { data, error } = await supabase.auth.signInWithPassword({ email: credential, password: parsed.data.password });
 
   if (error || !data.user) {
     await admin.from("login_activity_logs").insert({
@@ -188,16 +167,15 @@ async function postHandler(request: Request) {
   }
 
   let redirectTo = "/account";
-  const forcePasswordChange = mustChangePassword(profile);
   if (profile.status === "PENDING") redirectTo = "/pending";
   else if (profile.status !== "APPROVED") {
     await supabase.auth.signOut();
     redirectTo = "/login?error=account_unavailable";
-  } else if (forcePasswordChange) redirectTo = "/change-password";
+  } else if (profile.must_change_password) redirectTo = "/change-password";
   else if (adminRole) redirectTo = "/admin";
   else if (parsed.data.nextPath?.startsWith("/") && !parsed.data.nextPath.startsWith("//")) redirectTo = parsed.data.nextPath;
 
-  return ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status, mustChangePassword: forcePasswordChange } });
+  return ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
 }
 
 export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 10, windowSeconds: 60 } });

@@ -15,7 +15,6 @@ import { createRequestId, logSlowOperation, runtimeLog } from "@/lib/ops/logger"
 import { OperationTimeoutError, RUNTIME_LIMITS, publicErrorCode, publicErrorMessage, safeDiagnostics, withTimeout } from "@/lib/ops/runtime";
 import { getRequestFingerprint, inspectAttackSurface, isSuspiciousUserAgent, securityHeaders } from "@/lib/ops/security";
 import { recordAuditEventSoon, recordRuntimeEventSoon } from "@/lib/ops/db-events";
-import { mustChangePassword } from "@/lib/password-reset";
 
 type RpcErrorLike = { code?: string; message?: string; details?: string; hint?: string };
 type ApiRateKind = "api" | "login" | "admin" | "recovery" | "public";
@@ -167,10 +166,6 @@ export async function requireApiUser() {
 
   if (auth.profile.status !== "APPROVED") {
     return { error: fail("관리자 승인이 필요한 계정입니다.", 403, "ACCOUNT_NOT_APPROVED") } as const;
-  }
-
-  if (auth.profile.must_change_password) {
-    return { error: fail("비밀번호 변경이 필요합니다.", 403, "PASSWORD_CHANGE_REQUIRED", { redirectTo: "/change-password" }) } as const;
   }
 
   try {

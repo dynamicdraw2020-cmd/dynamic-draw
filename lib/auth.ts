@@ -3,7 +3,6 @@ import { demoMode, supabaseConfigured } from "@/lib/env";
 import { mockAdmin, mockProfile } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { mustChangePassword } from "@/lib/password-reset";
 import type { Profile } from "@/lib/types";
 import {
   type AdminCapability,
@@ -86,7 +85,6 @@ export async function requireApprovedUser() {
   if (!profile) redirect("/login?next=/account");
   if (profile.status === "PENDING") redirect("/pending");
   if (profile.status !== "APPROVED") redirect("/login?error=account_unavailable");
-  if (mustChangePassword(profile)) redirect("/change-password");
 
   const operation = await getOperationModeForAuth();
   if (String(profile.role) === "USER" && operation.mode !== "ACTIVE" && operation.mode !== "NORMAL") {
@@ -103,7 +101,6 @@ export async function requireAdmin(minimum: AdminRole = "VIEWER") {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login?next=/admin");
   if (profile.status !== "APPROVED" || !hasAnyAdminRole(profile.role)) redirect("/");
-  if (mustChangePassword(profile)) redirect("/change-password");
 
   const operation = await getOperationModeForAuth();
   if ((operation.mode === "INACTIVE" || operation.mode === "MAINTENANCE") && String(profile.role) !== "SUPER_ADMIN") {

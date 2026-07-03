@@ -3,6 +3,7 @@ import { demoMode, supabaseConfigured } from "@/lib/env";
 import { mockAdmin, mockProfile } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmergencyProfileIdFromCookies } from "@/lib/emergency-session";
 import type { Profile } from "@/lib/types";
 import {
   type AdminCapability,
@@ -17,6 +18,17 @@ import { RUNTIME_LIMITS, withTimeout } from "@/lib/ops/runtime";
 
 export async function getCurrentProfile(): Promise<Profile | null> {
   if (!supabaseConfigured) return demoMode ? mockProfile : null;
+
+  try {
+    const emergencyProfileId = await getEmergencyProfileIdFromCookies();
+    if (emergencyProfileId) {
+      const admin = createAdminClient();
+      const profileResult = await withTimeout(admin.from("profiles").select("*").eq("id", emergencyProfileId).maybeSingle(), RUNTIME_LIMITS.readQueryTimeoutMs, "get emergency current profile");
+      if (!profileResult.error && profileResult.data) return profileResult.data as Profile;
+    }
+  } catch {
+    // 긴급 복구 세션 확인 실패는 일반 Supabase 세션 확인으로 이어진다.
+  }
 
   try {
     const supabase = await createClient();

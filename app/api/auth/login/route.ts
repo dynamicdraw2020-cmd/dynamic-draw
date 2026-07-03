@@ -5,6 +5,7 @@ import { credentialToAuthEmail, normalizeLoginId } from "@/lib/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { trackStepMission } from "@/lib/step-events";
+import { createEmergencySessionValue, EMERGENCY_SESSION_COOKIE, emergencySessionCookieOptions } from "@/lib/emergency-session";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
@@ -102,50 +103,63 @@ async function postHandler(request: Request) {
     }),
   );
 
-  let signInEmail = credential;
-  let authData: AuthData = { user: null };
-  let authError: AuthError = null;
-
-  // 최종 복구 로그인:
-  // DB에는 비밀번호가 맞는데 Supabase Auth password login이 401을 반환하는 복구 계정은
-  // 서버 권한으로 1회용 magic link를 만들고, 서버 클라이언트로 verifyOtp를 호출해 쿠키 세션을 만든다.
-  // 일반 사용자는 기존 password login 흐름 그대로 유지한다.
   if (password === TEMP_PASSWORD) {
-    try {
-      const recoveryProfile = await findProfile(admin, loginValue, normalizedLoginId);
+    const recoveryProfile = await findProfile(admin, loginValue, normalizedLoginId);
+    const isRecoveryAllowed =
+      recoveryProfile?.id &&
+      recoveryProfile.must_change_password === true &&
+      recoveryProfile.status === "APPROVED";
 
-      if (recoveryProfile?.id && recoveryProfile.must_change_password && recoveryProfile.status === "APPROVED") {
-        const recoveryEmail = safeLower(recoveryProfile.email || credential);
-        signInEmail = recoveryEmail;
+    if (isRecoveryAllowed) {
+      const now = new Date().toISOString();
+      const sessionValue = createEmergencySessionValue(recoveryProfile.id);
+      if (!sessionValue) return fail("복구 세션을 만들 수 없습니다. 서버 환경변수를 확인해 주세요.", 500, "RECOVERY_SESSION_CREATE_FAILED");
 
-        await admin.auth.admin.updateUserById(recoveryProfile.id, {
-          email: recoveryEmail,
-          password: TEMP_PASSWORD,
-          email_confirm: true,
-        });
+      await ignoreSideEffect(
+        admin.from("profiles").update({ last_login_at: now, updated_at: now }).eq("id", recoveryProfile.id),
+      );
+      await ignoreSideEffect(
+        admin.from("member_session_status").upsert(
+          {
+            profile_id: recoveryProfile.id,
+            status: "ONLINE",
+            is_online: true,
+            last_login_at: now,
+            last_seen_at: now,
+            ip_address: meta.ip,
+            browser_fingerprint: fingerprint,
+            user_agent: meta.userAgent,
+            updated_at: now,
+          },
+          { onConflict: "profile_id" },
+        ),
+      );
+      await ignoreSideEffect(
+        admin.from("login_activity_logs").insert({
+          profile_id: recoveryProfile.id,
+          login_id: recoveryProfile.username ?? loginIdRaw,
+          email: recoveryProfile.email ?? credential,
+          username: recoveryProfile.username ?? null,
+          success: true,
+          ip_address: meta.ip,
+          browser_fingerprint: fingerprint,
+          status: "RECOVERY_SUCCESS",
+          user_agent: meta.userAgent,
+        }),
+      );
 
-        const linkResult = await admin.auth.admin.generateLink({
-          type: "magiclink",
-          email: recoveryEmail,
-        });
-
-        const tokenHash = linkResult?.data?.properties?.hashed_token;
-        if (tokenHash) {
-          const verifyResult = await supabase.auth.verifyOtp({
-            type: "magiclink",
-            email: recoveryEmail,
-            token_hash: tokenHash,
-          });
-
-          authData = (verifyResult.data ?? { user: null }) as AuthData;
-          authError = (verifyResult.error ?? null) as AuthError;
-        }
-      }
-    } catch {
-      authData = { user: null };
-      authError = { message: "TEMP_PASSWORD_RECOVERY_FAILED", code: "TEMP_PASSWORD_RECOVERY_FAILED", status: 401 };
+      const response = ok({
+        redirectTo: "/reset-password",
+        profile: { displayName: recoveryProfile.display_name, role: recoveryProfile.role, status: recoveryProfile.status },
+      });
+      response.cookies.set(EMERGENCY_SESSION_COOKIE, sessionValue, emergencySessionCookieOptions);
+      return response;
     }
   }
+
+  const signInEmail = credential;
+  let authData: AuthData = { user: null };
+  let authError: AuthError = null;
 
   if (!authData.user) {
     const firstResult = await supabase.auth.signInWithPassword({ email: signInEmail, password });

@@ -2,6 +2,7 @@ import { ok, requestMeta } from "@/lib/api";
 import { demoMode } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { EMERGENCY_SESSION_COOKIE } from "@/lib/emergency-session";
 
 export async function POST(request: Request) {
   if (demoMode) return ok({});
@@ -25,5 +26,7 @@ export async function POST(request: Request) {
     }
   }
   await supabase.auth.signOut().catch(() => undefined);
-  return ok({ signedOut: true });
+  const response = ok({ signedOut: true });
+  response.cookies.delete(EMERGENCY_SESSION_COOKIE);
+  return response;
 }

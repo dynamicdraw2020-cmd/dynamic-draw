@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { demoMode, supabaseAdminConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmergencyProfileIdFromCookies } from "@/lib/emergency-session";
 import type { Profile } from "@/lib/types";
 import {
   type AdminCapability,
@@ -143,6 +144,17 @@ export function enforceSameOrigin(request: Request) {
 
 export async function getApiProfile(): Promise<{ profile: Profile; userId: string } | null> {
   if (demoMode) return null;
+
+  try {
+    const emergencyProfileId = await getEmergencyProfileIdFromCookies();
+    if (emergencyProfileId) {
+      const admin = createAdminClient();
+      const profileResult = await withTimeout(admin.from("profiles").select("*").eq("id", emergencyProfileId).maybeSingle(), RUNTIME_LIMITS.readQueryTimeoutMs, "api emergency profile lookup");
+      if (!profileResult.error && profileResult.data) return { profile: profileResult.data as Profile, userId: emergencyProfileId };
+    }
+  } catch {
+    // 긴급 복구 세션 확인 실패는 일반 Supabase 세션 확인으로 이어진다.
+  }
 
   try {
     const supabase = await createClient();

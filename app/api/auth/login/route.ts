@@ -19,6 +19,23 @@ const schema = z.object({
   browserFingerprint: z.string().trim().max(120).optional().default(""),
 });
 
+type LoginProfile = {
+  id: string;
+  email: string | null;
+  username: string | null;
+  display_name?: string | null;
+  role: string | null;
+  status: string | null;
+  must_change_password?: boolean | null;
+};
+
+type AuthData = {
+  user: { id: string } | null;
+  session?: unknown;
+};
+
+type AuthError = { message?: string; code?: string; status?: number } | null;
+
 function safeLower(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
@@ -31,11 +48,22 @@ async function ignoreSideEffect<T>(promise: PromiseLike<T>) {
   }
 }
 
-function getMagicLinkTokenHash(linkData: unknown): string | null {
-  const data = linkData as { properties?: Record<string, unknown> } | null;
-  const props = data?.properties;
-  const tokenHash = props?.hashed_token ?? props?.token_hash ?? props?.email_otp;
-  return typeof tokenHash === "string" && tokenHash.length > 0 ? tokenHash : null;
+async function findProfile(admin: ReturnType<typeof createAdminClient>, loginValue: string, normalizedLoginId: string) {
+  if (loginValue.includes("@")) {
+    const { data } = await admin
+      .from("profiles")
+      .select("*")
+      .ilike("email", loginValue)
+      .maybeSingle();
+    return (data ?? null) as LoginProfile | null;
+  }
+
+  const { data } = await admin
+    .from("profiles")
+    .select("*")
+    .eq("username", normalizedLoginId)
+    .maybeSingle();
+  return (data ?? null) as LoginProfile | null;
 }
 
 async function postHandler(request: Request) {
@@ -46,7 +74,7 @@ async function postHandler(request: Request) {
   if (csrf) return csrf;
 
   const meta = requestMeta(request);
-  const limited = await enforceRateLimit(`login:v164:${meta.ip}`, 60, 60 * 10);
+  const limited = await enforceRateLimit(`login:v170:${meta.ip}`, 30, 60 * 10);
   if (limited) return limited;
 
   const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
@@ -55,15 +83,18 @@ async function postHandler(request: Request) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
-  const passwordValue = String(parsed.data.password || "").trim();
   const loginIdRaw = String(parsed.data.loginId || "").trim();
   const loginValue = safeLower(loginIdRaw);
   const normalizedLoginId = normalizeLoginId(loginValue);
+  const password = String(parsed.data.password || "").trim();
+
+  // 핵심 수정: 이메일이면 그대로 Supabase Auth에 넘기고, 아이디일 때만 local 이메일로 변환한다.
   const credential = loginValue.includes("@") ? loginValue : credentialToAuthEmail(loginIdRaw);
 
   await ignoreSideEffect(
     admin.from("login_activity_logs").insert({
       login_id: loginIdRaw,
+      email: loginValue.includes("@") ? loginValue : null,
       ip_address: meta.ip,
       browser_fingerprint: fingerprint,
       status: "TRYING",
@@ -72,89 +103,39 @@ async function postHandler(request: Request) {
   );
 
   let signInEmail = credential;
-  let signInResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null = null;
-  let data: NonNullable<typeof signInResult>["data"] = { user: null, session: null };
-  let error: NonNullable<typeof signInResult>["error"] = null;
+  let authData: AuthData = { user: null };
+  let authError: AuthError = null;
 
-  // 긴급 복구 모드: 임시 비밀번호를 쓰는 계정은 비밀번호 검증 대신 Auth magic link 세션을 서버에서 발급한다.
-  // SQL로 복구된 auth.users 비밀번호가 GoTrue 검증과 어긋나도 이 경로로 로그인 세션을 정상 생성한다.
-  if (passwordValue === TEMP_PASSWORD) {
+  const firstResult = await supabase.auth.signInWithPassword({ email: signInEmail, password });
+  authData = (firstResult.data ?? { user: null }) as AuthData;
+  authError = (firstResult.error ?? null) as AuthError;
+
+  // 복구 모드: must_change_password=true인 승인 유저는 임시 비밀번호로 재설정 후 다시 로그인한다.
+  if ((authError || !authData.user) && password === TEMP_PASSWORD) {
     try {
-      let recoveryProfile: { id: string; email: string | null; username: string | null; status: string | null; must_change_password?: boolean | null } | null = null;
+      const recoveryProfile = await findProfile(admin, loginValue, normalizedLoginId);
 
-      if (loginValue.includes("@")) {
-        const { data: byEmail } = await admin
-          .from("profiles")
-          .select("id,email,username,status,must_change_password")
-          .ilike("email", loginValue)
-          .maybeSingle();
-        recoveryProfile = byEmail;
-      } else {
-        const { data: byUsername } = await admin
-          .from("profiles")
-          .select("id,email,username,status,must_change_password")
-          .eq("username", normalizedLoginId)
-          .maybeSingle();
-        recoveryProfile = byUsername;
-      }
+      if (recoveryProfile?.id && recoveryProfile.must_change_password && recoveryProfile.status === "APPROVED") {
+        const recoveryEmail = safeLower(recoveryProfile.email || credential);
+        const updateResult = await admin.auth.admin.updateUserById(recoveryProfile.id, {
+          email: recoveryEmail,
+          password: TEMP_PASSWORD,
+          email_confirm: true,
+        });
 
-      if (recoveryProfile?.must_change_password && recoveryProfile.status === "APPROVED") {
-        signInEmail = safeLower(recoveryProfile.email || credential);
-
-        await ignoreSideEffect(
-          admin.auth.admin.updateUserById(recoveryProfile.id, {
-            email: signInEmail,
-            password: TEMP_PASSWORD,
-            email_confirm: true,
-          }),
-        );
-
-        const generated = await admin.auth.admin.generateLink({ type: "magiclink", email: signInEmail });
-        const tokenHash = getMagicLinkTokenHash(generated.data);
-
-        if (generated.error || !tokenHash) {
-          throw new Error(generated.error?.message || "Magic link token was not generated");
+        if (!updateResult.error) {
+          signInEmail = recoveryEmail;
+          const retryResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: TEMP_PASSWORD });
+          authData = (retryResult.data ?? { user: null }) as AuthData;
+          authError = (retryResult.error ?? null) as AuthError;
         }
-
-        const verified = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
-        data = verified.data;
-        error = verified.error;
       }
-    } catch (recoveryError) {
-      console.warn(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          service: "dynamic-draw",
-          level: "WARN",
-          event: "TEMP_PASSWORD_SESSION_FAILED",
-          loginId: loginIdRaw,
-          error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
-        }),
-      );
+    } catch {
+      // 아래 INVALID_CREDENTIALS 처리로 넘긴다.
     }
   }
 
-  // 일반 로그인. 복구 세션 생성이 안 된 경우에만 실행한다.
-  if (!data.user) {
-    signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: passwordValue });
-    data = signInResult.data;
-    error = signInResult.error;
-  }
-
-  if (error || !data.user) {
-    console.warn(
-      JSON.stringify({
-        ts: new Date().toISOString(),
-        service: "dynamic-draw",
-        level: "WARN",
-        event: "LOGIN_AUTH_FAILED_DETAIL",
-        email: signInEmail,
-        code: error?.code ?? null,
-        status: error?.status ?? null,
-        message: error?.message ?? null,
-      }),
-    );
-
+  if (authError || !authData.user) {
     await ignoreSideEffect(
       admin.from("login_activity_logs").insert({
         login_id: loginIdRaw,
@@ -168,7 +149,13 @@ async function postHandler(request: Request) {
     return fail("아이디 또는 비밀번호가 올바르지 않습니다.", 401, "INVALID_CREDENTIALS");
   }
 
-  const { data: profile, error: profileError } = await admin.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
+  const { data: profileRow, error: profileError } = await admin
+    .from("profiles")
+    .select("*")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+
+  const profile = profileRow as LoginProfile | null;
   if (profileError || !profile) return fail("회원 정보가 생성되지 않았습니다. 관리자에게 문의해 주세요.", 500, "PROFILE_MISSING");
 
   let operationMode = "ACTIVE";
@@ -193,12 +180,12 @@ async function postHandler(request: Request) {
 
   const now = new Date().toISOString();
 
-  await ignoreSideEffect(admin.from("profiles").update({ last_login_at: now }).eq("id", data.user.id));
+  await ignoreSideEffect(admin.from("profiles").update({ last_login_at: now }).eq("id", authData.user.id));
 
   await ignoreSideEffect(
     admin.from("member_session_status").upsert(
       {
-        profile_id: data.user.id,
+        profile_id: authData.user.id,
         status: "ONLINE",
         is_online: true,
         last_login_at: now,
@@ -214,7 +201,7 @@ async function postHandler(request: Request) {
 
   await ignoreSideEffect(
     admin.from("login_activity_logs").insert({
-      profile_id: data.user.id,
+      profile_id: authData.user.id,
       login_id: profile.username ?? loginIdRaw,
       email: profile.email ?? signInEmail,
       username: profile.username ?? null,
@@ -244,11 +231,11 @@ async function postHandler(request: Request) {
     await ignoreSideEffect(
       trackStepMission({
         admin,
-        profileId: data.user.id,
+        profileId: authData.user.id,
         missionType: "LOGIN",
         amount: 1,
         sourceType: "LOGIN",
-        sourceId: data.user.id,
+        sourceId: authData.user.id,
         autoClaim: true,
         details: { loginId: profile.username ?? loginIdRaw, ip: meta.ip },
       }),
@@ -267,4 +254,4 @@ async function postHandler(request: Request) {
   return ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
 }
 
-export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 60, windowSeconds: 60 } });
+export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 30, windowSeconds: 60 } });

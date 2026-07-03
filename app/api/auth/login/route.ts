@@ -4,7 +4,6 @@ import { isAdminRole } from "@/lib/admin-capabilities";
 import { credentialToAuthEmail, normalizeLoginId } from "@/lib/identity";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { trackStepMission } from "@/lib/step-events";
 
@@ -33,10 +32,36 @@ async function ignoreSideEffect<T>(promise: PromiseLike<T>) {
   }
 }
 
+function getSupabaseUrl() {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+}
+
+function getSupabaseAuthKey() {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    ""
+  );
+}
+
 async function createLoginClient() {
   const cookieStore = await cookies();
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseKey = getSupabaseAuthKey();
 
-  return createServerClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase login environment variables are missing");
+  }
+
+  return createServerClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -63,6 +88,25 @@ function logAuthFailure(context: { email: string; code?: string; status?: number
       code: context.code ?? null,
       status: context.status ?? null,
       message: context.message ?? null,
+      supabaseHost: (() => {
+        try {
+          return new URL(getSupabaseUrl()).host;
+        } catch {
+          return null;
+        }
+      })(),
+      hasPublicKey: Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+          process.env.SUPABASE_PUBLISHABLE_KEY ||
+          process.env.SUPABASE_ANON_KEY,
+      ),
+      usedSecretFallback: !Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+          process.env.SUPABASE_PUBLISHABLE_KEY ||
+          process.env.SUPABASE_ANON_KEY,
+      ),
     }),
   );
 }

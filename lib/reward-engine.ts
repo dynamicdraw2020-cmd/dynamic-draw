@@ -84,7 +84,7 @@ export function normalizeReferralCodeInput(value: string) {
   return trimmed.replace(/\D/g, "").slice(0, 8);
 }
 
-export function isNumericReferralCode(value: string | null | undefined) {
+export function isNumericReferralCode(value: string | null | undefined): value is string {
   return typeof value === "string" && /^[0-9]{1,8}$/.test(value);
 }
 

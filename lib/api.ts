@@ -279,11 +279,13 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
   }
 }
 
+type ApiHandlerResult = Response | null | undefined;
+
 export function withApiRoute<TContext = unknown>(
-  handler: (request: Request, context: TContext) => Promise<Response> | Response,
+  handler: (request: Request, context: TContext) => Promise<ApiHandlerResult> | ApiHandlerResult,
   options: ApiRouteOptions = {},
 ) {
-  return async function guardedRoute(request: Request, context: TContext) {
+  return async function guardedRoute(request: Request, context: TContext): Promise<Response> {
     const started = Date.now();
     const requestId = request.headers.get("x-request-id") || createRequestId("api");
     const meta = requestMeta(request);
@@ -310,7 +312,8 @@ export function withApiRoute<TContext = unknown>(
         }
       }
 
-      const response = await withTimeout(Promise.resolve(handler(request, context)), options.timeoutMs ?? RUNTIME_LIMITS.routeTimeoutMs, `api ${route}`);
+      const handled = await withTimeout(Promise.resolve(handler(request, context)), options.timeoutMs ?? RUNTIME_LIMITS.routeTimeoutMs, `api ${route}`);
+      const response = handled ?? fail("요청 처리 결과를 만들지 못했습니다.", 500, "EMPTY_API_RESPONSE");
       const durationMs = Date.now() - started;
       logSlowOperation({ event: "SLOW_API_ROUTE", route, method: request.method, requestId, ip: meta.ip, userAgent: meta.userAgent, status: response.status, durationMs });
       runtimeLog({ level: response.status >= 500 ? "ERROR" : response.status >= 400 ? "WARN" : "INFO", event: "API_ROUTE_COMPLETED", route, method: request.method, requestId, ip: meta.ip, userAgent: meta.userAgent, status: response.status, durationMs });

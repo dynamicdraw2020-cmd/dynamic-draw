@@ -765,7 +765,7 @@ export async function getAdminResults(limit = 100) {
   if (demoMode) return mockResults;
   const admin = createAdminClient();
 
-  async function mapRawRows(rows: Array<Record<string, any>>) {
+  async function mapRawRows(rows: Array<Record<string, unknown>>) {
     if (!rows.length) return [];
     const drawIds = Array.from(new Set(rows.map((row) => String(row.draw_id ?? row.drawId ?? "")).filter(Boolean)));
     const rewardIds = Array.from(new Set(rows.map((row) => String(row.reward_id ?? row.rewardId ?? "")).filter(Boolean)));
@@ -811,7 +811,7 @@ export async function getAdminResults(limit = 100) {
     .limit(limit);
 
   if (!rawResult.error && rawResult.data?.length) {
-    return mapRawRows((rawResult.data ?? []) as Array<Record<string, any>>);
+    return mapRawRows((rawResult.data ?? []) as Array<Record<string, unknown>>);
   }
 
   const publicResult = await admin
@@ -821,7 +821,7 @@ export async function getAdminResults(limit = 100) {
     .limit(limit);
 
   if (!publicResult.error && publicResult.data?.length) {
-    return mapRawRows((publicResult.data ?? []) as Array<Record<string, any>>);
+    return mapRawRows((publicResult.data ?? []) as Array<Record<string, unknown>>);
   }
 
   const relationFallback = await admin

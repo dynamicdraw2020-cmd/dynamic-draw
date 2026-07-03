@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiUser } from "@/lib/api";
+import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiUser, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit(`ticket-exchange:${guard.auth.userId}`, 20, 60);
   if (limited) return limited;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("교환 요청을 확인해 주세요.", 422);
 
   const admin = createAdminClient();

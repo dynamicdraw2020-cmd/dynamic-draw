@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo;
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "공지 정보를 확인해 주세요.", 422, "VALIDATION_ERROR");
   const admin = createAdminClient();
   const { data, error } = await admin.from("notices").insert({ title: parsed.data.title, body: parsed.data.body, is_pinned: parsed.data.isPinned, is_public: parsed.data.isPublic, created_by: guard.auth.userId }).select("*").single();

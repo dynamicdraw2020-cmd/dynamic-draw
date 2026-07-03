@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiUser } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiUser, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const attachmentSchema = z.object({ name: z.string().max(120), type: z.string().max(80), size: z.number().max(1_200_000), dataUrl: z.string().startsWith("data:image/").max(1_800_000) });
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo;
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiUser(); if ("error" in guard) return guard.error;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("문의 내용을 확인해 주세요. 사진은 최대 3장, 각 1.2MB 이하입니다.", 422, "VALIDATION_ERROR");
   const admin = createAdminClient();
   const payload = { profile_id: guard.auth.userId, category: parsed.data.category, title: parsed.data.title, body: parsed.data.body, attachments: parsed.data.attachments, status: "OPEN" };

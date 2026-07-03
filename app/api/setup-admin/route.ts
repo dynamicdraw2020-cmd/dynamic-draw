@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, fail, ok, requestMeta } from "@/lib/api";
+import { enforceRateLimit, enforceSameOrigin, fail, ok, requestMeta, readJsonWithLimit } from "@/lib/api";
 import { serverEnv } from "@/lib/env";
 import { normalizeLoginId, usernameToAuthEmail } from "@/lib/identity";
 import { inspectSetupStatus } from "@/lib/setup-status";
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit(`setup-admin:${meta.ip}`, 5, 60 * 15);
   if (limited) return limited;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "입력값을 확인해 주세요.", 422, "VALIDATION_ERROR");
   if (!sameSecret(parsed.data.setupSecret, serverEnv.adminSetupSecret)) {
     return fail("설치용 비밀문자가 맞지 않습니다.", 403, "INVALID_SETUP_SECRET");

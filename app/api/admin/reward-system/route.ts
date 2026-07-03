@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deliverRewards, type RewardItem } from "@/lib/reward-engine";
 
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo;
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("요청값을 확인해 주세요.", 422, "VALIDATION_ERROR");
 
   const body = parsed.data as Record<string, unknown> & { action: string };

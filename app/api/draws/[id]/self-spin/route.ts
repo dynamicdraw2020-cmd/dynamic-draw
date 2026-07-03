@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { databaseRpcErrorMessage, enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiUser } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiUser, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ idempotencyKey: z.uuid() });
@@ -12,7 +12,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { id } = await context.params;
   if (!z.uuid().safeParse(id).success) return fail("뽑기 ID가 올바르지 않습니다.", 400, "INVALID_DRAW_ID");
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("중복 방지 키가 올바르지 않습니다.", 422, "VALIDATION_ERROR");
 
   const meta = requestMeta(request);

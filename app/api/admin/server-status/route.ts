@@ -22,11 +22,11 @@ function nowMs() {
   return Math.round(performance.now());
 }
 
-async function withTimeout<T>(work: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+async function withTimeout<T>(work: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      work,
+      Promise.resolve(work),
       new Promise<T>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`${label} timeout ${timeoutMs}ms`)), timeoutMs);
       }),

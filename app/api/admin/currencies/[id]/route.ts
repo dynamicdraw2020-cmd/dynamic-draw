@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 const patchSchema = z.object({ isActive: z.boolean().optional(), name: z.string().trim().min(2).max(40).optional(), symbol: z.string().trim().min(1).max(8).optional() });
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const demo = rejectDemoMutation(); if (demo) return demo; const csrf = enforceSameOrigin(request); if (csrf) return csrf; const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
-  const { id } = await context.params; const parsed = patchSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return fail("화폐 정보를 확인해 주세요.", 422);
+  const { id } = await context.params; const parsed = patchSchema.safeParse(await readJsonWithLimit(request).catch(() => null)); if (!parsed.success) return fail("화폐 정보를 확인해 주세요.", 422);
   const patch: Record<string, unknown> = {}; if (parsed.data.isActive !== undefined) patch.is_active = parsed.data.isActive; if (parsed.data.name !== undefined) patch.name = parsed.data.name; if (parsed.data.symbol !== undefined) patch.symbol = parsed.data.symbol;
   const admin = createAdminClient(); const { data, error } = await admin.from("virtual_currencies").update(patch).eq("id", id).is("deleted_at", null).select("*").single();
   if (error) return fail("화폐를 수정하지 못했습니다.", 400, "CURRENCY_UPDATE_FAILED", error.message);

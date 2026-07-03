@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const imageInputSchema = z.string().trim().max(1_400_000).refine((value) => value.length === 0 || /^https?:\/\//.test(value) || /^data:image\/png;base64,/.test(value), "PNG 파일 또는 이미지 URL을 확인해 주세요.");
@@ -20,7 +20,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id } = await context.params;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("상품 정보를 확인해 주세요.", 422);
   const admin = createAdminClient();
   const { data: current } = await admin.from("rewards").select("*").eq("id", id).maybeSingle();

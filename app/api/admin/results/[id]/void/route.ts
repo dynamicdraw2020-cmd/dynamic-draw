@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ reason: z.string().trim().min(2).max(300) });
@@ -9,7 +9,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiAdmin("SUPER_ADMIN"); if ("error" in guard) return guard.error;
   const { id } = await context.params;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("무효 처리 사유를 입력해 주세요.", 422);
   const meta = requestMeta(request);
   const admin = createAdminClient();

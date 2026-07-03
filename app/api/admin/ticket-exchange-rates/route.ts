@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 const schema = z.object({ drawId: z.uuid(), currencyId: z.uuid(), currencyCost: z.number().int().min(1).max(1_000_000), ticketQuantity: z.number().int().min(1).max(1000) });
 export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo; const csrf = enforceSameOrigin(request); if (csrf) return csrf; const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
-  const parsed = schema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "교환 비율을 확인해 주세요.", 422);
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null)); if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "교환 비율을 확인해 주세요.", 422);
   const admin = createAdminClient();
   const { data: draw } = await admin.from("draws").select("id,name,status,deleted_at").eq("id", parsed.data.drawId).maybeSingle();
   if (!draw || draw.deleted_at || draw.status === "ENDED") return fail("사용 가능한 뽑기를 선택해 주세요.", 404, "DRAW_NOT_AVAILABLE");

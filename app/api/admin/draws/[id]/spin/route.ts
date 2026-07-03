@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { databaseRpcErrorMessage, enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ participantId: z.uuid(), idempotencyKey: z.uuid() });
@@ -10,7 +10,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const limited = await enforceRateLimit(`spin:${guard.auth.userId}`, 12, 60); if (limited) return limited;
   const { id } = await context.params;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("참가자 정보가 올바르지 않습니다.", 422);
   const meta = requestMeta(request);
   const admin = createAdminClient();

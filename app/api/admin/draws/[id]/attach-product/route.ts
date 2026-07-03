@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ productId: z.uuid(), stock: z.number().int().min(0).nullable().optional() });
@@ -9,7 +9,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id: drawId } = await context.params;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("연결할 상품을 확인해 주세요.", 422);
   const admin = createAdminClient();
   const { data: product } = await admin.from("product_catalog").select("*").eq("id", parsed.data.productId).is("deleted_at", null).eq("is_active", true).maybeSingle();

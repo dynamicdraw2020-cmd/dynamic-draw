@@ -151,12 +151,14 @@ async function postHandler(request: Request) {
     return fail(parsed.error.issues[0]?.message ?? "입력값을 확인해 주세요.", 422, "VALIDATION_ERROR", parsed.error.flatten());
   }
 
-  const login = validateLoginId(parsed.data.loginId);
+  const signupData = parsed.data;
+  const login = validateLoginId(signupData.loginId);
   if (!login.ok) return fail(login.message, 422, "LOGIN_ID_INVALID");
+  const loginId: string = login.loginId;
 
   const { ip, userAgent } = requestMeta(request);
   const admin = createAdminClient();
-  const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
+  const fingerprint = String(signupData.browserFingerprint || "unknown").slice(0, 120);
   let riskScore = 0;
   const riskFlags: string[] = [];
 
@@ -179,7 +181,7 @@ async function postHandler(request: Request) {
     if (signupGuardRelease?.allowed) return true;
 
     const release = await consumeSignupGuardRelease(admin, {
-      loginId: login.loginId,
+      loginId: loginId,
       ip,
       browserFingerprint: fingerprint,
       reason,
@@ -193,8 +195,8 @@ async function postHandler(request: Request) {
       severity: "LOW",
       ip,
       browserFingerprint: fingerprint,
-      loginId: login.loginId,
-      displayName: parsed.data.displayName,
+      loginId: loginId,
+      displayName: signupData.displayName,
       reason,
       release,
     });
@@ -204,16 +206,16 @@ async function postHandler(request: Request) {
   const limited = await enforceRateLimit(`signup:v168:${ip}`, 8, 60 * 10);
   if (limited && !(await allowOneReleasedSignupAttempt("RATE_LIMIT"))) return limited;
 
-  const elapsed = signupElapsedMs(parsed.data.signupStartedAt);
+  const elapsed = signupElapsedMs(signupData.signupStartedAt);
 
-  if (!signupBypassBySuperAdmin && parsed.data.website.trim() && !(await allowOneReleasedSignupAttempt("HONEYPOT_BLOCK"))) {
+  if (!signupBypassBySuperAdmin && signupData.website.trim() && !(await allowOneReleasedSignupAttempt("HONEYPOT_BLOCK"))) {
     await logSecurityEvent(admin, {
       eventType: "SIGNUP_HONEYPOT_BLOCK",
       severity: "HIGH",
       ip,
       browserFingerprint: fingerprint,
-      loginId: login.loginId,
-      displayName: parsed.data.displayName,
+      loginId: loginId,
+      displayName: signupData.displayName,
       reason: "honeypot field filled",
     });
     await temporaryBlock(admin, "IP", ip, "자동 가입 방어: honeypot 입력", 60);
@@ -226,8 +228,8 @@ async function postHandler(request: Request) {
       severity: "HIGH",
       ip,
       browserFingerprint: fingerprint,
-      loginId: login.loginId,
-      displayName: parsed.data.displayName,
+      loginId: loginId,
+      displayName: signupData.displayName,
       elapsedMs: elapsed,
       reason: "form submitted too quickly",
     });
@@ -235,14 +237,14 @@ async function postHandler(request: Request) {
     return fail("가입 신청 속도가 비정상적으로 빠릅니다.\n3분 뒤에 다시 시도해 주세요.", 429, "SIGNUP_TOO_FAST");
   }
 
-  if (!signupBypassBySuperAdmin && looksAutomatedSignup(login.loginId, parsed.data.displayName) && !(await allowOneReleasedSignupAttempt("PATTERN_BLOCK"))) {
+  if (!signupBypassBySuperAdmin && looksAutomatedSignup(loginId, signupData.displayName) && !(await allowOneReleasedSignupAttempt("PATTERN_BLOCK"))) {
     await logSecurityEvent(admin, {
       eventType: "SIGNUP_PATTERN_BLOCK",
       severity: "HIGH",
       ip,
       browserFingerprint: fingerprint,
-      loginId: login.loginId,
-      displayName: parsed.data.displayName,
+      loginId: loginId,
+      displayName: signupData.displayName,
       reason: "automated login/display pattern",
     });
     await temporaryBlock(admin, "IP", ip, "자동 가입 방어: 봇 계정명 패턴", 60);
@@ -255,7 +257,7 @@ async function postHandler(request: Request) {
       .select("id,kind,value,reason,expires_at")
       .eq("is_active", true)
       .in("kind", ["IP", "FINGERPRINT", "LOGIN_ID"])
-      .in("value", [ip, fingerprint, login.loginId.toLowerCase()])
+      .in("value", [ip, fingerprint, loginId.toLowerCase()])
       .limit(20);
 
     const now = Date.now();
@@ -269,8 +271,8 @@ async function postHandler(request: Request) {
         severity: "HIGH",
         ip,
         browserFingerprint: fingerprint,
-        loginId: login.loginId,
-        displayName: parsed.data.displayName,
+        loginId: loginId,
+        displayName: signupData.displayName,
         reason: blocked.reason ?? "blocklist hit",
       });
       return fail("현재 가입 신청이 잠시 제한되었습니다.\n잠시 후 다시 시도해 주세요.", 429, "SIGNUP_BLOCKLISTED");
@@ -323,8 +325,8 @@ async function postHandler(request: Request) {
         severity: "CRITICAL",
         ip,
         browserFingerprint: fingerprint,
-        loginId: login.loginId,
-        displayName: parsed.data.displayName,
+        loginId: loginId,
+        displayName: signupData.displayName,
         count: tenMinuteIpCount,
         reason: "too many signups from same IP",
       });
@@ -338,8 +340,8 @@ async function postHandler(request: Request) {
         severity: "HIGH",
         ip,
         browserFingerprint: fingerprint,
-        loginId: login.loginId,
-        displayName: parsed.data.displayName,
+        loginId: loginId,
+        displayName: signupData.displayName,
         count: tenMinuteFpCount,
         reason: "same device repeated signup",
       });
@@ -356,8 +358,8 @@ async function postHandler(request: Request) {
       severity: "HIGH",
       ip,
       browserFingerprint: fingerprint,
-      loginId: login.loginId,
-      displayName: parsed.data.displayName,
+      loginId: loginId,
+      displayName: signupData.displayName,
       riskScore,
       riskFlags,
       reason: "risk score threshold exceeded",
@@ -366,12 +368,12 @@ async function postHandler(request: Request) {
     return fail("중복 가입 또는 자동 가입으로 의심되어 가입 신청이 차단되었습니다.", 429, "SIGNUP_RISK_BLOCKED");
   }
 
-  const authEmail = loginIdToAuthEmail(login.loginId);
-  const { data: existing } = await admin.from("profiles").select("id").eq("username", login.loginId).maybeSingle();
+  const authEmail = loginIdToAuthEmail(loginId);
+  const { data: existing } = await admin.from("profiles").select("id").eq("username", loginId).maybeSingle();
   if (existing) return fail("이미 사용 중인 아이디입니다.\n다른 아이디를 사용해 주세요.", 409, "LOGIN_ID_ALREADY_REGISTERED");
 
   let referredBy: string | null = null;
-  const rawReferral = parsed.data.referralCode.trim();
+  const rawReferral = signupData.referralCode.trim();
   if (rawReferral && !/^[0-9]{1,8}$/.test(rawReferral)) {
     return fail("추천인 ID는 8자리 이내 숫자만 입력해 주세요.", 422, "REFERRAL_CODE_INVALID");
   }
@@ -406,18 +408,18 @@ async function postHandler(request: Request) {
     }
 
     if (!referrer) return fail("추천인 ID를 찾을 수 없습니다.\n추천인에게 숫자 추천 ID를 다시 확인해 주세요.", 404, "REFERRER_NOT_FOUND");
-    if (referrer.username === login.loginId) return fail("자기 자신은 추천인으로 입력할 수 없습니다.", 409, "SELF_REFERRAL_BLOCKED");
+    if (referrer.username === loginId) return fail("자기 자신은 추천인으로 입력할 수 없습니다.", 409, "SELF_REFERRAL_BLOCKED");
     referredBy = referrer.id;
   }
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: authEmail,
-    password: parsed.data.password,
+    password: signupData.password,
     email_confirm: true,
     user_metadata: {
-      display_name: parsed.data.displayName,
-      username: login.loginId,
-      signup_guard_release_id: signupGuardRelease?.releaseId ?? null,
+      display_name: signupData.displayName,
+      username: loginId,
+      signup_guard_release_id: (signupGuardRelease as SignupGuardRelease)?.releaseId ?? null,
     },
   });
 
@@ -428,8 +430,8 @@ async function postHandler(request: Request) {
     {
       id: created.user.id,
       email: authEmail,
-      username: login.loginId,
-      display_name: parsed.data.displayName,
+      username: loginId,
+      display_name: signupData.displayName,
       phone: null,
       role: "USER",
       status: "PENDING",
@@ -470,7 +472,7 @@ async function postHandler(request: Request) {
   try {
     await admin.from("signup_risk_assessments").insert({
       profile_id: created.user.id,
-      login_id: login.loginId,
+      login_id: loginId,
       ip_address: ip,
       browser_fingerprint: fingerprint,
       risk_score: riskScore,
@@ -489,7 +491,7 @@ async function postHandler(request: Request) {
     sourceType: "SIGNUP",
     sourceId: created.user.id,
     autoClaim: true,
-    details: { loginId: login.loginId, referredBy, riskScore },
+    details: { loginId: loginId, referredBy, riskScore },
   });
 
   return ok(

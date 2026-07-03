@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceRateLimit, enforceSameOrigin, ok, rejectDemoMutation, requestMeta } from "@/lib/api";
+import { enforceRateLimit, enforceSameOrigin, ok, rejectDemoMutation, requestMeta, readJsonWithLimit } from "@/lib/api";
 import { createClient } from "@/lib/supabase/server";
 
 const schema = z.object({ email: z.email().transform((value) => value.toLowerCase()) });
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit(`password-reset-request:${ip}`, 5, 60 * 15);
   if (limited) return limited;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   // 계정 존재 여부를 외부에 드러내지 않기 위해 잘못된 형식 외에는 같은 메시지를 반환합니다.
   if (parsed.success) {
     const supabase = await createClient();

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin } from "@/lib/api";
+import { databaseRpcErrorMessage, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, requireApiAdmin, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({
@@ -12,7 +12,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiAdmin("MANAGER"); if ("error" in guard) return guard.error;
   const { id } = await context.params;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "확률을 확인해 주세요.", 422);
   const probabilities = parsed.data.probabilities.map((item) => ({ reward_id: item.rewardId, probability_units: Math.round(item.percent * 10_000) }));
   const total = probabilities.reduce((sum, item) => sum + item.probability_units, 0);

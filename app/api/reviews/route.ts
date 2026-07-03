@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiUser } from "@/lib/api";
+import { enforceSameOrigin, fail, ok, rejectDemoMutation, requireApiUser, readJsonWithLimit } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ resultId: z.string().optional().nullable(), title: z.string().trim().min(2).max(100), body: z.string().trim().min(5).max(1600), nickname: z.string().trim().max(30).optional().default("") });
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const demo = rejectDemoMutation(); if (demo) return demo;
   const csrf = enforceSameOrigin(request); if (csrf) return csrf;
   const guard = await requireApiUser(); if ("error" in guard) return guard.error;
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("후기 내용을 확인해 주세요.", 422, "VALIDATION_ERROR");
   const admin = createAdminClient();
   let rewardName: string | null = null;

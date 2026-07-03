@@ -67,9 +67,10 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
     if (mode === "signup") {
       setMessage({ type: "success", text: body.data?.message ?? "가입 신청이 완료되었습니다." });
       setFormVersion((version) => version + 1);
-      if (typeof body.data?.redirectTo === "string") {
+      const redirectTo = typeof body.data?.redirectTo === "string" ? body.data.redirectTo : null;
+      if (redirectTo) {
         window.setTimeout(() => {
-          router.push(body.data.redirectTo);
+          router.push(redirectTo);
           router.refresh();
         }, 1100);
       }

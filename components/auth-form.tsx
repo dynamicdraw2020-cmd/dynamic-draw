@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, IdCard, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, IdCard, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { clientJsonRequest } from "@/lib/client-fetch";
@@ -23,16 +23,69 @@ function hashSmall(value: string) {
   return `fp_${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
+type ResetNotice = {
+  show: boolean;
+  temporaryPassword?: string;
+  message?: string;
+  displayName?: string;
+};
+
 export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "signup"; nextPath?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formVersion, setFormVersion] = useState(0);
   const [signupStartedAt, setSignupStartedAt] = useState("");
+  const [loginId, setLoginId] = useState("");
+  const [resetNotice, setResetNotice] = useState<ResetNotice | null>(null);
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
 
   useEffect(() => {
     if (mode === "signup") setSignupStartedAt(String(Date.now()));
   }, [mode, formVersion]);
+
+  useEffect(() => {
+    if (mode !== "login") {
+      setResetNotice(null);
+      return;
+    }
+
+    const value = loginId.trim();
+    if (value.length < 3) {
+      setResetNotice(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const body = await clientJsonRequest<{ data?: ResetNotice }>(`/api/auth/reset-notice?loginId=${encodeURIComponent(value)}`, {
+          method: "GET",
+          timeoutMs: 3500,
+          signal: controller.signal,
+          retries: 0,
+        });
+        setResetNotice(body.data?.show ? body.data : null);
+      } catch {
+        setResetNotice(null);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [mode, loginId]);
+
+  async function copyTemporaryPassword() {
+    const value = resetNotice?.temporaryPassword;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage({ type: "success", text: "임시 비밀번호를 복사했습니다." });
+    } catch {
+      setMessage({ type: "info", text: `임시 비밀번호: ${value}` });
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,6 +120,7 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
     if (mode === "signup") {
       setMessage({ type: "success", text: body.data?.message ?? "가입 신청이 완료되었습니다." });
       setFormVersion((version) => version + 1);
+      setLoginId("");
       const redirectTo = typeof body.data?.redirectTo === "string" ? body.data.redirectTo : null;
       if (redirectTo) {
         window.setTimeout(() => {
@@ -105,10 +159,25 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
           minLength={3}
           maxLength={32}
           required
+          value={loginId}
+          onChange={(event) => setLoginId(event.currentTarget.value)}
           autoComplete={mode === "login" ? "username" : "off"}
           placeholder="영문 소문자, 숫자, _ 조합"
         />
       </label>
+
+      {mode === "login" && resetNotice?.show && resetNotice.temporaryPassword && (
+        <div className="notice-box compact" style={{ borderColor: "rgba(246, 196, 83, 0.55)", background: "rgba(246, 196, 83, 0.10)" }}>
+          <div className="flex items-center gap-1"><AlertTriangle size={16} /><strong>비밀번호가 초기화되었습니다.</strong></div>
+          <p className="mt-1 mb-0">{resetNotice.message ?? "아래 임시 비밀번호로 로그인한 뒤 새 비밀번호로 변경해 주세요."}</p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <code style={{ fontWeight: 800, fontSize: 14 }}>{resetNotice.temporaryPassword}</code>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => void copyTemporaryPassword()}>
+              <Copy size={14} /> 복사
+            </button>
+          </div>
+        </div>
+      )}
 
       {mode === "signup" && (
         <>

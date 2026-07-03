@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LoaderCircle, ShieldBan, Trash2, UserRoundCheck } from "lucide-react";
+import { Check, KeyRound, LoaderCircle, ShieldBan, Trash2, UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { clientJsonRequest } from "@/lib/client-fetch";
@@ -25,6 +25,28 @@ export function MemberActions({
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const allowed = allowedActionsForRole(adminRole);
+
+  async function resetPassword() {
+    if (adminRole !== "SUPER_ADMIN") return window.alert("비밀번호 초기화는 최고 관리자만 가능합니다.");
+    const confirmText = window.prompt("이 회원의 비밀번호를 공통 임시 비밀번호로 초기화합니다.\n계속하려면 RESET을 입력해 주세요.");
+    if (confirmText !== "RESET") return;
+
+    setLoading("reset-password");
+    try {
+      const body = await clientJsonRequest<{ data?: { temporaryPassword?: string } }>(`/api/admin/members/${memberId}/reset-password`, {
+        method: "POST",
+        json: {},
+        timeoutMs: 10000,
+        fallbackMessage: "비밀번호를 초기화하지 못했습니다.",
+      });
+      window.alert(`비밀번호 초기화 완료\n임시 비밀번호: ${body.data?.temporaryPassword ?? "DynamicD2026!reset"}`);
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "비밀번호를 초기화하지 못했습니다.");
+    } finally {
+      setLoading(null);
+    }
+  }
 
   async function act(type: "approve" | "reject" | "suspend" | "restore" | "delete") {
     if (!allowed.has(type)) return window.alert("현재 권한으로는 처리할 수 없는 작업입니다.");
@@ -83,6 +105,11 @@ export function MemberActions({
   if (status === "APPROVED") {
     return (
       <div className="table-actions compact">
+        {adminRole === "SUPER_ADMIN" && (
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => void resetPassword()} disabled={Boolean(loading)}>
+            {loading === "reset-password" ? <LoaderCircle size={14} className="spin" /> : <KeyRound size={14} />} 비밀번호 초기화
+          </button>
+        )}
         {allowed.has("suspend") && (
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => void act("suspend")} disabled={Boolean(loading)}>
             <ShieldBan size={14} /> 이용 정지
@@ -99,6 +126,11 @@ export function MemberActions({
 
   return (
     <div className="table-actions compact">
+      {adminRole === "SUPER_ADMIN" && status !== "DELETED" && (
+        <button className="btn btn-secondary btn-sm" type="button" onClick={() => void resetPassword()} disabled={Boolean(loading)}>
+          {loading === "reset-password" ? <LoaderCircle size={14} className="spin" /> : <KeyRound size={14} />} 비밀번호 초기화
+        </button>
+      )}
       {allowed.has("restore") && (
         <button className="btn btn-primary btn-sm" type="button" onClick={() => void act("restore")} disabled={Boolean(loading)}>
           <UserRoundCheck size={14} /> 승인 상태 복구

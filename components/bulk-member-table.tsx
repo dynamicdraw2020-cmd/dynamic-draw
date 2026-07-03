@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, LoaderCircle, RotateCcw, ShieldBan, Square, Trash2 } from "lucide-react";
+import { CheckSquare, KeyRound, LoaderCircle, RotateCcw, ShieldBan, Square, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { MemberActions } from "@/components/member-actions";
@@ -36,6 +36,7 @@ export function BulkMemberTable({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkSuspending, setBulkSuspending] = useState(false);
   const [bulkRestoring, setBulkRestoring] = useState(false);
+  const [bulkPasswordResetting, setBulkPasswordResetting] = useState(false);
 
   const selectedPending = selected.filter((id) => pendingIds.includes(id));
   const allSelected = pendingIds.length > 0 && selectedPending.length === pendingIds.length;
@@ -99,6 +100,32 @@ export function BulkMemberTable({
     }
   }
 
+  async function resetApprovedPasswords() {
+    if (currentAdmin.role !== "SUPER_ADMIN") return window.alert("비밀번호 일괄 초기화는 최고 관리자만 가능합니다.");
+    const count = members.filter((member) => member.role !== "SUPER_ADMIN" && member.status === "APPROVED" && member.id !== currentAdmin.id).length;
+    if (!count) return window.alert("초기화할 승인 회원이 없습니다.");
+    const confirmText = window.prompt(`승인 회원 ${count.toLocaleString()}명의 비밀번호를 공통 임시 비밀번호로 초기화합니다.
+계속하려면 RESET을 입력해 주세요.`);
+    if (confirmText !== "RESET") return;
+    setBulkPasswordResetting(true);
+    try {
+      const body = await clientJsonRequest<{ data?: { temporaryPassword?: string; succeededCount?: number; failedCount?: number } }>("/api/admin/members/reset-passwords", {
+        method: "POST",
+        json: { confirm: "RESET", scope: "approved-users", limit: 500 },
+        timeoutMs: 30000,
+        fallbackMessage: "비밀번호 일괄 초기화에 실패했습니다.",
+      });
+      window.alert(`초기화 완료: ${body.data?.succeededCount ?? 0}명
+실패: ${body.data?.failedCount ?? 0}명
+임시 비밀번호: ${body.data?.temporaryPassword ?? "DynamicD2026!reset"}`);
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "비밀번호 일괄 초기화에 실패했습니다.");
+    } finally {
+      setBulkPasswordResetting(false);
+    }
+  }
+
   async function restoreAllRegularMembers() {
     if (currentAdmin.role !== "SUPER_ADMIN") return window.alert("전체 이용정지 해지는 최고 관리자만 가능합니다.");
     const count = members.filter((member) => member.role === "USER" && member.status === "SUSPENDED").length;
@@ -148,6 +175,11 @@ export function BulkMemberTable({
           <button className="btn btn-primary" type="button" onClick={() => void approveSelected()} disabled={loading || !selectedPending.length}>
             {loading ? <LoaderCircle size={16} className="spin" /> : <CheckSquare size={16} />} 선택 {selectedPending.length}명 승인
           </button>
+          {currentAdmin.role === "SUPER_ADMIN" && (
+            <button className="btn btn-secondary" type="button" onClick={() => void resetApprovedPasswords()} disabled={bulkPasswordResetting}>
+              {bulkPasswordResetting ? <LoaderCircle size={16} className="spin" /> : <KeyRound size={16} />} 승인 회원 임시비번 적용
+            </button>
+          )}
           {currentAdmin.role === "SUPER_ADMIN" && (
             <button className="btn btn-secondary" type="button" onClick={() => void restoreAllRegularMembers()} disabled={bulkRestoring}>
               {bulkRestoring ? <LoaderCircle size={16} className="spin" /> : <RotateCcw size={16} />} 일반 회원 정지 해지
@@ -201,7 +233,7 @@ export function BulkMemberTable({
                     <td>
                       <strong>{member.display_name}</strong>
                       <br />
-                      <small>개인정보 최소 수집 계정</small>
+                      <small>{member.must_change_password ? "임시 비밀번호 사용 중" : "개인정보 최소 수집 계정"}</small>
                     </td>
                     <td>{displayLoginId(member)}</td>
                     <td>{member.member_code ?? "미발급"}</td>

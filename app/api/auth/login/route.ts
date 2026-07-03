@@ -51,7 +51,9 @@ async function postHandler(request: Request) {
   const loginIdRaw = String(parsed.data.loginId || "").trim();
   const loginValue = safeLower(loginIdRaw);
   const normalizedLoginId = normalizeLoginId(loginValue);
-  const credential = credentialToAuthEmail(loginIdRaw);
+  const credential = loginValue.includes("@")
+    ? loginValue
+    : credentialToAuthEmail(loginIdRaw);
 
   await ignoreSideEffect(
     admin.from("login_activity_logs").insert({

@@ -20,6 +20,9 @@ export interface Profile {
   last_seen_at?: string | null;
   ip_address?: string | null;
   browser_fingerprint?: string | null;
+  must_change_password?: boolean | null;
+  password_reset_at?: string | null;
+  password_changed_at?: string | null;
 }
 
 export interface Reward {

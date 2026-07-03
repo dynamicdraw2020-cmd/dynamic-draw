@@ -96,11 +96,11 @@ async function loadTicketPageData(admin: AdminClient) {
   const currencyMap = new Map(currencies.map((currency) => [currency.id, currency]));
 
   const balances: AdminTicketBalance[] = rawBalances
-    .map((balance) => {
+    .flatMap((balance) => {
       const profile = profileMap.get(balance.profile_id);
       const draw = drawMap.get(balance.draw_id);
-      if (!profile || !draw) return null;
-      return {
+      if (!profile || !draw) return [];
+      return [{
         profile_id: balance.profile_id,
         draw_id: balance.draw_id,
         quantity: Number(balance.quantity ?? 0),
@@ -110,16 +110,15 @@ async function loadTicketPageData(admin: AdminClient) {
         member_code: profile.member_code,
         draw_name: draw.name,
         updated_at: balance.updated_at,
-      } satisfies AdminTicketBalance;
-    })
-    .filter((item): item is AdminTicketBalance => Boolean(item));
+      } satisfies AdminTicketBalance];
+    });
 
   const currencyBalances: AdminCurrencyBalance[] = rawCurrencyBalances
-    .map((balance) => {
+    .flatMap((balance) => {
       const profile = profileMap.get(balance.profile_id);
       const currency = currencyMap.get(balance.currency_id);
-      if (!profile || !currency) return null;
-      return {
+      if (!profile || !currency) return [];
+      return [{
         profile_id: balance.profile_id,
         currency_id: balance.currency_id,
         balance: Number(balance.balance ?? 0),
@@ -130,9 +129,8 @@ async function loadTicketPageData(admin: AdminClient) {
         currency_name: currency.name,
         currency_symbol: currency.symbol,
         updated_at: balance.updated_at,
-      } satisfies AdminCurrencyBalance;
-    })
-    .filter((item): item is AdminCurrencyBalance => Boolean(item));
+      } satisfies AdminCurrencyBalance];
+    });
 
   const exchangeRates = rawExchangeRates
     .filter((rate) => !rate.deleted_at)

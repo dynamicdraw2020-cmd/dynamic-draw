@@ -1,0 +1,28 @@
+Dynamic D v1.8.2 GitHub 교체용
+
+포함 내용
+1. v1.8.0 스탭업 미션 이벤트 시스템
+2. v1.8.0 쿠폰 공개/숨김/관리자전용/event_only 기능
+3. v1.8.1 문의센터 관리 사진 확대 보기
+4. v1.8.2 Next.js 16 / Turbopack route.ts re-export 빌드 오류 수정
+
+중요
+- 기존 UI를 갈아엎지 않습니다.
+- 기존 기능을 삭제하지 않습니다.
+- 관리자 사이드바/전역 CSS는 건드리지 않습니다.
+- SQL 먼저 실행 후 GitHub 파일을 덮어쓰세요.
+
+수정된 빌드 오류 파일
+- app/api/admin/members/bulk-delete-rejected/route.ts
+
+Next.js 16 대응 방식
+- Route Segment Config(dynamic/runtime/maxDuration)는 route.ts에서 직접 export const로 선언
+- POST만 import 후 재 export
+
+적용 후 확인 화면
+- /admin/step-events
+- /step-events
+- /admin/coupons
+- /rewards
+- /admin/support
+- /api/admin/members/bulk-delete-rejected

@@ -1,0 +1,13 @@
+Dynamic Draw v1.0.4 검증 결과
+
+핵심 수정
+- 비동기 폼 제출 후 React event.currentTarget이 null이 되어 reset()에서 발생하던 런타임 오류 수정
+- 뽑기 생성, 상품 추가, 교환 규칙 추가, 회원가입 폼에 동일 수정 적용
+
+검증
+- npm run typecheck 통과
+- npm run lint 통과
+- npm run build 통과
+- Next.js App Router 전체 경로 빌드 완료
+
+Node.js v22.16.0 / npm 10.9.2 / Next.js 16.2.9

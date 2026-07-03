@@ -1,0 +1,21 @@
+DynamicD v1.7.1 운영 안정화 / Runtime Guard / Anti-Attack 핫픽스
+
+적용 순서
+1) Supabase SQL Editor에서 DynamicD-v1.7.1-SQL_교체용_메모장.txt 전체 실행
+2) 이 ZIP 압축 해제
+3) GitHub 저장소 루트에 app / components / lib / tools / next.config.ts / vercel.json / proxy.ts / instrumentation.ts 덮어쓰기
+4) 커밋 후 Vercel 배포 Ready 확인
+5) /api/ping, /api/health, /api/ready, /admin/server-status 확인
+
+주의
+- 기존 UI를 바꾸는 CSS 수정 없음
+- 기존 기능 삭제 없음
+- 정상 화면은 그대로 두고 Timeout / Retry / Fallback / Circuit Breaker / Rate Limit / 보안 헤더 / 공격 차단만 추가
+- Next.js 16 기준 proxy.ts 사용
+- 운영 배포에서 필수 Supabase 환경변수가 누락되면 배포가 실패합니다.
+- 임시로 누락 허용이 필요하면 DYNAMICD_ALLOW_MISSING_ENV=true를 설정할 수 있지만 운영에서는 권장하지 않습니다.
+
+테스트
+node tools/dynamicd-env-check.mjs
+node tools/dynamicd-traffic-check.mjs https://배포주소 20 200 /api/ping
+node tools/dynamicd-attack-smoke-check.mjs https://배포주소

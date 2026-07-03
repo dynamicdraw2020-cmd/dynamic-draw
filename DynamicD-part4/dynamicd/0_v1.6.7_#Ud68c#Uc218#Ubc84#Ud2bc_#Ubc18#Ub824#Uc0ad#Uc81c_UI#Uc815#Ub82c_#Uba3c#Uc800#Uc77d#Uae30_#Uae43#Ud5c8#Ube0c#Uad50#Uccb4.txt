@@ -1,0 +1,24 @@
+DynamicD v1.6.7 긴급 핫픽스
+
+적용 대상
+- 관리자 /admin/tickets 화면에서 회수 기능이 보이지 않거나 아래로 밀려 보이는 문제
+- 관리자 UI 카드 비율과 배치가 어긋나 보이는 문제
+- 회원 관리에서 반려 상태 계정을 총관리자가 한 번에 삭제해야 하는 운영 요청
+
+핵심 변경
+1. /admin/tickets 상단 카드에서 추첨권 지급·회수, 포인트 지급·회수가 바로 보이도록 재배치했습니다.
+2. 회수 버튼은 각 카드 오른쪽 영역에 항상 노출됩니다.
+3. 화폐 설정/교환 설정은 아래쪽 2열로 정리했습니다.
+4. /admin/members 상단에 총관리자 전용 '반려 상태 전체 삭제' 패널을 추가했습니다.
+5. 반려 삭제는 실제 auth.users 물리 삭제가 아니라 profiles.status = 'DELETED' 처리입니다.
+
+적용 순서
+1. Supabase SQL Editor에 DynamicD-v1.6.7-SQL_교체용_메모장.txt 전체 실행
+2. 이 ZIP 안의 app / components / lib / tools 폴더를 GitHub 루트에 덮어쓰기
+3. Vercel 배포 Ready 확인
+4. /admin/tickets, /admin/members 확인
+
+확인 포인트
+- /admin/tickets 첫 화면에 '추첨권 지급 · 회수'와 '포인트 지급 · 회수'가 보이면 정상입니다.
+- /admin/members에서 총관리자 계정으로만 '반려 상태 전체 삭제' 패널이 보이면 정상입니다.
+- CS_MANAGER는 개별 지급·회수만 가능합니다.

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dynamic Draw v1.0.1 설치·수정 안내</title>
+  <style>
+    :root{--bg:#07101f;--card:#101c31;--line:#263650;--text:#f5f7fb;--muted:#a7b4c7;--gold:#f7c95c;--blue:#5cc8ff;--green:#5de0a0;--red:#ff8585}
+    *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:radial-gradient(circle at 80% 0,#172d51 0,transparent 32%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;line-height:1.72}
+    a{color:var(--blue)} .wrap{width:min(1080px,calc(100% - 28px));margin:auto}.hero{padding:72px 0 42px}.eyebrow{color:var(--gold);font-weight:800;letter-spacing:.12em}.hero h1{font-size:clamp(2.2rem,7vw,4.4rem);line-height:1.05;margin:.3em 0}.hero p{max-width:780px;color:var(--muted);font-size:1.1rem}.pill{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:#0b1628;padding:8px 13px;border-radius:999px;margin:4px}
+    .nav{position:sticky;top:0;z-index:5;background:rgba(7,16,31,.92);backdrop-filter:blur(12px);border-block:1px solid var(--line);padding:10px 0;overflow:auto;white-space:nowrap}.nav a{display:inline-block;text-decoration:none;color:var(--text);padding:8px 11px;border-radius:10px}.nav a:hover{background:#182844}
+    main{padding:26px 0 80px}.notice{border:1px solid #735b1f;background:#30260c;padding:20px;border-radius:18px;margin:18px 0}.notice strong{color:var(--gold)}.danger{border-color:#733434;background:#301718}.danger strong{color:#ffaaaa}.success{border-color:#28644b;background:#102b22}.success strong{color:var(--green)}
+    .step{background:linear-gradient(180deg,#111e34,#0c1729);border:1px solid var(--line);border-radius:22px;padding:clamp(20px,4vw,34px);margin:22px 0;box-shadow:0 18px 50px rgba(0,0,0,.2)}.step-head{display:flex;gap:16px;align-items:flex-start}.num{display:grid;place-items:center;flex:0 0 46px;height:46px;border-radius:14px;background:var(--gold);color:#171307;font-weight:900;font-size:1.25rem}.step h2{margin:0 0 5px;font-size:1.55rem}.step h3{margin-top:28px;color:var(--gold)}.step p,.step li{color:#d7deea}.step ol,.step ul{padding-left:1.35rem}.step li{margin:8px 0}
+    .path{background:#040a13;border:1px solid #31435e;border-radius:12px;padding:15px 16px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow:auto;color:#dce9ff}.buttons{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:#172641;color:#fff;padding:11px 15px;border-radius:12px;text-decoration:none;font-weight:750;cursor:pointer}.btn.primary{background:var(--gold);color:#171307;border-color:var(--gold)}.btn.green{background:#21664d;border-color:#398a6c}.btn:hover{filter:brightness(1.1)}
+    .copy-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(240px,1.6fr) auto;gap:9px;align-items:center;margin:9px 0}.copy-row code,.copy-row span{background:#050b15;border:1px solid #2a3c58;border-radius:10px;padding:10px 12px;overflow:auto}.copy{border:0;background:#294b78;color:white;border-radius:10px;padding:11px 13px;cursor:pointer}.copy.done{background:#227354}.check{display:flex;gap:12px;align-items:flex-start;padding:10px 0}.check input{width:21px;height:21px;margin-top:3px;accent-color:var(--gold)}.check label{cursor:pointer}.check input:checked+label{color:#92a0b5;text-decoration:line-through}
+    table{width:100%;border-collapse:collapse;min-width:620px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:12px}th{color:var(--gold)}.scroll{overflow:auto}.tiny{font-size:.92rem;color:var(--muted)}.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}.toc{background:#0b1628;border:1px solid var(--line);border-radius:18px;padding:20px}.toc a{display:block;padding:5px 0;text-decoration:none}.footer{padding:30px 0 70px;color:var(--muted);text-align:center}
+    @media(max-width:760px){.two{grid-template-columns:1fr}.copy-row{grid-template-columns:1fr}.copy-row .copy{width:100%}.hero{padding-top:45px}.step-head{display:block}.num{margin-bottom:12px}}
+  </style>
+</head>
+<body>
+  <header class="hero"><div class="wrap"><div class="eyebrow">DYNAMIC DRAW · 설치 안내</div><h1>여기부터<br>차례대로 누르세요.</h1><p>이 파일은 홈페이지 코드가 아니라 <strong>설치 설명서</strong>입니다. 실제 홈페이지 코드는 같은 폴더의 <code>app</code>, <code>components</code>, <code>lib</code> 등에 들어 있습니다.</p><div><span class="pill">✓ GitHub</span><span class="pill">✓ Vercel</span><span class="pill">✓ Supabase</span><span class="pill">✓ 가비아 dynamic2020.com</span></div></div></header>
+  <nav class="nav"><div class="wrap"><a href="#s1">1 압축 확인</a><a href="#s2">2 Supabase SQL</a><a href="#s3">3 GitHub</a><a href="#s4">4 Supabase 키</a><a href="#s5">5 Vercel</a><a href="#s6">6 관리자</a><a href="#s7">7 로그인 주소</a><a href="#s8">8 도메인</a><a href="#s9">9 시험</a></div></nav>
+  <main><div class="wrap">
+    <div class="notice success"><strong>이미 배포했고 /setup-admin에서 digest 또는 DB 보안 함수 오류가 보이나요?</strong><br>처음부터 다시 하지 마세요. 같은 폴더의 <b>4_PGCRYPTO_오류_수정.sql</b>을 Supabase SQL Editor에 붙여넣고 Run한 뒤 사이트를 Ctrl+F5로 새로고침하면 됩니다. GitHub·Vercel·Supabase 프로젝트를 삭제할 필요가 없습니다.<div class="buttons"><a class="btn primary" href="4_PGCRYPTO_오류_수정.sql">pgcrypto 오류 수정 SQL 열기</a><a class="btn" href="0_이미배포한사람_여기부터.txt">기존 배포 수정 순서</a></div></div>
+
+    <div class="notice danger"><strong>가장 헷갈리기 쉬운 부분</strong><br><code>PASTE_THIS_ONCE.sql</code>은 Supabase 화면 안에서 찾는 파일이 아닙니다. 지금 이 설명서가 들어 있는 컴퓨터 폴더에서 <b>1_SUPABASE에_한번만_붙여넣기.sql (같은 내용은 supabase → PASTE_THIS_ONCE.sql에도 있음)</b>을 열어 복사한 다음 Supabase SQL Editor에 붙여넣습니다.</div>
+
+    <section class="toc"><strong>필요한 시간</strong><p class="tiny">처음 하는 경우 약 30~60분. 한 단계가 끝날 때마다 체크하면 새로고침해도 이 브라우저에 진행 상태가 저장됩니다.</p>
+      <div class="check"><input id="c1" type="checkbox"><label for="c1">ZIP을 압축 풀고 package.json을 확인함</label></div>
+      <div class="check"><input id="c2" type="checkbox"><label for="c2">Supabase SQL 실행 성공</label></div>
+      <div class="check"><input id="c3" type="checkbox"><label for="c3">GitHub 업로드 완료</label></div>
+      <div class="check"><input id="c4" type="checkbox"><label for="c4">Vercel 환경변수 6개 입력·Deploy 완료</label></div>
+      <div class="check"><input id="c5" type="checkbox"><label for="c5">/setup-admin에서 최초 관리자 생성</label></div>
+      <div class="check"><input id="c6" type="checkbox"><label for="c6">dynamic2020.com 연결</label></div>
+      <div class="check"><input id="c7" type="checkbox"><label for="c7">회원가입·승인·추첨·교환 시험 완료</label></div>
+    </section>
+
+    <section class="step" id="s1"><div class="step-head"><div class="num">1</div><div><h2>압축 푼 폴더 확인</h2><p>이 HTML 파일을 열었다면 거의 맞게 한 것입니다.</p></div></div>
+      <ol><li>다운로드한 <b>Dynamic-Draw-FIXED-v1.0.2.zip</b>에 마우스 오른쪽 버튼을 누릅니다.</li><li><b>모두 압축 풀기</b>를 누릅니다.</li><li>압축 푼 폴더를 엽니다.</li><li>아래 파일이 보이는지 확인합니다.</li></ol>
+      <div class="path">app / components / lib / supabase / package.json / 00_여기부터_더블클릭.html</div>
+      <div class="buttons"><a class="btn" href="README.md">README 열기</a><a class="btn" href="먼저읽기_배포순서.txt">초간단 메모 열기</a></div>
+    </section>
+
+    <section class="step" id="s2"><div class="step-head"><div class="num">2</div><div><h2>Supabase에 데이터베이스 설치</h2><p>회원과 결과를 저장하는 전자 노트를 만드는 단계입니다.</p></div></div>
+      <h3>내 컴퓨터에서 누를 것</h3><ol><li>압축 푼 폴더에서 같은 폴더의 <b>1_SUPABASE에_한번만_붙여넣기.sql</b>에 마우스 오른쪽 버튼을 누릅니다.</li><li><b>연결 프로그램 → 메모장</b>을 누릅니다.</li><li><kbd>Ctrl</kbd> + <kbd>A</kbd>, 그다음 <kbd>Ctrl</kbd> + <kbd>C</kbd>를 누릅니다.</li></ol>
+      <div class="buttons"><a class="btn primary" href="1_SUPABASE에_한번만_붙여넣기.sql">DB 설치 SQL 파일 열기</a></div>
+      <h3>Supabase에서 누를 것</h3><ol><li>Supabase 로그인 → <b>dynamic-draw 프로젝트 카드</b>를 누릅니다.</li><li>왼쪽의 <b>SQL Editor</b>를 누릅니다.</li><li>위쪽의 <b>New query</b>를 누릅니다.</li><li>큰 빈칸을 누르고 <kbd>Ctrl</kbd> + <kbd>V</kbd>를 누릅니다.</li><li>위쪽 또는 오른쪽 아래 초록색 <b>Run</b>을 누릅니다.</li><li><b>Success</b>가 나오면 끝입니다.</li></ol>
+      <div class="notice"><strong>한 번만 실행</strong><br>새 Supabase 프로젝트에서 처음 한 번만 실행하세요. 빨간 오류가 나오면 같은 버튼을 계속 누르지 말고 오류 문장을 확인하세요.</div>
+    </section>
+
+    <section class="step" id="s3"><div class="step-head"><div class="num">3</div><div><h2>GitHub에 홈페이지 파일 올리기</h2><p>ZIP 한 개가 아니라 압축을 푼 안쪽 파일들을 올립니다.</p></div></div>
+      <ol><li>GitHub 로그인 → <b>dynamic-draw 저장소</b>를 누릅니다.</li><li>파일이 있으면 <b>Add file → Upload files</b>를 누릅니다. 비어 있으면 <b>uploading an existing file</b>을 누릅니다.</li><li>컴퓨터의 압축 푼 폴더 안에서 <kbd>Ctrl</kbd> + <kbd>A</kbd>로 모두 선택합니다.</li><li>GitHub의 <b>Drag files here</b> 영역으로 끌어다 놓습니다.</li><li>업로드가 끝나면 아래의 초록색 <b>Commit changes</b>를 누릅니다.</li><li>GitHub 첫 화면에 <b>package.json</b>이 바로 보이면 성공입니다.</li></ol>
+      <div class="notice danger"><strong>올리면 안 되는 것</strong><br>Secret key, 비밀번호 메모, .env.local, node_modules, .next</div>
+    </section>
+
+    <section class="step" id="s4"><div class="step-head"><div class="num">4</div><div><h2>Supabase 열쇠 3개 복사</h2><p>Supabase 프로젝트의 Connect 또는 Project Settings → API Keys에서 찾습니다.</p></div></div>
+      <ol><li>Supabase 프로젝트 위쪽의 <b>Connect</b>를 누릅니다.</li><li>안 보이면 왼쪽 아래 <b>Project Settings → API Keys</b>를 누릅니다.</li><li><b>Project URL</b>, <b>Publishable key</b>, <b>Secret key</b>를 메모장에 잠깐 복사합니다.</li></ol>
+      <div class="notice danger"><strong>Secret key는 공개 금지</strong><br>GitHub·채팅·브라우저 파일에 넣지 말고 Vercel 환경변수에만 저장합니다.</div>
+    </section>
+
+    <section class="step" id="s5"><div class="step-head"><div class="num">5</div><div><h2>Vercel에 연결하고 환경변수 넣기</h2><p>Vercel이 GitHub 코드를 실제 인터넷 홈페이지로 켭니다.</p></div></div>
+      <ol><li>Vercel 로그인 → 오른쪽 위 <b>Add New... → Project</b>.</li><li>GitHub의 <b>dynamic-draw</b> 오른쪽 <b>Import</b>.</li><li>Framework가 <b>Next.js</b>인지 확인.</li><li><b>Environment Variables</b>를 찾습니다.</li></ol>
+      <h3>아래 6개를 한 줄씩 추가</h3>
+      <div class="copy-row"><code>NEXT_PUBLIC_SUPABASE_URL</code><span>Supabase Project URL</span><button class="copy" data-copy="NEXT_PUBLIC_SUPABASE_URL">이름 복사</button></div>
+      <div class="copy-row"><code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code><span>Publishable key 또는 anon key</span><button class="copy" data-copy="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY">이름 복사</button></div>
+      <div class="copy-row"><code>SUPABASE_SECRET_KEY</code><span>Secret key 또는 service_role key</span><button class="copy" data-copy="SUPABASE_SECRET_KEY">이름 복사</button></div>
+      <div class="copy-row"><code>NEXT_PUBLIC_SITE_URL</code><span>https://dynamic2020.com</span><button class="copy" data-copy="NEXT_PUBLIC_SITE_URL">이름 복사</button></div>
+      <div class="copy-row"><code>NEXT_PUBLIC_DEMO_MODE</code><span>false</span><button class="copy" data-copy="NEXT_PUBLIC_DEMO_MODE">이름 복사</button></div>
+      <div class="copy-row"><code>ADMIN_SETUP_SECRET</code><span>직접 만든 32자 이상의 긴 비밀문자</span><button class="copy" data-copy="ADMIN_SETUP_SECRET">이름 복사</button></div>
+      <ol start="5"><li>각 줄에서 Name과 Value를 넣고 <b>Add</b>를 누릅니다.</li><li>6개가 모두 보이면 <b>Deploy</b>를 누릅니다.</li><li>축하 화면에서 <b>Visit</b>을 누릅니다.</li></ol>
+      <div class="notice"><strong>ADMIN_SETUP_SECRET 예시 모양</strong><br><code>DynamicDraw-Setup-2026-My-Private-Key-93841</code><br><span class="tiny">예시를 그대로 쓰지 말고 본인만 아는 값으로 바꾸세요.</span></div>
+    </section>
+
+    <section class="step" id="s6"><div class="step-head"><div class="num">6</div><div><h2>최초 최고 관리자 만들기</h2><p>Vercel 배포 주소 뒤에 /setup-admin을 붙입니다.</p></div></div>
+      <div class="path">https://내-프로젝트.vercel.app/setup-admin</div>
+      <ol><li>설치용 비밀문자에 Vercel의 <b>ADMIN_SETUP_SECRET</b> 값을 넣습니다.</li><li>관리자 이름·이메일·10자 이상 비밀번호를 넣습니다.</li><li><b>최초 최고 관리자 만들기</b>를 누릅니다.</li><li>성공 뒤 <b>/login</b>에서 로그인합니다.</li></ol>
+      <div class="success"><strong>자동 잠금</strong><br>최고 관리자가 한 명 만들어지면 이 설치 페이지는 더 이상 관리자 계정을 만들지 않습니다.</div>
+    </section>
+
+    <section class="step" id="s7"><div class="step-head"><div class="num">7</div><div><h2>Supabase 로그인 돌아갈 주소 설정</h2><p>이메일 인증 뒤 회원이 홈페이지로 돌아오게 합니다.</p></div></div>
+      <ol><li>Supabase → <b>Authentication → URL Configuration</b>.</li><li>Site URL에 <code>https://dynamic2020.com</code> 입력.</li><li>Redirect URLs에 아래 3개를 추가.</li><li><b>Save</b>.</li></ol>
+      <div class="path">https://dynamic2020.com/**<br>https://www.dynamic2020.com/**<br>https://내-프로젝트.vercel.app/**</div>
+    </section>
+
+    <section class="step" id="s8"><div class="step-head"><div class="num">8</div><div><h2>dynamic2020.com 연결</h2><p>Vercel이 보여주는 값을 가비아에 그대로 옮깁니다.</p></div></div>
+      <div class="two"><div><h3>Vercel에서</h3><ol><li>프로젝트 → <b>Settings</b>.</li><li><b>Domains</b>.</li><li><b>Add Domain</b>.</li><li><code>dynamic2020.com</code> 입력 후 Add.</li><li><code>www.dynamic2020.com</code>도 추가.</li><li>화면의 A와 CNAME 값을 열어 둡니다.</li></ol></div><div><h3>가비아에서</h3><ol><li><b>My가비아 → 서비스 관리 → DNS 관리툴</b>.</li><li>dynamic2020.com 체크 → <b>DNS 설정</b>.</li><li><b>+ 레코드 추가</b>.</li><li>A / 호스트 @ / Vercel의 A 값.</li><li>CNAME / 호스트 www / Vercel의 CNAME 값.</li><li>각 줄 <b>확인</b> → 마지막 <b>저장</b>.</li></ol></div></div>
+      <div class="notice"><strong>숫자를 외우지 마세요</strong><br>이 문서의 예시보다 Vercel Domains 화면에 지금 표시되는 값을 그대로 복사하는 것이 정확합니다.</div>
+    </section>
+
+    <section class="step" id="s9"><div class="step-head"><div class="num">9</div><div><h2>진짜 작동하는지 시험</h2><p>아래 순서가 모두 되면 실제 운영 준비가 끝난 것입니다.</p></div></div>
+      <ol><li>다른 브라우저에서 일반 회원가입 신청.</li><li>관리자 로그인 → <b>회원 관리</b>.</li><li><b>승인·ID 자동발급</b>.</li><li>관리자 → <b>실시간 추첨</b>에서 회원 선택.</li><li>다른 휴대전화에서 <code>/live</code> 열기.</li><li><b>추첨 실행</b> → 흔들림 → 빛 → 뒤집기 → 결과 확인.</li><li>회원 로그인 → <b>내 정보</b>에서 상품 수량 확인.</li><li>회원 직접 교환 또는 관리자 <b>교환 시스템 → 관리자 현장 교환</b> 시험.</li><li>확률 변경 기록과 관리자 로그 확인.</li></ol>
+      <div class="buttons"><a class="btn green" href="docs/02_일반회원_사용설명서.md">일반 회원 설명서</a><a class="btn green" href="docs/03_관리자_사용설명서.md">관리자 설명서</a><a class="btn" href="docs/06_운영체크리스트_문제해결.md">문제 해결</a></div>
+    </section>
+
+    <section class="step"><h2>막혔을 때 확인할 네 가지</h2><div class="scroll"><table><thead><tr><th>상황</th><th>먼저 확인</th></tr></thead><tbody><tr><td>Supabase에서 SQL 파일이 안 보임</td><td>Supabase 안에서 찾는 것이 아니라 다운로드한 폴더의 supabase/PASTE_THIS_ONCE.sql을 엽니다.</td></tr><tr><td>Vercel 빌드 실패</td><td>GitHub 첫 화면에 package.json이 바로 있는지, ZIP만 올린 것은 아닌지 확인합니다.</td></tr><tr><td>/setup-admin이 잠김</td><td>이미 최고 관리자가 있거나 ADMIN_SETUP_SECRET이 없을 수 있습니다.</td></tr><tr><td>Vercel 주소는 되는데 도메인이 안 됨</td><td>가비아 A·CNAME 값과 마지막 저장, Vercel Domains의 상태를 확인합니다.</td></tr><tr><td>function digest(...) does not exist</td><td>4_PGCRYPTO_오류_수정.sql만 실행합니다. 전체 설치 SQL은 다시 실행하지 않습니다.</td></tr><tr><td>회원가입은 되는데 기능이 안 열림</td><td>관리자 회원 관리에서 승인·ID 자동발급을 했는지 확인합니다.</td></tr></tbody></table></div></section>
+  </div></main>
+  <footer class="footer"><div class="wrap">Dynamic Draw 배포 안내 · 비밀키는 화면 캡처를 보낼 때 반드시 가리세요.</div></footer>
+  <script>
+    document.querySelectorAll('.copy').forEach(btn=>btn.addEventListener('click',async()=>{await navigator.clipboard.writeText(btn.dataset.copy);btn.textContent='복사됨';btn.classList.add('done');setTimeout(()=>{btn.textContent='이름 복사';btn.classList.remove('done')},1200)}));
+    document.querySelectorAll('.check input').forEach(input=>{const key='dynamicdraw-'+input.id;input.checked=localStorage.getItem(key)==='1';input.addEventListener('change',()=>localStorage.setItem(key,input.checked?'1':'0'))});
+  </script>
+</body>
+</html>

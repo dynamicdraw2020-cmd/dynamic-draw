@@ -1,0 +1,29 @@
+Dynamic Draw — Vercel 환경변수 6개
+===================================
+
+Vercel 프로젝트 Import 화면의 Environment Variables에 아래 이름을 정확히 입력합니다.
+
+1. NEXT_PUBLIC_SUPABASE_URL
+   값: Supabase Project URL
+
+2. NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+   값: Supabase Publishable key (구형 프로젝트는 anon public key)
+
+3. SUPABASE_SECRET_KEY
+   값: Supabase Secret key (구형 프로젝트는 service_role key)
+   주의: GitHub나 채팅에 공개하지 마세요.
+
+4. NEXT_PUBLIC_SITE_URL
+   값: https://dynamic2020.com
+
+5. NEXT_PUBLIC_DEMO_MODE
+   값: false
+
+6. ADMIN_SETUP_SECRET
+   값: 본인만 아는 32자 이상의 긴 문자열
+   예시 모양: DynamicDraw-Setup-2026-Private-93841
+   예시를 그대로 쓰지 말고 직접 바꾸세요.
+
+환경변수 입력 후 Deploy를 누릅니다.
+배포가 끝나면 다음 주소로 첫 관리자를 만듭니다.
+https://Vercel에서받은주소/setup-admin

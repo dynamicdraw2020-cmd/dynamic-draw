@@ -1,0 +1,25 @@
+DynamicD v1.6.6 회수 기능 + 관리자 UI 정렬 핫픽스
+
+적용 순서
+1) Supabase SQL Editor에서 DynamicD-v1.6.6-SQL_교체용_메모장.txt 전체 실행
+2) 이 압축 파일 안의 app / components / lib / tools 폴더를 GitHub 저장소 루트에 덮어쓰기
+3) Vercel 배포가 Ready 상태인지 확인
+4) /admin/tickets 접속 후 추첨권 지급/회수, 포인트 지급/회수 확인
+
+핵심 변경
+- 잘못 지급한 추첨권을 개별 회원 단위로 회수 가능
+- 잘못 지급한 포인트/화폐를 개별 회원 단위로 회수 가능
+- 회수는 현재 보유 수량보다 많이 할 수 없음
+- 회수 사유 필수
+- 회수 기록 admin_reward_recovery_logs에 저장
+- 포인트 회수는 currency_logs에도 ADMIN_RECOVERY로 저장
+- CS_MANAGER도 기존 지급 권한 범위 안에서 개별 회수 가능
+- 전체 회수 기능은 안전상 추가하지 않음
+- /admin/tickets UI를 지급/회수/설정/현황 카드 단위로 정렬
+
+건드리지 않은 것
+- 관리자 사이드바 카테고리 접기/펼치기
+- 전역 CSS(app/globals.css)
+- 회원가입 시크릿코드 구조
+- 반려 가입 전체 삭제 구조
+- 기존 지급 API 동작

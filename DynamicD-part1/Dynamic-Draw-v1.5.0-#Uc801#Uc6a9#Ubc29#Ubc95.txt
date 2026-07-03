@@ -1,0 +1,36 @@
+Dynamic Draw / Dynamic D v1.5.0 적용 방법
+
+이번 업데이트는 기능 추가 업데이트입니다.
+기존 관리자 계정, 회원, 도메인, Vercel 환경변수는 유지합니다.
+
+1) Supabase DB 보정 SQL 실행
+- Dynamic-Draw-v1.5.0-운영도구_이벤트상세_재추첨_DB.sql 파일을 엽니다.
+- Ctrl + A → Ctrl + C
+- Supabase → SQL Editor → New query
+- 붙여넣기 → Run
+- 결과에서 redraw_logs_ready, rerun_function_ready, v150_marker_ready 값이 true면 성공입니다.
+
+2) GitHub 파일 교체
+- Dynamic-Draw-GitHub-교체파일-v1.5.0.zip 압축을 풉니다.
+- GitHub dynamic-draw 저장소로 갑니다.
+- Add file → Upload files
+- 압축 푼 폴더 안쪽 파일/폴더를 전부 드래그합니다.
+- Commit changes를 누릅니다.
+
+3) Vercel 확인
+- Vercel → dynamic-draw 프로젝트 → Deployments
+- 최신 배포가 Ready가 될 때까지 기다립니다.
+- dynamic2020.com에서 Ctrl + F5로 새로고침합니다.
+
+4) 적용 확인
+- 메인 첫 화면에 공지/이벤트/전체 추첨 섹션이 보이는지 확인합니다.
+- /events/[slug] 이벤트 상세 페이지가 열리는지 확인합니다.
+- 관리자 → 회원 관리에서 일괄 승인 체크박스가 보이는지 확인합니다.
+- 관리자 → 전체 회원 추첨에서 재추첨 버튼/사유 입력이 보이는지 확인합니다.
+- 관리자 → 결과 이미지에서 결과 카드 생성 UI가 보이는지 확인합니다.
+- 내 정보 또는 관리자 활동 메뉴에서 유저별 활동 로그가 보이는지 확인합니다.
+
+주의
+- GitHub에 ZIP 파일 자체를 올리지 말고, 압축을 푼 안쪽 파일을 올려야 합니다.
+- Supabase Secret key, .env, .env.local, node_modules, .next는 올리지 않습니다.
+- 이전 /lotteries 주소는 /raffles로 자동 이동하도록 호환 파일을 넣었습니다.

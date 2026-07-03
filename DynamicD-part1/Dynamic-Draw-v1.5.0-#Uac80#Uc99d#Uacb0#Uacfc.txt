@@ -1,0 +1,35 @@
+Dynamic Draw / Dynamic D v1.5.0 검증 결과
+
+검증 기준 폴더: release_v150
+검증 일시: 패키징 직전
+
+완료 항목
+- TypeScript 검사: 통과
+- ESLint 소스 검사: 에러 0개, 경고 2개
+  - 경고는 룰렛 중앙 이미지의 <img> 사용 관련 Next.js 권장 경고입니다.
+  - 관리자가 넣는 외부 이미지 URL 호환성을 위해 유지했습니다.
+- Next.js 프로덕션 빌드: 통과
+  - /events/[slug]
+  - /admin/activity
+  - /admin/result-images
+  - /admin/raffles
+  - /api/admin/members/bulk-approve
+  - /api/admin/raffles/[id]/rerun
+  - 기타 기존 페이지/API 라우트 확인
+
+DB 보정 SQL 포함 항목
+- raffle_redraw_logs 테이블
+- 전체 회원 추첨 재추첨 함수 rerun_member_raffle
+- v1.5.0 스키마 마커
+
+주요 반영 기능
+- 이벤트별 상세 페이지
+- 홈 화면 안에서 이벤트/공지 상세 전환 UI
+- 일괄 회원 승인
+- 테스트 모드 기반 추첨 연출 점검
+- 관리자 결과 이미지 생성 UI
+- 공지 상단 배너
+- 유저별 활동 로그
+- 전체 추첨 재추첨 정책 및 로그
+- 룰렛 이미지 설정 호환
+- 공개 페이지를 전체 이용가 운영 사이트 톤으로 정리

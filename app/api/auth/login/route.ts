@@ -2,9 +2,8 @@ import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { isAdminRole } from "@/lib/admin-capabilities";
 import { credentialToAuthEmail, normalizeLoginId } from "@/lib/identity";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { trackStepMission } from "@/lib/step-events";
 
 export const dynamic = "force-dynamic";
@@ -28,87 +27,15 @@ async function ignoreSideEffect<T>(promise: PromiseLike<T>) {
   try {
     await promise;
   } catch {
-    // 로그인은 로그/세션 기록 실패 때문에 막히면 안 된다.
+    // 로그인은 로그/세션/미션 기록 실패 때문에 막히면 안 된다.
   }
 }
 
-function getSupabaseUrl() {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-}
-
-function getSupabaseAuthKey() {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    ""
-  );
-}
-
-async function createLoginClient() {
-  const cookieStore = await cookies();
-  const supabaseUrl = getSupabaseUrl();
-  const supabaseKey = getSupabaseAuthKey();
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase login environment variables are missing");
-  }
-
-  return createServerClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-        } catch {
-          // Route handler 외부 렌더링 상황에서는 쿠키 쓰기가 막힐 수 있다.
-        }
-      },
-    },
-  });
-}
-
-function logAuthFailure(context: { email: string; code?: string; status?: number; message?: string }) {
-  console.warn(
-    JSON.stringify({
-      ts: new Date().toISOString(),
-      service: "dynamic-draw",
-      level: "WARN",
-      event: "LOGIN_AUTH_FAILED",
-      email: context.email,
-      code: context.code ?? null,
-      status: context.status ?? null,
-      message: context.message ?? null,
-      supabaseHost: (() => {
-        try {
-          return new URL(getSupabaseUrl()).host;
-        } catch {
-          return null;
-        }
-      })(),
-      hasPublicKey: Boolean(
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-          process.env.SUPABASE_PUBLISHABLE_KEY ||
-          process.env.SUPABASE_ANON_KEY,
-      ),
-      usedSecretFallback: !Boolean(
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-          process.env.SUPABASE_PUBLISHABLE_KEY ||
-          process.env.SUPABASE_ANON_KEY,
-      ),
-    }),
-  );
+function getMagicLinkTokenHash(linkData: unknown): string | null {
+  const data = linkData as { properties?: Record<string, unknown> } | null;
+  const props = data?.properties;
+  const tokenHash = props?.hashed_token ?? props?.token_hash ?? props?.email_otp;
+  return typeof tokenHash === "string" && tokenHash.length > 0 ? tokenHash : null;
 }
 
 async function postHandler(request: Request) {
@@ -119,13 +46,13 @@ async function postHandler(request: Request) {
   if (csrf) return csrf;
 
   const meta = requestMeta(request);
-  const limited = await enforceRateLimit(`login:v161:${meta.ip}`, 30, 60 * 10);
+  const limited = await enforceRateLimit(`login:v164:${meta.ip}`, 60, 60 * 10);
   if (limited) return limited;
 
   const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("아이디와 비밀번호를 확인해 주세요.", 422, "VALIDATION_ERROR");
 
-  const supabase = await createLoginClient();
+  const supabase = await createClient();
   const admin = createAdminClient();
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
   const passwordValue = String(parsed.data.password || "").trim();
@@ -145,15 +72,16 @@ async function postHandler(request: Request) {
   );
 
   let signInEmail = credential;
-  let signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: passwordValue });
-  let data = signInResult.data;
-  let error = signInResult.error;
+  let signInResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null = null;
+  let data: NonNullable<typeof signInResult>["data"] = { user: null, session: null };
+  let error: NonNullable<typeof signInResult>["error"] = null;
 
-  // 복구 모드: must_change_password=true인 승인 유저는 임시 비밀번호로 로그인 가능하게 만든다.
-  if ((error || !data.user) && passwordValue === TEMP_PASSWORD) {
-    let recoveryProfile: { id: string; email: string | null; username: string | null; status: string | null; must_change_password?: boolean | null } | null = null;
-
+  // 긴급 복구 모드: 임시 비밀번호를 쓰는 계정은 비밀번호 검증 대신 Auth magic link 세션을 서버에서 발급한다.
+  // SQL로 복구된 auth.users 비밀번호가 GoTrue 검증과 어긋나도 이 경로로 로그인 세션을 정상 생성한다.
+  if (passwordValue === TEMP_PASSWORD) {
     try {
+      let recoveryProfile: { id: string; email: string | null; username: string | null; status: string | null; must_change_password?: boolean | null } | null = null;
+
       if (loginValue.includes("@")) {
         const { data: byEmail } = await admin
           .from("profiles")
@@ -171,37 +99,66 @@ async function postHandler(request: Request) {
       }
 
       if (recoveryProfile?.must_change_password && recoveryProfile.status === "APPROVED") {
-        const recoveryEmail = safeLower(recoveryProfile.email || credential);
+        signInEmail = safeLower(recoveryProfile.email || credential);
 
-        const updateResult = await admin.auth.admin.updateUserById(recoveryProfile.id, {
-          email: recoveryEmail,
-          password: TEMP_PASSWORD,
-          email_confirm: true,
-        });
+        await ignoreSideEffect(
+          admin.auth.admin.updateUserById(recoveryProfile.id, {
+            email: signInEmail,
+            password: TEMP_PASSWORD,
+            email_confirm: true,
+          }),
+        );
 
-        if (!updateResult.error) {
-          signInEmail = recoveryEmail;
-          signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: TEMP_PASSWORD });
-          data = signInResult.data;
-          error = signInResult.error;
+        const generated = await admin.auth.admin.generateLink({ type: "magiclink", email: signInEmail });
+        const tokenHash = getMagicLinkTokenHash(generated.data);
+
+        if (generated.error || !tokenHash) {
+          throw new Error(generated.error?.message || "Magic link token was not generated");
         }
+
+        const verified = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+        data = verified.data;
+        error = verified.error;
       }
-    } catch {
-      // 아래 INVALID_CREDENTIALS 처리로 넘긴다.
+    } catch (recoveryError) {
+      console.warn(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          service: "dynamic-draw",
+          level: "WARN",
+          event: "TEMP_PASSWORD_SESSION_FAILED",
+          loginId: loginIdRaw,
+          error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
+        }),
+      );
     }
   }
 
+  // 일반 로그인. 복구 세션 생성이 안 된 경우에만 실행한다.
+  if (!data.user) {
+    signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: passwordValue });
+    data = signInResult.data;
+    error = signInResult.error;
+  }
+
   if (error || !data.user) {
-    logAuthFailure({
-      email: signInEmail,
-      code: error?.code,
-      status: error?.status,
-      message: error?.message,
-    });
+    console.warn(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        service: "dynamic-draw",
+        level: "WARN",
+        event: "LOGIN_AUTH_FAILED_DETAIL",
+        email: signInEmail,
+        code: error?.code ?? null,
+        status: error?.status ?? null,
+        message: error?.message ?? null,
+      }),
+    );
 
     await ignoreSideEffect(
       admin.from("login_activity_logs").insert({
         login_id: loginIdRaw,
+        email: signInEmail,
         ip_address: meta.ip,
         browser_fingerprint: fingerprint,
         status: "FAILED",
@@ -303,11 +260,11 @@ async function postHandler(request: Request) {
   else if (profile.status !== "APPROVED") {
     await supabase.auth.signOut();
     redirectTo = "/login?error=account_unavailable";
-  } else if (profile.must_change_password) redirectTo = "/change-password";
+  } else if (profile.must_change_password) redirectTo = "/reset-password";
   else if (adminRole) redirectTo = "/admin";
   else if (parsed.data.nextPath?.startsWith("/") && !parsed.data.nextPath.startsWith("//")) redirectTo = parsed.data.nextPath;
 
   return ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
 }
 
-export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 30, windowSeconds: 60 } });
+export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 60, windowSeconds: 60 } });

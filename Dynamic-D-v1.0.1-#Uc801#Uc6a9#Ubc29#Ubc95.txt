@@ -1,0 +1,50 @@
+Dynamic D 1.0.1 적용 방법
+
+이번 업데이트는 Supabase SQL 1번 + GitHub 파일 교체가 필요합니다.
+기존 Supabase 프로젝트, Vercel 환경변수, 가비아 도메인은 건드리지 않습니다.
+
+1) Supabase DB 보정
+- Dynamic-D-v1.0.1-운영개편_DB.sql 파일을 엽니다.
+- Ctrl + A → Ctrl + C
+- Supabase → SQL Editor → New query
+- 붙여넣기 → Run
+- 결과가 아래처럼 true인지 확인합니다.
+  product_catalog_ready = true
+  draw_delete_ready = true
+  user_delete_ready = true
+  exchange_rate_delete_ready = true
+  old_draws_hidden = true
+
+주의:
+- 이 SQL은 기존 모든 뽑기를 화면에서 제거합니다.
+- 기존 추첨 결과/로그는 지우지 않고 보존합니다.
+- 앞으로는 상품 보관함에 상품을 만든 뒤 뽑기에 선택 연결합니다.
+
+2) GitHub 교체
+- Dynamic-D-GitHub-교체파일-v1.0.1.zip 압축을 풉니다.
+- GitHub dynamic-draw 저장소 → Add file → Upload files
+- 압축 푼 폴더 안쪽 파일 전부를 드래그합니다.
+- Commit changes를 누릅니다.
+- Vercel이 자동 배포할 때까지 기다립니다.
+
+3) 확인
+- Vercel Deployments에서 최신 배포가 Ready인지 확인합니다.
+- dynamic2020.com에서 Ctrl + F5를 누릅니다.
+- 관리자 → 상품 보관함·뽑기 관리에서 상품을 먼저 만들고 뽑기에 연결합니다.
+- 관리자 → 추첨권·화폐 설정에서 화폐 정지/복구/삭제, 교환비 수정/정지/삭제가 보이면 성공입니다.
+- /dashboard 와 /event-live 페이지가 열리면 성공입니다.
+
+4) 주요 변경
+- 버전 표기 1.0.1로 고정
+- 첨부한 Dynamic 이미지 기반 흑백 잉크 톤 디자인 적용
+- 상품 보관함 기반으로 뽑기 구조 개편
+- 기존 뽑기 화면 제거 처리
+- 뽑기 삭제 가능
+- 상품 삭제 가능
+- 유저 삭제 가능
+- 화폐 정지/복구/삭제 가능
+- 화폐→추첨권 교환비 수정/정지/삭제 가능
+- 유저 공개 대시보드 추가
+- 이벤트 라이브 화면 추가
+- 인형뽑기 결과 캡슐에 당첨 유저 닉네임 표시
+- 공지 글 문단 가독성 개선

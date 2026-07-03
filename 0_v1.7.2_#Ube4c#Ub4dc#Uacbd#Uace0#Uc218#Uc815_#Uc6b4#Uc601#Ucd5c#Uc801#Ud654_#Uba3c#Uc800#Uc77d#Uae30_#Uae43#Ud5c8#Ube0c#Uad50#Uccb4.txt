@@ -1,0 +1,19 @@
+DynamicD v1.7.2 빌드 경고 수정 / 운영 안정화 재최적화
+
+적용 대상:
+- Next.js 16.2.9 + Vercel + Supabase
+- v1.7.1 적용 후 instrumentation.ts Edge Runtime 경고가 발생한 저장소
+
+핵심 수정:
+1. instrumentation.ts에서 process.on 직접 사용 제거
+2. Node 전용 예외 핸들러를 lib/ops/instrumentation-node.ts로 분리
+3. Edge 전용 instrumentation no-op 추가
+4. next.config.ts에서 /_next/static Cache-Control 커스텀 헤더 제거
+5. 모든 app/api route.ts에 runtime = "nodejs" 명시
+6. Request body 읽기 로직을 스트림 기반 제한/타임아웃 방식으로 개선
+7. AbortSignal.timeout 미지원 런타임 fallback 추가
+8. package.json Node engine을 22.x로 고정해 Vercel 자동 메이저 업그레이드 경고 완화
+
+UI 변경 없음.
+기존 기능 삭제 없음.
+DB 변경 없음. SQL 파일은 운영 이력 마커용입니다.

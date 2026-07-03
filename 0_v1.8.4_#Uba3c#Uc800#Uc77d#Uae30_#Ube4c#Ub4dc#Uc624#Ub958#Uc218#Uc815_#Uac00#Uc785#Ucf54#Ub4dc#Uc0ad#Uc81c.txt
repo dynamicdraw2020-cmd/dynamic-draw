@@ -1,0 +1,19 @@
+DynamicD v1.8.4
+
+1) Next.js 16 route config re-export 오류 수정
+- app/api/admin/members/bulk-delete-rejected/route.ts 는 더 이상 다른 route.ts의 dynamic/runtime/maxDuration/POST를 re-export하지 않습니다.
+- 전체 핸들러를 독립 route로 구성했습니다.
+
+2) 회원가입 코드 기능 삭제
+- 회원가입 화면에서 코드 입력/신청 링크 제거
+- 회원가입 API에서 코드 검증/소비 제거
+- 관리자 메뉴에서 코드 관리 메뉴 제거
+- 관련 API는 410 REMOVED 또는 no-op 응답으로 비활성화
+
+GitHub 웹 업로드만 하면 파일 삭제는 자동 처리되지 않을 수 있습니다.
+완전 삭제하려면 교체 후 아래 파일/폴더를 직접 삭제하세요.
+- app/admin/secret-codes
+- app/api/admin/signup-secret-codes
+- app/api/admin/signup-secret-settings
+- app/api/public/signup-secret-settings
+- components/signup-secret-code-manager.tsx

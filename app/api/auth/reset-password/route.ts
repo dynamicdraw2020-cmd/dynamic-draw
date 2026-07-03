@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, readJsonWithLimit } from "@/lib/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const schema = z.object({ password: z.string().min(8).max(72) });
@@ -20,5 +21,12 @@ export async function POST(request: Request) {
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return fail("비밀번호를 바꾸지 못했습니다. 새 재설정 링크를 요청해 주세요.", 400, "PASSWORD_UPDATE_FAILED");
+
+  const now = new Date().toISOString();
+  await createAdminClient()
+    .from("profiles")
+    .update({ must_change_password: false, password_changed_at: now, password_reset_at: null, updated_at: now })
+    .eq("id", user.id);
+
   return ok({ message: "비밀번호가 변경되었습니다.", redirectTo: "/account" });
 }

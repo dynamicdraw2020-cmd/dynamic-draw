@@ -2,8 +2,10 @@ import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, requestMeta, withApiRoute, readJsonWithLimit } from "@/lib/api";
 import { isAdminRole } from "@/lib/admin-capabilities";
 import { credentialToAuthEmail, normalizeLoginId } from "@/lib/identity";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { trackStepMission } from "@/lib/step-events";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +33,40 @@ async function ignoreSideEffect<T>(promise: PromiseLike<T>) {
   }
 }
 
+async function createLoginClient() {
+  const cookieStore = await cookies();
+
+  return createServerClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        } catch {
+          // Route handler 외부 렌더링 상황에서는 쿠키 쓰기가 막힐 수 있다.
+        }
+      },
+    },
+  });
+}
+
+function logAuthFailure(context: { email: string; code?: string; status?: number; message?: string }) {
+  console.warn(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      service: "dynamic-draw",
+      level: "WARN",
+      event: "LOGIN_AUTH_FAILED",
+      email: context.email,
+      code: context.code ?? null,
+      status: context.status ?? null,
+      message: context.message ?? null,
+    }),
+  );
+}
+
 async function postHandler(request: Request) {
   const demo = rejectDemoMutation();
   if (demo) return demo;
@@ -45,15 +81,14 @@ async function postHandler(request: Request) {
   const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
   if (!parsed.success) return fail("아이디와 비밀번호를 확인해 주세요.", 422, "VALIDATION_ERROR");
 
-  const supabase = await createClient();
+  const supabase = await createLoginClient();
   const admin = createAdminClient();
   const fingerprint = String(parsed.data.browserFingerprint || "unknown").slice(0, 120);
+  const passwordValue = String(parsed.data.password || "").trim();
   const loginIdRaw = String(parsed.data.loginId || "").trim();
   const loginValue = safeLower(loginIdRaw);
   const normalizedLoginId = normalizeLoginId(loginValue);
-  const credential = loginValue.includes("@")
-    ? loginValue
-    : credentialToAuthEmail(loginIdRaw);
+  const credential = loginValue.includes("@") ? loginValue : credentialToAuthEmail(loginIdRaw);
 
   await ignoreSideEffect(
     admin.from("login_activity_logs").insert({
@@ -66,12 +101,12 @@ async function postHandler(request: Request) {
   );
 
   let signInEmail = credential;
-  let signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: parsed.data.password });
+  let signInResult = await supabase.auth.signInWithPassword({ email: signInEmail, password: passwordValue });
   let data = signInResult.data;
   let error = signInResult.error;
 
   // 복구 모드: must_change_password=true인 승인 유저는 임시 비밀번호로 로그인 가능하게 만든다.
-  if ((error || !data.user) && parsed.data.password === TEMP_PASSWORD) {
+  if ((error || !data.user) && passwordValue === TEMP_PASSWORD) {
     let recoveryProfile: { id: string; email: string | null; username: string | null; status: string | null; must_change_password?: boolean | null } | null = null;
 
     try {
@@ -113,6 +148,13 @@ async function postHandler(request: Request) {
   }
 
   if (error || !data.user) {
+    logAuthFailure({
+      email: signInEmail,
+      code: error?.code,
+      status: error?.status,
+      message: error?.message,
+    });
+
     await ignoreSideEffect(
       admin.from("login_activity_logs").insert({
         login_id: loginIdRaw,

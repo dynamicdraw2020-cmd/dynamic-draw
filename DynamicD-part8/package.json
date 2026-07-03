@@ -1,0 +1,35 @@
+{
+  "name": "dynamic-draw",
+  "version": "1.0.3",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "tsc --noEmit && NEXT_TELEMETRY_DISABLED=1 next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.0",
+    "@supabase/supabase-js": "2.108.2",
+    "clsx": "2.1.1",
+    "lucide-react": "1.21.0",
+    "motion": "12.41.0",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "recharts": "3.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.2.9",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

@@ -1,0 +1,46 @@
+Dynamic Draw v1.1.0 적용 방법
+
+이번 버전 추가 기능
+1. 관리자가 회원에게 뽑기별 추첨권 지급
+2. 일반 회원이 /play에서 직접 룰렛 뽑기 실행
+3. 추첨 실행 시 전체화면 룰렛 연출
+4. 실시간 추첨 화면도 카드가 아니라 룰렛 중심으로 변경
+5. 모바일 화면 대응 강화
+
+적용 순서
+
+[1] Supabase DB 보정 SQL 실행
+1. 5_추첨권_직접룰렛_DB보정_v1.1.0.sql 파일을 메모장으로 엽니다.
+2. Ctrl + A → Ctrl + C
+3. Supabase → SQL Editor → New query
+4. 붙여넣기 → Run
+5. 결과가 아래처럼 true로 나오면 성공입니다.
+   tickets_table_ready = true
+   grant_function_ready = true
+   self_draw_function_ready = true
+
+[2] GitHub 파일 교체
+1. Dynamic-Draw-GitHub-교체파일-v1.1.0.zip 압축을 풉니다.
+2. GitHub dynamic-draw 저장소로 갑니다.
+3. Add file → Upload files
+4. 압축 푼 안쪽 파일과 폴더를 전부 업로드합니다.
+5. Commit changes를 누릅니다.
+6. Vercel이 자동 배포합니다.
+7. Vercel Deployments에서 Ready가 뜨면 사이트에서 Ctrl + F5를 누릅니다.
+
+[3] 관리자 사용법
+1. 관리자 로그인
+2. 관리자 → 추첨권 지급
+3. 뽑기 선택
+4. 회원 선택
+5. 지급 수량 입력
+6. 추첨권 지급 버튼 클릭
+
+[4] 일반 회원 사용법
+1. 일반 회원 로그인
+2. 상단의 뽑기 버튼 또는 /play 접속
+3. 지급받은 뽑기 선택
+4. 추첨권 1장 사용해서 룰렛 돌리기 클릭
+5. 전체화면 룰렛이 돌고 결과가 표시됩니다.
+
+Supabase 환경변수, Vercel 환경변수, 가비아 도메인은 건드리지 않습니다.

@@ -160,11 +160,38 @@ async function postHandler(request: Request) {
   const signInEmail = credential;
   let authData: AuthData = { user: null };
   let authError: AuthError = null;
+  let emergencySessionForPasswordFallback = "";
 
   if (!authData.user) {
     const firstResult = await supabase.auth.signInWithPassword({ email: signInEmail, password });
     authData = (firstResult.data ?? { user: null }) as AuthData;
     authError = (firstResult.error ?? null) as AuthError;
+  }
+
+  if (authError || !authData.user) {
+    // Supabase Auth가 401을 반환해도, 서버 DB의 auth.users 해시와 직접 대조하는 복구 fallback.
+    // 이 fallback은 service-role RPC가 존재할 때만 작동하며, 성공 시 emergency session으로 사이트 세션을 만든다.
+    try {
+      const { data: verifiedRows } = await admin.rpc("dynamicd_verify_password", {
+        p_email: signInEmail,
+        p_password: password,
+      });
+
+      const verified = Array.isArray(verifiedRows) ? verifiedRows[0] : verifiedRows;
+      const verifiedUserId = String(verified?.user_id || "");
+      const verifiedOk = verified?.ok === true;
+
+      if (verifiedOk && verifiedUserId) {
+        const fallbackSession = createEmergencySessionValue(verifiedUserId);
+        if (fallbackSession) {
+          authData = { user: { id: verifiedUserId }, session: null };
+          authError = null;
+          emergencySessionForPasswordFallback = fallbackSession;
+        }
+      }
+    } catch {
+      // RPC fallback 실패 시 기존 401 처리로 진행
+    }
   }
 
   if (authError || !authData.user) {
@@ -283,7 +310,11 @@ async function postHandler(request: Request) {
   else if (adminRole) redirectTo = "/admin";
   else if (parsed.data.nextPath?.startsWith("/") && !parsed.data.nextPath.startsWith("//")) redirectTo = parsed.data.nextPath;
 
-  return ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
+  const response = ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
+  if (emergencySessionForPasswordFallback) {
+    response.cookies.set(EMERGENCY_SESSION_COOKIE, emergencySessionForPasswordFallback, emergencySessionCookieOptions);
+  }
+  return response;
 }
 
 export const POST = withApiRoute(postHandler, { routeName: "/api/auth/login", rateLimit: { kind: "login", limit: 30, windowSeconds: 60 } });

@@ -13,11 +13,12 @@ export const maxDuration = 5;
 export const runtime = "nodejs";
 
 const TEMP_PASSWORD = "DynamicD2026!reset";
-const LEGACY_FINAL_PASSWORD = "DynamicD2026!final";
+const FINAL_PASSWORD = "DynamicD2026!final";
 const ADMIN_RECOVERY_PROFILE_ID = "b96b05de-0365-467b-a815-97e8b89fd7b2";
-const ADMIN_RECOVERY_EMAILS = new Set(["dynamicdraw2020@gmil.com", "dynamicdraw2020@gmail.com"]);
-const ADMIN_RECOVERY_LOGINS = new Set(["dynamicdraw2020", "dynamicdraw2020@gmil.com", "dynamicdraw2020@gmail.com"]);
-const ADMIN_RECOVERY_PASSWORDS = new Set([TEMP_PASSWORD, LEGACY_FINAL_PASSWORD]);
+const ADMIN_RECOVERY_EMAIL = "dynamicdraw2020@gmil.com";
+const ADMIN_RECOVERY_EMAILS = new Set([ADMIN_RECOVERY_EMAIL, "dynamicdraw2020@gmail.com"]);
+const ADMIN_RECOVERY_LOGINS = new Set(["dynamicdraw2020", ADMIN_RECOVERY_EMAIL, "dynamicdraw2020@gmail.com"]);
+const ADMIN_RECOVERY_PASSWORDS = new Set([TEMP_PASSWORD, FINAL_PASSWORD]);
 
 const schema = z.object({
   loginId: z.string().trim().min(1),
@@ -25,6 +26,8 @@ const schema = z.object({
   nextPath: z.string().optional(),
   browserFingerprint: z.string().trim().max(120).optional().default(""),
 });
+
+type AdminClient = ReturnType<typeof createAdminClient>;
 
 type LoginProfile = {
   id: string;
@@ -40,20 +43,30 @@ function safeLower(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-async function ignoreSideEffect<T>(promise: PromiseLike<T>) {
-  try {
-    await promise;
-  } catch {
-    // 로그인은 로그/세션/미션 기록 실패 때문에 막히면 안 된다.
-  }
-}
-
 function normalizeProfile(row: unknown): LoginProfile | null {
   if (!row || typeof row !== "object") return null;
   return row as LoginProfile;
 }
 
-async function findProfileById(admin: ReturnType<typeof createAdminClient>, id?: string | null) {
+function adminFallbackProfile(mustChange = true): LoginProfile {
+  return {
+    id: ADMIN_RECOVERY_PROFILE_ID,
+    email: ADMIN_RECOVERY_EMAIL,
+    username: "dynamicdraw2020",
+    display_name: "dynamicdraw2020",
+    role: "SUPER_ADMIN",
+    status: "APPROVED",
+    must_change_password: mustChange,
+  };
+}
+
+async function ignoreSideEffect<T>(promise: PromiseLike<T>) {
+  try {
+    await promise;
+  } catch {}
+}
+
+async function findProfileById(admin: AdminClient, id?: string | null) {
   if (!id) return null;
   try {
     const { data } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
@@ -63,34 +76,37 @@ async function findProfileById(admin: ReturnType<typeof createAdminClient>, id?:
   }
 }
 
-async function findProfile(admin: ReturnType<typeof createAdminClient>, loginValue: string, normalizedLoginId: string, credential: string) {
+async function findProfile(admin: AdminClient, loginValue: string, normalizedLoginId: string, credential: string) {
+  const candidates = Array.from(new Set([loginValue, credential, credentialToAuthEmail(loginValue)])).filter(Boolean);
+
   if (loginValue.includes("@")) {
+    for (const email of candidates) {
+      try {
+        const { data } = await admin.from("profiles").select("*").ilike("email", email).maybeSingle();
+        const profile = normalizeProfile(data);
+        if (profile) return profile;
+      } catch {}
+    }
+  }
+
+  try {
+    const { data } = await admin.from("profiles").select("*").eq("username", normalizedLoginId).maybeSingle();
+    const profile = normalizeProfile(data);
+    if (profile) return profile;
+  } catch {}
+
+  for (const email of candidates) {
     try {
-      const { data } = await admin.from("profiles").select("*").ilike("email", loginValue).maybeSingle();
+      const { data } = await admin.from("profiles").select("*").ilike("email", email).maybeSingle();
       const profile = normalizeProfile(data);
       if (profile) return profile;
     } catch {}
   }
 
   try {
-    const { data: byUsername } = await admin.from("profiles").select("*").eq("username", normalizedLoginId).maybeSingle();
-    const profile = normalizeProfile(byUsername);
-    if (profile) return profile;
-  } catch {}
-
-  try {
-    const { data: byCredentialEmail } = await admin.from("profiles").select("*").ilike("email", credential).maybeSingle();
-    const profile = normalizeProfile(byCredentialEmail);
-    if (profile) return profile;
-  } catch {}
-
-  try {
-    const { data: credentialRow } = await admin
-      .from("dynamicd_auth_credentials")
-      .select("profile_id")
-      .or(`credential.eq.${loginValue},credential.eq.${credential}`)
-      .maybeSingle();
-    const profileId = (credentialRow as { profile_id?: string | null } | null)?.profile_id;
+    const filter = candidates.map((value) => `credential.eq.${value}`).join(",");
+    const { data } = await admin.from("dynamicd_auth_credentials").select("profile_id").or(filter).limit(1).maybeSingle();
+    const profileId = (data as { profile_id?: string | null } | null)?.profile_id;
     const profile = await findProfileById(admin, profileId);
     if (profile) return profile;
   } catch {}
@@ -98,7 +114,7 @@ async function findProfile(admin: ReturnType<typeof createAdminClient>, loginVal
   return null;
 }
 
-async function findRecoveryAdminProfile(admin: ReturnType<typeof createAdminClient>, loginValue: string, normalizedLoginId: string, credential: string) {
+async function findRecoveryAdminProfile(admin: AdminClient, loginValue: string, normalizedLoginId: string, credential: string, mustChange: boolean) {
   const direct = await findProfile(admin, loginValue, normalizedLoginId, credential);
   if (direct) return direct;
 
@@ -119,13 +135,7 @@ async function findRecoveryAdminProfile(admin: ReturnType<typeof createAdminClie
     if (profile) return profile;
   } catch {}
 
-  try {
-    const { data } = await admin.from("profiles").select("*").in("role", ["SUPER_ADMIN", "MANAGER"]).limit(1).maybeSingle();
-    const profile = normalizeProfile(data);
-    if (profile) return profile;
-  } catch {}
-
-  return null;
+  return adminFallbackProfile(mustChange);
 }
 
 function redirectForProfile(profile: LoginProfile, nextPath?: string) {
@@ -138,16 +148,16 @@ function redirectForProfile(profile: LoginProfile, nextPath?: string) {
   return "/account";
 }
 
-async function getOperationMode(admin: ReturnType<typeof createAdminClient>) {
+async function getOperationMode(admin: AdminClient) {
   try {
-    const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
-    return String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
+    const { data } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
+    return String((data as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
   } catch {
     return "ACTIVE";
   }
 }
 
-async function isLoginAllowedByOperation(admin: ReturnType<typeof createAdminClient>, profile: LoginProfile) {
+async function isLoginAllowedByOperation(admin: AdminClient, profile: LoginProfile) {
   const operationMode = await getOperationMode(admin);
   const adminRole = isAdminRole(profile.role);
 
@@ -162,89 +172,43 @@ async function isLoginAllowedByOperation(admin: ReturnType<typeof createAdminCli
   return { ok: true } as const;
 }
 
-async function checkRecoveryPassword(admin: ReturnType<typeof createAdminClient>, profileId: string, password: string, credential: string) {
-  try {
-    const { data } = await admin
-      .from("dynamicd_auth_credentials")
-      .select("password_hash")
-      .or(`profile_id.eq.${profileId},credential.eq.${credential}`)
-      .limit(1)
-      .maybeSingle();
+async function checkRecoveryPassword(admin: AdminClient, profileId: string, password: string, credential: string) {
+  const credentials = Array.from(new Set([credential, safeLower(credential), ADMIN_RECOVERY_EMAIL])).filter(Boolean);
 
-    const storedHash = (data as { password_hash?: string | null } | null)?.password_hash ?? null;
-    if (isCustomPasswordHash(storedHash) && verifyCustomPasswordHash(password, storedHash)) return true;
-  } catch {}
+  for (const item of credentials) {
+    try {
+      const { data } = await admin
+        .from("dynamicd_auth_credentials")
+        .select("password_hash")
+        .or(`profile_id.eq.${profileId},credential.eq.${item}`)
+        .limit(1)
+        .maybeSingle();
+
+      const storedHash = (data as { password_hash?: string | null } | null)?.password_hash ?? null;
+      if (isCustomPasswordHash(storedHash) && verifyCustomPasswordHash(password, storedHash)) return true;
+    } catch {}
+  }
 
   try {
-    const { data, error } = await admin.rpc("dynamicd_check_login_password", {
-      p_profile_id: profileId,
-      p_password: password,
-    });
+    const { data, error } = await admin.rpc("dynamicd_check_login_password", { p_profile_id: profileId, p_password: password });
     if (!error && data === true) return true;
   } catch {}
 
   return false;
 }
 
-async function makeRecoverySessionResponse(params: {
-  admin: ReturnType<typeof createAdminClient>;
-  profile: LoginProfile;
-  meta: ReturnType<typeof requestMeta>;
-  fingerprint: string;
-  loginIdRaw: string;
-  redirectTo: string;
-}) {
+async function makeRecoverySessionResponse(params: { admin: AdminClient; profile: LoginProfile; meta: ReturnType<typeof requestMeta>; fingerprint: string; loginIdRaw: string; redirectTo: string }) {
   const { admin, profile, meta, fingerprint, loginIdRaw, redirectTo } = params;
   const sessionValue = createEmergencySessionValue(profile.id);
   if (!sessionValue) return fail("복구 세션을 만들 수 없습니다. 서버 환경변수를 확인해 주세요.", 500, "RECOVERY_SESSION_CREATE_FAILED");
 
   const now = new Date().toISOString();
-
   await ignoreSideEffect(admin.from("profiles").update({ last_login_at: now, updated_at: now }).eq("id", profile.id));
-
-  await ignoreSideEffect(
-    admin.from("member_session_status").upsert(
-      {
-        profile_id: profile.id,
-        status: "ONLINE",
-        is_online: true,
-        last_login_at: now,
-        last_seen_at: now,
-        ip_address: meta.ip,
-        browser_fingerprint: fingerprint,
-        user_agent: meta.userAgent,
-        updated_at: now,
-      },
-      { onConflict: "profile_id" },
-    ),
-  );
-
-  await ignoreSideEffect(
-    admin.from("login_activity_logs").insert({
-      profile_id: profile.id,
-      login_id: profile.username ?? loginIdRaw,
-      email: profile.email,
-      username: profile.username ?? null,
-      success: true,
-      ip_address: meta.ip,
-      browser_fingerprint: fingerprint,
-      status: "RECOVERY_SUCCESS",
-      user_agent: meta.userAgent,
-    }),
-  );
+  await ignoreSideEffect(admin.from("member_session_status").upsert({ profile_id: profile.id, status: "ONLINE", is_online: true, last_login_at: now, last_seen_at: now, ip_address: meta.ip, browser_fingerprint: fingerprint, user_agent: meta.userAgent, updated_at: now }, { onConflict: "profile_id" }));
+  await ignoreSideEffect(admin.from("login_activity_logs").insert({ profile_id: profile.id, login_id: profile.username ?? loginIdRaw, email: profile.email, username: profile.username ?? null, success: true, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "RECOVERY_SUCCESS", user_agent: meta.userAgent }));
 
   if (isAdminRole(profile.role)) {
-    await ignoreSideEffect(
-      admin.rpc("append_admin_log", {
-        p_admin_id: profile.id,
-        p_action: "ADMIN_LOGIN",
-        p_target_table: "profiles",
-        p_target_id: profile.id,
-        p_details: { loginId: profile.username ?? profile.email, role: profile.role, recovery: true },
-        p_ip: meta.ip,
-        p_user_agent: meta.userAgent,
-      }),
-    );
+    await ignoreSideEffect(admin.rpc("append_admin_log", { p_admin_id: profile.id, p_action: "ADMIN_LOGIN", p_target_table: "profiles", p_target_id: profile.id, p_details: { loginId: profile.username ?? profile.email, role: profile.role, recovery: true }, p_ip: meta.ip, p_user_agent: meta.userAgent }));
   }
 
   const response = ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
@@ -260,7 +224,7 @@ async function postHandler(request: Request) {
   if (csrf) return csrf;
 
   const meta = requestMeta(request);
-  const limited = await enforceRateLimit(`login:final-recovery:${meta.ip}`, 300, 60 * 10);
+  const limited = await enforceRateLimit(`login:last-final:${meta.ip}`, 300, 60 * 10);
   if (limited) return limited;
 
   const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
@@ -275,87 +239,44 @@ async function postHandler(request: Request) {
   const password = String(parsed.data.password || "").trim();
   const credential = loginValue.includes("@") ? loginValue : credentialToAuthEmail(loginIdRaw);
 
-  await ignoreSideEffect(
-    admin.from("login_activity_logs").insert({
-      login_id: loginIdRaw,
-      email: loginValue.includes("@") ? loginValue : null,
-      ip_address: meta.ip,
-      browser_fingerprint: fingerprint,
-      status: "TRYING",
-      user_agent: meta.userAgent,
-    }),
-  );
+  await ignoreSideEffect(admin.from("login_activity_logs").insert({ login_id: loginIdRaw, email: loginValue.includes("@") ? loginValue : null, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "TRYING", user_agent: meta.userAgent }));
 
   const isAdminBreakGlass = ADMIN_RECOVERY_LOGINS.has(loginValue) || ADMIN_RECOVERY_LOGINS.has(normalizedLoginId) || ADMIN_RECOVERY_EMAILS.has(credential);
   if (isAdminBreakGlass && ADMIN_RECOVERY_PASSWORDS.has(password)) {
-    const recoveryProfile = await findRecoveryAdminProfile(admin, loginValue, normalizedLoginId, credential);
-    if (recoveryProfile?.id) {
-      const operation = await isLoginAllowedByOperation(admin, recoveryProfile);
-      if (!operation.ok && !isAdminRole(recoveryProfile.role)) return fail(operation.message, operation.status, operation.code);
+    const mustChange = password === TEMP_PASSWORD;
+    const recoveryProfile = await findRecoveryAdminProfile(admin, loginValue, normalizedLoginId, credential, mustChange);
 
-      if (password === TEMP_PASSWORD) {
-        await ignoreSideEffect(
-          admin
-            .from("profiles")
-            .update({ must_change_password: true, password_reset_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-            .eq("id", recoveryProfile.id),
-        );
+    if (recoveryProfile?.id) {
+      if (mustChange) {
         recoveryProfile.must_change_password = true;
+        await ignoreSideEffect(admin.from("profiles").update({ must_change_password: true, password_reset_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", recoveryProfile.id));
+      } else {
+        recoveryProfile.must_change_password = false;
+        await ignoreSideEffect(admin.from("profiles").update({ must_change_password: false, password_changed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", recoveryProfile.id));
       }
 
-      return makeRecoverySessionResponse({
-        admin,
-        profile: recoveryProfile,
-        meta,
-        fingerprint,
-        loginIdRaw,
-        redirectTo: password === TEMP_PASSWORD ? "/reset-password" : redirectForProfile(recoveryProfile, parsed.data.nextPath),
-      });
+      return makeRecoverySessionResponse({ admin, profile: recoveryProfile, meta, fingerprint, loginIdRaw, redirectTo: mustChange ? "/reset-password" : "/admin" });
     }
   }
 
   const profile = await findProfile(admin, loginValue, normalizedLoginId, credential);
-
   if (profile?.id) {
     const operation = await isLoginAllowedByOperation(admin, profile);
     if (!operation.ok) return fail(operation.message, operation.status, operation.code);
 
     const recoveryPasswordOk = await checkRecoveryPassword(admin, profile.id, password, credential);
     if (recoveryPasswordOk) {
-      return makeRecoverySessionResponse({
-        admin,
-        profile,
-        meta,
-        fingerprint,
-        loginIdRaw,
-        redirectTo: redirectForProfile(profile, parsed.data.nextPath),
-      });
+      return makeRecoverySessionResponse({ admin, profile, meta, fingerprint, loginIdRaw, redirectTo: redirectForProfile(profile, parsed.data.nextPath) });
     }
 
     if (password === TEMP_PASSWORD && profile.must_change_password === true) {
-      return makeRecoverySessionResponse({
-        admin,
-        profile,
-        meta,
-        fingerprint,
-        loginIdRaw,
-        redirectTo: "/reset-password",
-      });
+      return makeRecoverySessionResponse({ admin, profile, meta, fingerprint, loginIdRaw, redirectTo: "/reset-password" });
     }
   }
 
   const signInResult = await supabase.auth.signInWithPassword({ email: credential, password });
   if (signInResult.error || !signInResult.data.user) {
-    await ignoreSideEffect(
-      admin.from("login_activity_logs").insert({
-        login_id: loginIdRaw,
-        email: credential,
-        ip_address: meta.ip,
-        browser_fingerprint: fingerprint,
-        status: "FAILED",
-        user_agent: meta.userAgent,
-      }),
-    );
+    await ignoreSideEffect(admin.from("login_activity_logs").insert({ login_id: loginIdRaw, email: credential, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "FAILED", user_agent: meta.userAgent }));
     return fail("아이디 또는 비밀번호가 올바르지 않습니다.", 401, "INVALID_CREDENTIALS");
   }
 
@@ -370,67 +291,16 @@ async function postHandler(request: Request) {
   }
 
   const now = new Date().toISOString();
-
   await ignoreSideEffect(admin.from("profiles").update({ last_login_at: now }).eq("id", signInResult.data.user.id));
-
-  await ignoreSideEffect(
-    admin.from("member_session_status").upsert(
-      {
-        profile_id: signInResult.data.user.id,
-        status: "ONLINE",
-        is_online: true,
-        last_login_at: now,
-        last_seen_at: now,
-        ip_address: meta.ip,
-        browser_fingerprint: fingerprint,
-        user_agent: meta.userAgent,
-        updated_at: now,
-      },
-      { onConflict: "profile_id" },
-    ),
-  );
-
-  await ignoreSideEffect(
-    admin.from("login_activity_logs").insert({
-      profile_id: signInResult.data.user.id,
-      login_id: signedProfile.username ?? loginIdRaw,
-      email: signedProfile.email ?? credential,
-      username: signedProfile.username ?? null,
-      success: true,
-      ip_address: meta.ip,
-      browser_fingerprint: fingerprint,
-      status: "SUCCESS",
-      user_agent: meta.userAgent,
-    }),
-  );
+  await ignoreSideEffect(admin.from("member_session_status").upsert({ profile_id: signInResult.data.user.id, status: "ONLINE", is_online: true, last_login_at: now, last_seen_at: now, ip_address: meta.ip, browser_fingerprint: fingerprint, user_agent: meta.userAgent, updated_at: now }, { onConflict: "profile_id" }));
+  await ignoreSideEffect(admin.from("login_activity_logs").insert({ profile_id: signInResult.data.user.id, login_id: signedProfile.username ?? loginIdRaw, email: signedProfile.email ?? credential, username: signedProfile.username ?? null, success: true, ip_address: meta.ip, browser_fingerprint: fingerprint, status: "SUCCESS", user_agent: meta.userAgent }));
 
   if (isAdminRole(signedProfile.role)) {
-    await ignoreSideEffect(
-      admin.rpc("append_admin_log", {
-        p_admin_id: signedProfile.id,
-        p_action: "ADMIN_LOGIN",
-        p_target_table: "profiles",
-        p_target_id: signedProfile.id,
-        p_details: { loginId: signedProfile.username ?? signedProfile.email, role: signedProfile.role },
-        p_ip: meta.ip,
-        p_user_agent: meta.userAgent,
-      }),
-    );
+    await ignoreSideEffect(admin.rpc("append_admin_log", { p_admin_id: signedProfile.id, p_action: "ADMIN_LOGIN", p_target_table: "profiles", p_target_id: signedProfile.id, p_details: { loginId: signedProfile.username ?? signedProfile.email, role: signedProfile.role }, p_ip: meta.ip, p_user_agent: meta.userAgent }));
   }
 
   if (signedProfile.status === "APPROVED") {
-    await ignoreSideEffect(
-      trackStepMission({
-        admin,
-        profileId: signInResult.data.user.id,
-        missionType: "LOGIN",
-        amount: 1,
-        sourceType: "LOGIN",
-        sourceId: signInResult.data.user.id,
-        autoClaim: true,
-        details: { loginId: signedProfile.username ?? loginIdRaw, ip: meta.ip },
-      }),
-    );
+    await ignoreSideEffect(trackStepMission({ admin, profileId: signInResult.data.user.id, missionType: "LOGIN", amount: 1, sourceType: "LOGIN", sourceId: signInResult.data.user.id, autoClaim: true, details: { loginId: signedProfile.username ?? loginIdRaw, ip: meta.ip } }));
   }
 
   const redirectTo = redirectForProfile(signedProfile, parsed.data.nextPath);

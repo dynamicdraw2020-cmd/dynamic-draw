@@ -2,9 +2,97 @@ import { z } from "zod";
 import { enforceRateLimit, enforceSameOrigin, fail, ok, rejectDemoMutation, readJsonWithLimit } from "@/lib/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getEmergencyProfileIdFromCookies, EMERGENCY_SESSION_COOKIE } from "@/lib/emergency-session";
+import { makeCustomPasswordHash } from "@/lib/custom-password";
+import { getEmergencyProfileIdFromCookies } from "@/lib/emergency-session";
 
 const schema = z.object({ password: z.string().min(8).max(72) });
+
+type ProfileForReset = {
+  id: string;
+  email: string | null;
+  username: string | null;
+};
+
+async function resolveProfileForReset(admin: ReturnType<typeof createAdminClient>, userId: string): Promise<ProfileForReset | null> {
+  const { data } = await admin.from("profiles").select("id,email,username").eq("id", userId).maybeSingle();
+  return (data ?? null) as ProfileForReset | null;
+}
+
+async function saveCustomPassword(admin: ReturnType<typeof createAdminClient>, profile: ProfileForReset, password: string) {
+  const now = new Date().toISOString();
+  const passwordHash = makeCustomPasswordHash(password);
+  const credential = String(profile.email || profile.username || profile.id).trim().toLowerCase();
+
+  // 새 스키마: credential 컬럼 포함.
+  try {
+    const { error } = await admin.from("dynamicd_auth_credentials").upsert(
+      {
+        profile_id: profile.id,
+        credential,
+        password_hash: passwordHash,
+        must_change_password: false,
+        updated_at: now,
+      },
+      { onConflict: "profile_id" },
+    );
+    if (!error) return { ok: true as const };
+  } catch {
+    // 기존 스키마 fallback으로 계속 진행.
+  }
+
+  // 구 스키마: credential 컬럼이 없던 테이블도 지원.
+  try {
+    const { error } = await admin.from("dynamicd_auth_credentials").upsert(
+      {
+        profile_id: profile.id,
+        password_hash: passwordHash,
+        must_change_password: false,
+        updated_at: now,
+      },
+      { onConflict: "profile_id" },
+    );
+    if (!error) return { ok: true as const };
+    return { ok: false as const, reason: error.message };
+  } catch (error) {
+    return { ok: false as const, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function syncSupabaseAuthPassword(admin: ReturnType<typeof createAdminClient>, userId: string, password: string) {
+  // 이건 보조 작업이다. 실패해도 custom password가 성공하면 로그인은 된다.
+  try {
+    await admin.rpc("dynamicd_set_password", { p_user_id: userId, p_password: password });
+  } catch {}
+
+  try {
+    await admin.rpc("dynamicd_set_login_password", { p_profile_id: userId, p_password: password, p_must_change: false });
+  } catch {}
+
+  try {
+    await admin.auth.admin.updateUserById(userId, { password, email_confirm: true });
+  } catch {}
+}
+
+async function clearRecoveryFlags(admin: ReturnType<typeof createAdminClient>, userId: string) {
+  const now = new Date().toISOString();
+
+  try {
+    await admin
+      .from("profiles")
+      .update({ must_change_password: false, password_changed_at: now, password_reset_at: null, updated_at: now })
+      .eq("id", userId);
+    return;
+  } catch {}
+
+  try {
+    await admin.from("profiles").update({ must_change_password: false, password_changed_at: now, updated_at: now }).eq("id", userId);
+    return;
+  } catch {}
+
+  try {
+    await admin.from("profiles").update({ updated_at: now }).eq("id", userId);
+  } catch {}
+}
 
 export async function POST(request: Request) {
   const demo = rejectDemoMutation();
@@ -27,59 +115,19 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit(`password-reset:${userId}`, 20, 60 * 15);
   if (limited) return limited;
 
+  const profile = await resolveProfileForReset(admin, userId);
+  if (!profile) return fail("회원 정보를 찾지 못했습니다. 다시 로그인해 주세요.", 404, "PROFILE_MISSING");
+
   const password = parsed.data.password;
-  let passwordUpdated = false;
-  const reasons: string[] = [];
-
-  // 1) 프로젝트 전용 복구 패스워드 저장소를 먼저 갱신한다. 이게 성공하면 이후 로그인은 Supabase Auth 401과 무관하게 통과한다.
-  try {
-    const { data, error } = await admin.rpc("dynamicd_set_login_password", {
-      p_profile_id: userId,
-      p_password: password,
-      p_must_change: false,
-    });
-    if (!error && data === true) passwordUpdated = true;
-    else reasons.push(error?.message || "dynamicd_set_login_password returned false");
-  } catch (error) {
-    reasons.push(error instanceof Error ? error.message : String(error));
+  const saved = await saveCustomPassword(admin, profile, password);
+  if (!saved.ok) {
+    return fail("비밀번호를 바꾸지 못했습니다. 다시 시도해 주세요.", 400, "PASSWORD_UPDATE_FAILED", { reason: saved.reason });
   }
 
-  // 2) Supabase Auth 세션이 살아 있으면 정식 updateUser도 시도한다. 실패해도 1번이 성공했으면 성공 처리한다.
-  if (user) {
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (!error) passwordUpdated = true;
-      else reasons.push(error.message);
-    } catch (error) {
-      reasons.push(error instanceof Error ? error.message : String(error));
-    }
-  }
+  await syncSupabaseAuthPassword(admin, userId, password);
+  await clearRecoveryFlags(admin, userId);
 
-  // 3) service role Admin API도 보조로 시도한다.
-  try {
-    const { error } = await admin.auth.admin.updateUserById(userId, {
-      password,
-      email_confirm: true,
-    });
-    if (!error) passwordUpdated = true;
-    else reasons.push(error.message);
-  } catch (error) {
-    reasons.push(error instanceof Error ? error.message : String(error));
-  }
-
-  if (!passwordUpdated) {
-    return fail("비밀번호를 바꾸지 못했습니다. 다시 시도해 주세요.", 400, "PASSWORD_UPDATE_FAILED", { reason: reasons.join(" | ") });
-  }
-
-  const now = new Date().toISOString();
-  await admin
-    .from("profiles")
-    .update({ must_change_password: false, password_changed_at: now, password_reset_at: null, updated_at: now })
-    .eq("id", userId)
-    .then(undefined, () => undefined);
-
-  const response = ok({ message: "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.", redirectTo: "/login?password_changed=1" });
-  response.cookies.delete(EMERGENCY_SESSION_COOKIE);
-  await supabase.auth.signOut().catch(() => undefined);
-  return response;
+  // 복구 세션은 유지한다. 저장 직후 바로 계정 화면으로 보낸다.
+  // 사용자가 로그아웃 후 다시 로그인하면 방금 저장한 새 비밀번호가 custom table에서 검증된다.
+  return ok({ message: "비밀번호가 변경되었습니다.", redirectTo: "/account" });
 }

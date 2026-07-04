@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { trackStepMission } from "@/lib/step-events";
 import { createEmergencySessionValue, EMERGENCY_SESSION_COOKIE, emergencySessionCookieOptions } from "@/lib/emergency-session";
+import { isCustomPasswordHash, verifyCustomPasswordHash } from "@/lib/custom-password";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 5;
@@ -91,16 +92,32 @@ async function isLoginAllowedByOperation(admin: ReturnType<typeof createAdminCli
 }
 
 async function checkRecoveryPassword(admin: ReturnType<typeof createAdminClient>, profileId: string, password: string) {
+  // 1) 새 복구 방식: 서버 전용 HMAC 해시를 직접 검증한다. Supabase Auth 401과 무관하게 동작한다.
+  try {
+    const { data } = await admin
+      .from("dynamicd_auth_credentials")
+      .select("password_hash")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+
+    const storedHash = (data as { password_hash?: string | null } | null)?.password_hash ?? null;
+    if (isCustomPasswordHash(storedHash) && verifyCustomPasswordHash(password, storedHash)) return true;
+  } catch {
+    // 기존 DB에 테이블/컬럼이 아직 없어도 아래 fallback으로 계속 진행한다.
+  }
+
+  // 2) 이전 복구 방식: pgcrypto crypt 함수로 저장된 해시도 계속 지원한다.
   try {
     const { data, error } = await admin.rpc("dynamicd_check_login_password", {
       p_profile_id: profileId,
       p_password: password,
     });
-    if (error) return false;
-    return data === true;
+    if (!error && data === true) return true;
   } catch {
-    return false;
+    // RPC가 없거나 스키마가 달라도 로그인 전체를 죽이지 않는다.
   }
+
+  return false;
 }
 
 async function makeRecoverySessionResponse(params: {

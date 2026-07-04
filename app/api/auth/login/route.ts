@@ -52,8 +52,8 @@ async function findProfile(admin: ReturnType<typeof createAdminClient>, loginVal
   const { data: byUsername } = await admin.from("profiles").select("*").eq("username", normalizedLoginId).maybeSingle();
   if (byUsername) return byUsername as LoginProfile;
 
-  const { data: byEmail } = await admin.from("profiles").select("*").ilike("email", credential).maybeSingle();
-  return (byEmail ?? null) as LoginProfile | null;
+  const { data: byCredentialEmail } = await admin.from("profiles").select("*").ilike("email", credential).maybeSingle();
+  return (byCredentialEmail ?? null) as LoginProfile | null;
 }
 
 function redirectForProfile(profile: LoginProfile, nextPath?: string) {
@@ -66,7 +66,44 @@ function redirectForProfile(profile: LoginProfile, nextPath?: string) {
   return "/account";
 }
 
-async function makeEmergencyLoginResponse(params: {
+async function getOperationMode(admin: ReturnType<typeof createAdminClient>) {
+  try {
+    const { data: modeRow } = await admin.from("site_settings").select("value").eq("key", "operation_mode").maybeSingle();
+    return String((modeRow as { value?: unknown } | null)?.value ?? "ACTIVE").replace(/^"|"$/g, "");
+  } catch {
+    return "ACTIVE";
+  }
+}
+
+async function isLoginAllowedByOperation(admin: ReturnType<typeof createAdminClient>, profile: LoginProfile) {
+  const operationMode = await getOperationMode(admin);
+  const adminRole = isAdminRole(profile.role);
+
+  if ((operationMode === "UPDATING" || operationMode === "READ_ONLY") && !adminRole) {
+    return { ok: false, status: 503, code: "OPERATION_LOGIN_BLOCKED", message: "현재 업데이트중입니다. 관리자만 로그인할 수 있습니다." } as const;
+  }
+
+  if ((operationMode === "INACTIVE" || operationMode === "MAINTENANCE") && profile.role !== "SUPER_ADMIN") {
+    return { ok: false, status: 503, code: "OPERATION_LOGIN_BLOCKED", message: "현재 사이트가 비활성화되어 최고 관리자만 로그인할 수 있습니다." } as const;
+  }
+
+  return { ok: true } as const;
+}
+
+async function checkRecoveryPassword(admin: ReturnType<typeof createAdminClient>, profileId: string, password: string) {
+  try {
+    const { data, error } = await admin.rpc("dynamicd_check_login_password", {
+      p_profile_id: profileId,
+      p_password: password,
+    });
+    if (error) return false;
+    return data === true;
+  } catch {
+    return false;
+  }
+}
+
+async function makeRecoverySessionResponse(params: {
   admin: ReturnType<typeof createAdminClient>;
   profile: LoginProfile;
   meta: ReturnType<typeof requestMeta>;
@@ -79,7 +116,9 @@ async function makeEmergencyLoginResponse(params: {
   if (!sessionValue) return fail("복구 세션을 만들 수 없습니다. 서버 환경변수를 확인해 주세요.", 500, "RECOVERY_SESSION_CREATE_FAILED");
 
   const now = new Date().toISOString();
+
   await ignoreSideEffect(admin.from("profiles").update({ last_login_at: now, updated_at: now }).eq("id", profile.id));
+
   await ignoreSideEffect(
     admin.from("member_session_status").upsert(
       {
@@ -96,6 +135,7 @@ async function makeEmergencyLoginResponse(params: {
       { onConflict: "profile_id" },
     ),
   );
+
   await ignoreSideEffect(
     admin.from("login_activity_logs").insert({
       profile_id: profile.id,
@@ -105,10 +145,24 @@ async function makeEmergencyLoginResponse(params: {
       success: true,
       ip_address: meta.ip,
       browser_fingerprint: fingerprint,
-      status: "EMERGENCY_SUCCESS",
+      status: "RECOVERY_SUCCESS",
       user_agent: meta.userAgent,
     }),
   );
+
+  if (isAdminRole(profile.role)) {
+    await ignoreSideEffect(
+      admin.rpc("append_admin_log", {
+        p_admin_id: profile.id,
+        p_action: "ADMIN_LOGIN",
+        p_target_table: "profiles",
+        p_target_id: profile.id,
+        p_details: { loginId: profile.username ?? profile.email, role: profile.role, recovery: true },
+        p_ip: meta.ip,
+        p_user_agent: meta.userAgent,
+      }),
+    );
+  }
 
   const response = ok({ redirectTo, profile: { displayName: profile.display_name, role: profile.role, status: profile.status } });
   response.cookies.set(EMERGENCY_SESSION_COOKIE, sessionValue, emergencySessionCookieOptions);
@@ -123,7 +177,7 @@ async function postHandler(request: Request) {
   if (csrf) return csrf;
 
   const meta = requestMeta(request);
-  const limited = await enforceRateLimit(`login:v999:${meta.ip}`, 100, 60 * 10);
+  const limited = await enforceRateLimit(`login:custom-recovery:${meta.ip}`, 100, 60 * 10);
   if (limited) return limited;
 
   const parsed = schema.safeParse(await readJsonWithLimit(request).catch(() => null));
@@ -151,41 +205,23 @@ async function postHandler(request: Request) {
 
   const profile = await findProfile(admin, loginValue, normalizedLoginId, credential);
 
-  if (profile?.id && profile.status === "APPROVED") {
+  if (profile?.id) {
+    const operation = await isLoginAllowedByOperation(admin, profile);
+    if (!operation.ok) return fail(operation.message, operation.status, operation.code);
+
     const profileEmail = safeLower(profile.email || credential);
     const adminRecovery = ADMIN_RECOVERY_EMAILS.has(profileEmail) || ADMIN_RECOVERY_EMAILS.has(loginValue) || isAdminRole(profile.role);
+    const recoveryPasswordOk = await checkRecoveryPassword(admin, profile.id, password);
 
-    // 1) 공통 임시 비밀번호 복구 로그인: 관리자/복구 플래그 계정은 Supabase Auth 401을 우회한다.
-    if (password === TEMP_PASSWORD && (profile.must_change_password === true || adminRecovery)) {
-      return makeEmergencyLoginResponse({
+    if (recoveryPasswordOk || (password === TEMP_PASSWORD && (profile.must_change_password === true || adminRecovery))) {
+      return makeRecoverySessionResponse({
         admin,
         profile,
         meta,
         fingerprint,
         loginIdRaw,
-        redirectTo: "/reset-password",
+        redirectTo: redirectForProfile(profile, parsed.data.nextPath),
       });
-    }
-
-    // 2) 실제 auth.users 해시와 직접 대조하는 fallback. Supabase Auth가 401이어도 DB 해시가 맞으면 로그인 처리한다.
-    try {
-      const { data: verifiedRows } = await admin.rpc("dynamicd_verify_password", {
-        p_email: profileEmail,
-        p_password: password,
-      });
-      const verified = Array.isArray(verifiedRows) ? verifiedRows[0] : verifiedRows;
-      if (verified?.ok === true) {
-        return makeEmergencyLoginResponse({
-          admin,
-          profile,
-          meta,
-          fingerprint,
-          loginIdRaw,
-          redirectTo: redirectForProfile(profile, parsed.data.nextPath),
-        });
-      }
-    } catch {
-      // RPC가 아직 설치되지 않았다면 일반 Supabase 로그인으로 진행한다.
     }
   }
 
@@ -208,8 +244,16 @@ async function postHandler(request: Request) {
   const signedProfile = profileRow as LoginProfile | null;
   if (profileError || !signedProfile) return fail("회원 정보가 생성되지 않았습니다. 관리자에게 문의해 주세요.", 500, "PROFILE_MISSING");
 
+  const operation = await isLoginAllowedByOperation(admin, signedProfile);
+  if (!operation.ok) {
+    await supabase.auth.signOut().catch(() => undefined);
+    return fail(operation.message, operation.status, operation.code);
+  }
+
   const now = new Date().toISOString();
+
   await ignoreSideEffect(admin.from("profiles").update({ last_login_at: now }).eq("id", signInResult.data.user.id));
+
   await ignoreSideEffect(
     admin.from("member_session_status").upsert(
       {
@@ -226,6 +270,7 @@ async function postHandler(request: Request) {
       { onConflict: "profile_id" },
     ),
   );
+
   await ignoreSideEffect(
     admin.from("login_activity_logs").insert({
       profile_id: signInResult.data.user.id,

@@ -26,8 +26,10 @@ function safeEqual(a: string, b: string) {
 }
 
 export function createEmergencySessionValue(profileId: string) {
+  const cleanProfileId = String(profileId || "").trim();
+  if (!cleanProfileId) return "";
   const issuedAt = Date.now();
-  const payload = `${profileId}.${issuedAt}`;
+  const payload = `${cleanProfileId}.${issuedAt}`;
   const signature = signPayload(payload);
   if (!signature) return "";
   return `${payload}.${signature}`;
@@ -65,4 +67,9 @@ export const emergencySessionCookieOptions = {
   secure: process.env.NODE_ENV === "production",
   path: "/",
   maxAge: MAX_AGE_SECONDS,
+};
+
+export const clearEmergencySessionCookieOptions = {
+  ...emergencySessionCookieOptions,
+  maxAge: 0,
 };

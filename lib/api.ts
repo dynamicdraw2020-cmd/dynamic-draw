@@ -149,14 +149,16 @@ export async function getApiProfile(): Promise<{ profile: Profile; userId: strin
     const emergencyProfileId = await getEmergencyProfileIdFromCookies();
     if (emergencyProfileId) {
       const admin = createAdminClient();
-      const profileResult = await withTimeout(admin.from("profiles").select("*").eq("id", emergencyProfileId).maybeSingle(), RUNTIME_LIMITS.readQueryTimeoutMs, "api emergency profile lookup");
-      if (!profileResult.error && profileResult.data) return { profile: profileResult.data as Profile, userId: emergencyProfileId };
+      const profileResult = await withTimeout(
+        admin.from("profiles").select("*").eq("id", emergencyProfileId).maybeSingle(),
+        RUNTIME_LIMITS.readQueryTimeoutMs,
+        "api emergency profile lookup",
+      );
+      if (!profileResult.error && profileResult.data) {
+        return { profile: profileResult.data as Profile, userId: emergencyProfileId };
+      }
     }
-  } catch {
-    // 긴급 복구 세션 확인 실패는 일반 Supabase 세션 확인으로 이어진다.
-  }
 
-  try {
     const supabase = await createClient();
     const userResult = await withTimeout(supabase.auth.getUser(), RUNTIME_LIMITS.authTimeoutMs, "api auth getUser");
     const user = userResult.data.user;

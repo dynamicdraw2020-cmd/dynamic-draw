@@ -53,6 +53,44 @@ const emptyStats: PublicStats = {
   dailyStats: [],
 };
 
+function normalizeProfileStatus(value: unknown): Profile["status"] {
+  const status = String(value ?? "").trim().toUpperCase();
+  if (["PENDING", "APPROVED", "REJECTED", "SUSPENDED", "DELETED"].includes(status)) return status as Profile["status"];
+  // 오래된 DB에서 status가 비어 있던 기존 회원은 운영 복구를 위해 승인 회원으로 취급합니다.
+  return "APPROVED";
+}
+
+function normalizeProfileRole(value: unknown): Profile["role"] {
+  const role = String(value ?? "").trim().toUpperCase();
+  if (["USER", "VIEWER", "CS_MANAGER", "MANAGER", "SUPER_ADMIN"].includes(role)) return role as Profile["role"];
+  return "USER";
+}
+
+function normalizeProfileRow(row: Record<string, unknown>): Profile {
+  return {
+    ...(row as unknown as Profile),
+    id: String(row.id ?? ""),
+    email: String(row.email ?? row.username ?? ""),
+    username: typeof row.username === "string" ? row.username : null,
+    display_name: String(row.display_name ?? row.username ?? row.email ?? "회원"),
+    phone: typeof row.phone === "string" ? row.phone : null,
+    role: normalizeProfileRole(row.role),
+    status: normalizeProfileStatus(row.status),
+    member_code: typeof row.member_code === "string" ? row.member_code : null,
+    created_at: String(row.created_at ?? new Date().toISOString()),
+  };
+}
+
+export async function getAdminProfileSnapshot(): Promise<Profile[]> {
+  if (demoMode) return [];
+  const admin = createAdminClient();
+  const result = await admin.from("profiles").select("*").or("status.is.null,status.neq.DELETED").order("created_at", { ascending: false }).limit(10000);
+  const fallback = result.error ? await admin.from("profiles").select("*").order("created_at", { ascending: false }).limit(10000) : result;
+  return ((fallback.data ?? []) as Array<Record<string, unknown>>)
+    .map(normalizeProfileRow)
+    .filter((profile) => profile.id && profile.status !== "DELETED");
+}
+
 async function attachRewards(admin: ReturnType<typeof createAdminClient>, draws: Draw[]): Promise<Draw[]> {
   const drawIds = draws.map((draw) => draw.id).filter(Boolean);
   if (!drawIds.length) return draws.map((draw) => ({ ...draw, rewards: [] }));
@@ -225,11 +263,11 @@ export async function getAdminStats(): Promise<PublicStats> {
   if (demoMode) return mockStats;
   const admin = createAdminClient();
   try {
-    const [drawResult, rewardResult, resultResult, memberResult] = await Promise.all([
+    const [drawResult, rewardResult, resultResult, profileSnapshot] = await Promise.all([
       admin.from("draws").select("id,name,status,is_public,created_at,deleted_at").is("deleted_at", null).order("created_at", { ascending: false }),
       admin.from("rewards").select("id,draw_id,name,color,probability_units,is_active,sort_order,deleted_at").is("deleted_at", null).order("sort_order", { ascending: true }),
       admin.from("results").select("id,draw_id,reward_id,created_at,revealed_at,voided_at").not("revealed_at", "is", null).is("voided_at", null).order("created_at", { ascending: false }).limit(5000),
-      admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "APPROVED").eq("role", "USER"),
+      getAdminProfileSnapshot(),
     ]);
     if (drawResult.error || rewardResult.error || resultResult.error) throw new Error("stats query failed");
 
@@ -286,7 +324,7 @@ export async function getAdminStats(): Promise<PublicStats> {
     return {
       totalDraws: results.length,
       todayDraws: dailyCounts.get(todayKey) ?? 0,
-      totalMembers: memberResult.count ?? 0,
+      totalMembers: profileSnapshot.filter((profile) => profile.status === "APPROVED" && profile.role === "USER").length,
       rewardStats,
       dailyStats,
       drawOptions,
@@ -633,9 +671,9 @@ export async function getAdminDashboardData() {
     };
   }
   const admin = createAdminClient();
-  const [statsResult, pendingResult, activeDrawResult, resultsResult, logsResult] = await Promise.all([
+  const [statsResult, profiles, activeDrawResult, resultsResult, logsResult] = await Promise.all([
     admin.rpc("get_admin_stats"),
-    admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "PENDING"),
+    getAdminProfileSnapshot(),
     admin.from("draws").select("id", { count: "exact", head: true }).eq("status", "ACTIVE"),
     admin.from("public_results").select("*").order("created_at", { ascending: false }).limit(8),
     admin
@@ -647,7 +685,7 @@ export async function getAdminDashboardData() {
 
   return {
     stats: (statsResult.data as PublicStats | null) ?? emptyStats,
-    pendingMembers: pendingResult.count ?? 0,
+    pendingMembers: profiles.filter((profile) => profile.status === "PENDING").length,
     activeDraws: activeDrawResult.count ?? 0,
     recentResults: (resultsResult.data as DrawResult[] | null) ?? [],
     recentLogs:
@@ -692,8 +730,7 @@ export async function getAdminMembers(): Promise<Profile[]> {
     ];
   }
   const admin = createAdminClient();
-  const { data } = await admin.from("profiles").select("*").neq("status", "DELETED").order("created_at", { ascending: false });
-  const profiles = (data as Profile[] | null) ?? [];
+  const profiles = await getAdminProfileSnapshot();
   if (!profiles.length) return profiles;
   const ids = profiles.map((profile) => profile.id);
   const [riskResult, sessionResult, attemptResult] = await Promise.all([

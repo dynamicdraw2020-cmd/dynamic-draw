@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { Dices, Eye, Gift, Radio, Trophy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { supabaseConfigured } from "@/lib/env";
 import type { Draw, DrawResult, Reward } from "@/lib/types";
 import { maskMemberCode, maskName } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ export function LiveDrawStage({ drawId, initialResult, draw }: { drawId?: string
   const [visualRotation, setVisualRotation] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const stageRef = useRef<Stage>(stage);
-  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
+  const configured = supabaseConfigured;
   const segments = useMemo(() => { const rewards = (draw?.rewards ?? []).filter((reward) => reward.is_active && reward.probability_units > 0); return rewards.length ? rewards : fallbackSegments; }, [draw?.rewards]);
   const gradient = useMemo(() => equalWheelGradient(segments), [segments]);
 

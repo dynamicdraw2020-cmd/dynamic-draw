@@ -115,6 +115,16 @@ export async function inspectSetupStatus(): Promise<SetupStatus> {
     };
   }
 
+  if (!envDiagnostics.publishableKeySafe) {
+    return {
+      code: "SECRET_KEY_INVALID",
+      ready: false,
+      locked: false,
+      technicalCode: String(envDiagnostics.publishableKeyKind),
+      message: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY에 Secret key가 들어가 있습니다. Publishable key(sb_publishable_...)로 교체하고, 노출된 Secret key는 Supabase에서 재발급/삭제해 주세요.",
+    };
+  }
+
   if (!envDiagnostics.supabaseUrlValid) {
     return {
       code: "SUPABASE_URL_INVALID",
@@ -124,12 +134,22 @@ export async function inspectSetupStatus(): Promise<SetupStatus> {
     };
   }
 
-  if (!supabaseAdminConfigured || !envDiagnostics.secretKeyPresent) {
+  if (!envDiagnostics.secretKeyPresent) {
     return {
       code: "SECRET_KEY_MISSING",
       ready: false,
       locked: false,
       message: "서버용 Supabase Secret key가 없습니다. Vercel의 SUPABASE_SECRET_KEY를 확인해 주세요.",
+    };
+  }
+
+  if (!envDiagnostics.secretKeySafe || !supabaseAdminConfigured) {
+    return {
+      code: "SECRET_KEY_INVALID",
+      ready: false,
+      locked: false,
+      technicalCode: String(envDiagnostics.secretKeyKind),
+      message: "SUPABASE_SECRET_KEY에 Publishable/Anon key가 들어가 있거나 서버용 키가 아닙니다. Secret key(sb_secret_...) 또는 legacy service_role key로 교체해 주세요.",
     };
   }
 

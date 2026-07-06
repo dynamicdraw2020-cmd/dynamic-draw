@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { supabaseConfigured } from "@/lib/env";
 
 export function RealtimeRefresh({ eventTypes = ["DRAW_RESULT", "STATS_UPDATE"] }: { eventTypes?: string[] }) {
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
+  const configured = supabaseConfigured;
   const eventKey = eventTypes.join(",");
 
   useEffect(() => {

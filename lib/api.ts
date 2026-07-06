@@ -270,7 +270,7 @@ export async function enforceRateLimit(key: string, limit: number, windowSeconds
       return fail("요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.", 429, "RATE_LIMITED", undefined, { "Retry-After": String(windowSeconds) });
     }
 
-    if (error) runtimeLog({ level: "WARN", event: "DB_RATE_LIMIT_FALLBACK_LOCAL", details: { key, code: (error as RpcErrorLike).code, message: (error as RpcErrorLike).message } });
+    if (error) runtimeLog({ level: (error as RpcErrorLike).code === "42501" ? "INFO" : "WARN", event: "DB_RATE_LIMIT_FALLBACK_LOCAL", details: { key, code: (error as RpcErrorLike).code, message: (error as RpcErrorLike).message } });
     return null;
   } catch (error) {
     // DB가 죽었다고 전체 API를 죽이지 않습니다. proxy/local rate limit으로 최소 방어합니다.
@@ -316,7 +316,7 @@ export function withApiRoute<TContext = unknown>(
       const response = handled ?? fail("요청 처리 결과를 만들지 못했습니다.", 500, "EMPTY_API_RESPONSE");
       const durationMs = Date.now() - started;
       logSlowOperation({ event: "SLOW_API_ROUTE", route, method: request.method, requestId, ip: meta.ip, userAgent: meta.userAgent, status: response.status, durationMs });
-      runtimeLog({ level: response.status >= 500 ? "ERROR" : response.status >= 400 ? "WARN" : "INFO", event: "API_ROUTE_COMPLETED", route, method: request.method, requestId, ip: meta.ip, userAgent: meta.userAgent, status: response.status, durationMs });
+      runtimeLog({ level: response.status >= 500 ? "ERROR" : response.status === 429 ? "WARN" : "INFO", event: "API_ROUTE_COMPLETED", route, method: request.method, requestId, ip: meta.ip, userAgent: meta.userAgent, status: response.status, durationMs });
 
       if (response.status >= 500 || durationMs >= RUNTIME_LIMITS.slowWarnMs) {
         recordRuntimeEventSoon({

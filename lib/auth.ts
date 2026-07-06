@@ -3,7 +3,6 @@ import { demoMode, supabaseConfigured } from "@/lib/env";
 import { mockAdmin, mockProfile } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getEmergencyProfileIdFromCookies } from "@/lib/emergency-session";
 import type { Profile } from "@/lib/types";
 import {
   type AdminCapability,
@@ -20,17 +19,6 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   if (!supabaseConfigured) return demoMode ? mockProfile : null;
 
   try {
-    const emergencyProfileId = await getEmergencyProfileIdFromCookies();
-    if (emergencyProfileId) {
-      const admin = createAdminClient();
-      const profileResult = await withTimeout(
-        admin.from("profiles").select("*").eq("id", emergencyProfileId).maybeSingle(),
-        RUNTIME_LIMITS.readQueryTimeoutMs,
-        "get emergency current profile",
-      );
-      if (!profileResult.error && profileResult.data) return profileResult.data as Profile;
-    }
-
     const supabase = await createClient();
     const userResult = await withTimeout(supabase.auth.getUser(), RUNTIME_LIMITS.authTimeoutMs, "get current auth user");
     const user = userResult.data.user;

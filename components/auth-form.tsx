@@ -29,41 +29,10 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
   const [formVersion, setFormVersion] = useState(0);
   const [signupStartedAt, setSignupStartedAt] = useState("");
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
-  const [resetNotice, setResetNotice] = useState<{ temporaryPassword: string; message: string } | null>(null);
 
   useEffect(() => {
     if (mode === "signup") setSignupStartedAt(String(Date.now()));
   }, [mode, formVersion]);
-
-  async function checkPasswordResetNotice(loginId: string) {
-    if (mode !== "login") return;
-    const value = loginId.trim();
-    if (value.length < 3) {
-      setResetNotice(null);
-      return;
-    }
-
-    try {
-      const body = await clientJsonRequest<{ data?: { mustChangePassword?: boolean; temporaryPassword?: string; message?: string } }>("/api/auth/password-reset-status", {
-        method: "POST",
-        json: { loginId: value },
-        timeoutMs: 3500,
-        fallbackMessage: "비밀번호 초기화 상태를 확인하지 못했습니다.",
-      });
-
-      const data = body.data;
-      if (data?.mustChangePassword && data.temporaryPassword) {
-        setResetNotice({
-          temporaryPassword: data.temporaryPassword,
-          message: data.message ?? "비밀번호가 초기화된 계정입니다. 임시 비밀번호로 로그인해 주세요.",
-        });
-      } else {
-        setResetNotice(null);
-      }
-    } catch {
-      setResetNotice(null);
-    }
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,14 +103,10 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
           className="input"
           name="loginId"
           minLength={3}
-          maxLength={120}
+          maxLength={32}
           required
           autoComplete={mode === "login" ? "username" : "off"}
           placeholder="영문 소문자, 숫자, _ 조합"
-          onBlur={(event) => checkPasswordResetNotice(event.currentTarget.value)}
-          onChange={() => {
-            if (resetNotice) setResetNotice(null);
-          }}
         />
       </label>
 
@@ -155,16 +120,6 @@ export function AuthForm({ mode, nextPath = "/account" }: { mode: "login" | "sig
             <small>추천인 ID는 선택 사항입니다. 승인 후 설정된 보상이 지급됩니다.</small>
           </label>
         </>
-      )}
-
-      {mode === "login" && resetNotice && (
-        <div className="notice-box compact" style={{ borderColor: "#f59e0b", background: "#fffbeb", color: "#92400e" }}>
-          <strong>비밀번호가 초기화되었습니다.</strong>
-          <br />
-          {resetNotice.message}
-          <br />
-          임시 비밀번호: <code>{resetNotice.temporaryPassword}</code>
-        </div>
       )}
 
       <label className="field-label">

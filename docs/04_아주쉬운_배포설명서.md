@@ -1,0 +1,564 @@
+# Dynamic Draw 홈페이지 적용 설명서 — 버튼까지 하나씩
+
+문서 버전: 2.1  
+대상: GitHub·Vercel·Supabase 가입과 `dynamic2020.com` 구매를 끝낸 사용자
+
+---
+
+
+# 이미 GitHub·Vercel·Supabase 배포까지 끝낸 경우
+
+**처음부터 다시 만들 필요가 없습니다.** 저장소, Vercel 프로젝트, Supabase 프로젝트, 환경변수와 도메인을 삭제하지 마세요.
+
+현재 홈페이지는 열리지만 `/setup-admin`에서 “DB 설치 SQL이 아직 실행되지 않았습니다”가 계속 보인다면 다음 네 단계만 먼저 진행합니다.
+
+1. 프로젝트 루트의 `4_기존설치_권한오류_수정.sql`을 메모장으로 엽니다.
+2. 전체 복사한 뒤 Supabase **SQL Editor → New query**에 붙여넣고 **Run**을 누릅니다.
+3. 결과 JSON에서 `ready`, `serviceRoleCanReadProfiles`, `serviceRoleCanWriteProfiles`가 모두 `true`인지 확인합니다.
+4. 기존 Vercel 주소의 `/setup-admin`을 새로고침하고 첫 관리자를 만듭니다.
+
+이 패치는 이미 만든 표와 데이터는 그대로 두고 서버용 `service_role` 권한만 보정합니다. 여러 번 실행해도 안전하게 작성되어 있습니다. 코드의 오류 안내도 개선하려면 수정본 파일을 기존 GitHub 저장소에 덮어쓰면 Vercel이 자동으로 새 배포를 시작합니다.
+
+---
+
+# 가장 먼저 알아둘 것
+
+이 압축파일 안에는 실제 홈페이지 코드와 SQL이 모두 들어 있습니다.
+
+```text
+Dynamic-Draw-FIXED-v1.0.1/
+├─ app/                         홈페이지 화면과 API
+├─ components/                  화면 부품
+├─ lib/                         인증·데이터 연결 코드
+├─ supabase/
+│  ├─ PASTE_THIS_ONCE.sql       처음 한 번 붙여넣을 DB 설치문
+│  └─ MAKE_FIRST_ADMIN.sql      설치 페이지가 안 될 때만 쓰는 예비 파일
+├─ docs/                        사용·운영 설명서
+├─ package.json                 Vercel이 홈페이지 종류를 알아보는 파일
+└─ .env.example                 필요한 환경변수 이름 예시
+```
+
+## 아주 중요한 설명
+
+`PASTE_THIS_ONCE.sql`은 **Supabase 사이트 안에서 찾는 메뉴가 아닙니다.**
+
+1. 이 ZIP 파일을 내 컴퓨터에 다운로드합니다.
+2. ZIP을 압축 풉니다.
+3. 압축 푼 폴더 안의 `supabase` 폴더를 엽니다.
+4. 그 안에 있는 `PASTE_THIS_ONCE.sql` 파일을 메모장으로 엽니다.
+5. 그 파일 내용을 복사해서 Supabase의 SQL Editor에 붙여넣는 것입니다.
+
+---
+
+# 전체 순서 한눈에 보기
+
+```text
+① ZIP 다운로드·압축 풀기
+        ↓
+② Supabase에 SQL 붙여넣기
+        ↓
+③ GitHub에 압축 푼 파일 올리기
+        ↓
+④ Supabase 열쇠 3개 복사하기
+        ↓
+⑤ Vercel에 GitHub 저장소 연결하기
+        ↓
+⑥ Vercel 환경변수 6개 넣고 Deploy 누르기
+        ↓
+⑦ /setup-admin에서 첫 관리자 만들기
+        ↓
+⑧ Supabase 로그인 주소 설정하기
+        ↓
+⑨ Vercel과 가비아에서 dynamic2020.com 연결하기
+        ↓
+⑩ 회원가입 → 승인 → 추첨 → 교환 시험하기
+```
+
+---
+
+# 1단계. ZIP 파일 다운로드하고 압축 풀기
+
+## Windows
+
+1. 전달받은 `Dynamic-Draw-FIXED-v1.0.1.zip`을 누릅니다.
+2. 브라우저 오른쪽 위의 다운로드 표시를 누릅니다.
+3. 다운로드 폴더에서 ZIP 파일을 찾습니다.
+4. ZIP 파일에 마우스 오른쪽 버튼을 누릅니다.
+5. **모두 압축 풀기**를 누릅니다.
+6. 새로 생긴 `Dynamic-Draw-FIXED-v1.0.1` 폴더를 엽니다.
+7. 첫 화면에 `app`, `components`, `docs`, `supabase`, `package.json`이 보이면 성공입니다.
+
+## Mac
+
+1. 다운로드한 ZIP 파일을 두 번 누릅니다.
+2. 자동으로 생긴 `Dynamic-Draw-FIXED-v1.0.1` 폴더를 엽니다.
+3. `app`, `components`, `supabase`, `package.json`이 보이면 성공입니다.
+
+## 여기서 확인
+
+```text
+정상: Dynamic-Draw-FIXED-v1.0.1/app
+정상: Dynamic-Draw-FIXED-v1.0.1/package.json
+
+잘못된 업로드 예: dynamic-draw/Dynamic-Draw-FIXED-v1.0.1/app
+```
+
+GitHub 첫 화면에는 `package.json`이 바로 보여야 합니다.
+
+---
+
+# 2단계. Supabase에 DB 설치하기
+
+이 단계는 회원, 상품, 결과, 교환 기록을 저장할 표를 만드는 단계입니다.
+
+## 2-1. 내 컴퓨터에서 SQL 파일 열기
+
+1. 압축을 푼 `Dynamic-Draw-FIXED-v1.0.1` 폴더를 엽니다.
+2. `supabase` 폴더를 두 번 누릅니다.
+3. `PASTE_THIS_ONCE.sql` 파일을 찾습니다.
+4. 파일에 마우스 오른쪽 버튼을 누릅니다.
+5. **연결 프로그램 → 메모장**을 누릅니다.
+6. 메모장에서 `Ctrl + A`를 눌러 전체 선택합니다.
+7. `Ctrl + C`를 눌러 복사합니다.
+
+## 2-2. Supabase SQL Editor에 붙여넣기
+
+1. 브라우저에서 Supabase에 로그인합니다.
+2. 만들어 둔 `dynamic-draw` 프로젝트 카드를 누릅니다.
+3. 왼쪽 메뉴에서 **SQL Editor**를 누릅니다.
+4. 화면 위쪽의 **New query**를 누릅니다.
+5. 가운데 큰 빈칸을 한 번 누릅니다.
+6. 키보드에서 `Ctrl + V`를 누릅니다.
+7. 화면 오른쪽 아래 또는 위쪽의 초록색 **Run** 버튼을 누릅니다.
+8. 잠시 기다립니다.
+9. 빨간 오류 없이 `Success` 또는 성공 표시가 나오면 완료입니다.
+
+## SQL을 실행하면 생기는 것
+
+- 회원·관리자 프로필
+- 고유 회원 ID 자동 발급기
+- 뽑기와 상품
+- 확률 변경 기록
+- 추첨 결과
+- 회원별 상품 보관함
+- 교환 규칙과 교환 기록
+- 관리자 감사 로그
+- 실시간 이벤트
+- 기본 입장권 뽑기
+- 기본 상품 4개
+- 기본 교환 규칙 2개
+
+## 빨간 오류가 나오면
+
+1. 오류 문장을 복사합니다.
+2. 같은 SQL을 계속 여러 번 누르지 않습니다.
+3. 오류 화면과 문장을 확인한 뒤 `docs/06_운영체크리스트_문제해결.md`를 봅니다.
+
+`PASTE_THIS_ONCE.sql`은 새 프로젝트에서 **처음 한 번만** 실행합니다.
+
+---
+
+# 3단계. GitHub에 홈페이지 파일 올리기
+
+## 3-1. 저장소 열기
+
+1. GitHub에 로그인합니다.
+2. 화면 왼쪽 또는 가운데에서 만들어 둔 `dynamic-draw` 저장소를 누릅니다.
+3. 저장소가 비어 있으면 `Quick setup` 화면이 보일 수 있습니다.
+
+## 3-2. 파일 업로드 화면 열기
+
+저장소에 파일이 이미 보일 때:
+
+1. 파일 목록 위쪽의 **Add file**을 누릅니다.
+2. **Upload files**를 누릅니다.
+
+저장소가 완전히 비어 있을 때:
+
+1. 가운데의 **uploading an existing file** 글자를 누릅니다.
+
+## 3-3. 압축 푼 내용 올리기
+
+1. 컴퓨터에서 압축 푼 `Dynamic-Draw-FIXED-v1.0.1` 폴더를 엽니다.
+2. 그 폴더 **안쪽**의 파일과 폴더를 모두 선택합니다.
+   - Windows: `Ctrl + A`
+   - Mac: `Command + A`
+3. 선택한 파일들을 GitHub의 `Drag files here` 영역으로 끌어다 놓습니다.
+4. 업로드가 끝날 때까지 브라우저를 닫지 않습니다.
+5. 아래쪽 `Commit changes` 영역까지 내려갑니다.
+6. 제목은 기본값을 그대로 두어도 됩니다.
+7. 초록색 **Commit changes** 버튼을 누릅니다.
+8. 저장소 첫 화면으로 돌아옵니다.
+9. `app`, `components`, `supabase`, `package.json`이 바로 보이면 성공입니다.
+
+## 절대 올리지 말 것
+
+- Supabase Secret key
+- `.env.local`
+- 비밀번호가 적힌 메모장
+- ZIP 파일 한 개만 올리는 방식
+- `node_modules` 폴더
+- `.next` 폴더
+
+---
+
+# 4단계. Supabase 열쇠 3개 찾기
+
+1. Supabase에서 `dynamic-draw` 프로젝트를 엽니다.
+2. 화면 위쪽의 **Connect** 버튼을 누릅니다.
+3. 키가 안 보이면 왼쪽 아래 **Project Settings** 톱니바퀴를 누릅니다.
+4. **API Keys**를 누릅니다.
+5. 다음 세 값을 메모장에 잠깐 복사합니다.
+
+```text
+① Project URL
+② Publishable key
+③ Secret key
+```
+
+화면에 예전 이름이 보일 때는 다음처럼 대응합니다.
+
+```text
+Publishable key = anon public key
+Secret key      = service_role key
+```
+
+## 보안 약속
+
+- `Publishable key`는 홈페이지 브라우저에서도 사용하는 공개용 키입니다.
+- `Secret key` 또는 `service_role key`는 마스터키입니다.
+- 마스터키는 GitHub 파일에 쓰지 않습니다.
+- 마스터키는 채팅이나 공개 게시판에 보내지 않습니다.
+- 마스터키는 다음 단계의 Vercel 비밀 입력칸에만 넣습니다.
+
+---
+
+# 5단계. Vercel에 GitHub 저장소 연결하기
+
+1. Vercel에 로그인합니다.
+2. 대시보드 오른쪽 위의 **Add New...**를 누릅니다.
+3. **Project**를 누릅니다.
+4. `Import Git Repository` 화면에서 `dynamic-draw`를 찾습니다.
+5. 저장소 오른쪽의 **Import**를 누릅니다.
+6. `Configure Project` 화면이 열립니다.
+7. `Framework Preset`이 **Next.js**로 표시되는지 확인합니다.
+8. `Root Directory`는 기본값 `./` 그대로 둡니다.
+9. **Environment Variables** 영역을 찾습니다.
+
+---
+
+# 6단계. Vercel 환경변수 6개 넣기
+
+환경변수는 이름과 값을 한 줄씩 넣습니다.
+
+## 6-1. Supabase 주소
+
+```text
+Name:  NEXT_PUBLIC_SUPABASE_URL
+Value: Supabase의 Project URL
+```
+
+## 6-2. Supabase 공개 키
+
+```text
+Name:  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+Value: Supabase의 Publishable key 또는 anon key
+```
+
+## 6-3. Supabase 서버 비밀키
+
+```text
+Name:  SUPABASE_SECRET_KEY
+Value: Supabase의 Secret key 또는 service_role key
+```
+
+## 6-4. 사이트 주소
+
+```text
+Name:  NEXT_PUBLIC_SITE_URL
+Value: https://dynamic2020.com
+```
+
+## 6-5. 미리보기 모드 끄기
+
+```text
+Name:  NEXT_PUBLIC_DEMO_MODE
+Value: false
+```
+
+## 6-6. 최초 관리자 설치용 비밀문자
+
+```text
+Name:  ADMIN_SETUP_SECRET
+Value: 내가 만든 32자 이상의 긴 비밀문자
+```
+
+예시 모양만 참고합니다. 아래 값을 그대로 쓰지는 마세요.
+
+```text
+DynamicDraw-Setup-2026-My-Private-Key-93841
+```
+
+## 환경변수 입력 방법
+
+1. `Name` 칸에 이름을 붙여넣습니다.
+2. `Value` 칸에 값을 붙여넣습니다.
+3. **Add**를 누릅니다.
+4. 위의 6개를 모두 반복합니다.
+5. 철자를 다시 확인합니다.
+6. 값 앞뒤에 따옴표 `"`를 넣지 않습니다.
+7. 모두 입력한 뒤 **Deploy**를 누릅니다.
+8. 빌드가 끝날 때까지 기다립니다.
+9. `Congratulations!` 화면과 **Visit** 버튼이 보이면 배포 성공입니다.
+10. **Visit**을 눌러 `https://무언가.vercel.app` 주소가 열리는지 확인합니다.
+
+## Vercel이 빨간 오류를 보여줄 때
+
+가장 먼저 확인할 것:
+
+- GitHub 첫 화면에 `package.json`이 바로 보이는가?
+- ZIP 파일만 올린 것은 아닌가?
+- 환경변수 6개의 이름에 띄어쓰기가 없는가?
+- Supabase Secret key를 공개 키 칸에 넣지 않았는가?
+
+---
+
+# 7단계. 첫 번째 최고 관리자 만들기
+
+이 버전은 SQL 파일을 다시 수정하지 않아도 설치 화면에서 첫 관리자를 만들 수 있습니다.
+
+1. Vercel이 만든 주소를 복사합니다.
+   - 예: `https://dynamic-draw-abc.vercel.app`
+2. 주소 뒤에 `/setup-admin`을 붙입니다.
+
+```text
+https://dynamic-draw-abc.vercel.app/setup-admin
+```
+
+3. 페이지를 엽니다.
+4. `설치용 비밀문자`에 Vercel의 `ADMIN_SETUP_SECRET` 값을 넣습니다.
+5. 관리자 이름을 넣습니다.
+6. 관리자 이메일을 넣습니다.
+7. 10자 이상의 관리자 비밀번호를 넣습니다.
+8. 비밀번호 확인을 똑같이 넣습니다.
+9. **최초 최고 관리자 만들기**를 누릅니다.
+10. 성공 안내가 나오면 `/login`으로 이동합니다.
+11. 방금 만든 이메일과 비밀번호로 로그인합니다.
+12. 관리자 대시보드가 나오면 성공입니다.
+
+## 안전장치
+
+- 최고 관리자가 한 명 생기면 `/setup-admin`은 자동으로 잠깁니다.
+- 설치용 비밀문자가 틀리면 생성되지 않습니다.
+- 여러 번 누르지 못하도록 요청 횟수 제한이 있습니다.
+
+## 설치 페이지가 안 될 때만 쓰는 예비 방법
+
+`supabase/MAKE_FIRST_ADMIN.sql`은 예비용입니다. 보통은 사용할 필요가 없습니다. `/setup-admin`에서 오류가 날 때만 문제 해결 설명서를 확인한 뒤 사용합니다.
+
+---
+
+# 8단계. Supabase 로그인 주소 설정하기
+
+회원이 이메일 인증 링크를 누른 뒤 홈페이지로 돌아오게 만드는 단계입니다.
+
+1. Supabase 프로젝트를 엽니다.
+2. 왼쪽 메뉴에서 **Authentication**을 누릅니다.
+3. **URL Configuration**을 누릅니다.
+4. `Site URL` 칸에 입력합니다.
+
+```text
+https://dynamic2020.com
+```
+
+5. `Redirect URLs` 또는 `Redirect URL` 영역에서 **Add URL**을 누릅니다.
+6. 아래 주소들을 하나씩 추가합니다.
+
+```text
+https://dynamic2020.com/**
+https://www.dynamic2020.com/**
+https://내-Vercel-주소.vercel.app/**
+```
+
+7. **Save**를 누릅니다.
+
+## 이메일 확인을 켜둘지 결정하기
+
+권장 설정은 이메일 확인을 켜는 것입니다.
+
+행사장에서 이메일 확인이 번거롭다면:
+
+1. Supabase **Authentication**을 누릅니다.
+2. **Providers**를 누릅니다.
+3. **Email**을 누릅니다.
+4. `Confirm email` 설정을 끕니다.
+5. 저장합니다.
+
+이메일 확인을 꺼도 Dynamic Draw의 **관리자 승인**은 별도로 필요합니다.
+
+---
+
+# 9단계. Vercel에 dynamic2020.com 추가하기
+
+1. Vercel 대시보드에서 `dynamic-draw` 프로젝트를 누릅니다.
+2. 위쪽 또는 왼쪽의 **Settings**를 누릅니다.
+3. 왼쪽 메뉴에서 **Domains**를 누릅니다.
+4. **Add Domain**을 누릅니다.
+5. 아래 주소를 입력합니다.
+
+```text
+dynamic2020.com
+```
+
+6. **Add**를 누릅니다.
+7. Vercel이 `www`도 추가할지 물으면 추가합니다.
+8. 직접 추가해야 하면 다시 **Add Domain**을 누르고 아래를 입력합니다.
+
+```text
+www.dynamic2020.com
+```
+
+9. Vercel이 A 레코드와 CNAME 값을 보여주는 화면을 열어 둡니다.
+
+중요: 인터넷 글의 오래된 숫자를 외워 넣지 말고 **Vercel 화면에 지금 표시된 값**을 사용합니다.
+
+---
+
+# 10단계. 가비아 DNS에 Vercel 값 넣기
+
+1. 새 탭에서 가비아에 로그인합니다.
+2. 오른쪽 위 또는 상단의 **My가비아**를 누릅니다.
+3. **서비스 관리**를 누릅니다.
+4. **DNS 관리툴**을 누릅니다.
+5. `dynamic2020.com` 왼쪽 체크박스를 누릅니다.
+6. **DNS 설정**을 누릅니다.
+7. **+ 레코드 추가**를 누릅니다.
+
+## 10-1. dynamic2020.com 연결
+
+Vercel이 A 레코드를 보여줬다면 가비아에 입력합니다.
+
+```text
+타입: A
+호스트: @
+값/위치: Vercel Domains 화면에 나온 A 값
+TTL: 기본값
+```
+
+입력 후 그 줄의 **확인**을 누릅니다.
+
+## 10-2. www.dynamic2020.com 연결
+
+다시 **+ 레코드 추가**를 누릅니다.
+
+```text
+타입: CNAME
+호스트: www
+값/위치: Vercel Domains 화면에 나온 CNAME 값
+TTL: 기본값
+```
+
+가비아가 완전한 도메인 형식을 요구하면 값 마지막에 점 `.`을 붙입니다.
+
+```text
+예: abc123.vercel-dns-017.com.
+```
+
+입력 후 그 줄의 **확인**을 누릅니다.
+
+## 마지막 저장
+
+1. 화면 아래 또는 위쪽의 **저장**을 누릅니다.
+2. 저장 확인 창이 나오면 확인합니다.
+3. Vercel의 Domains 화면으로 돌아갑니다.
+4. 새로고침합니다.
+5. `Valid Configuration` 또는 초록색 체크가 나오면 연결 성공입니다.
+
+## 지우면 안 되는 것
+
+가비아에 이메일 관련 `MX`, `TXT`, `SPF`, `DKIM` 레코드가 있으면 함부로 지우지 않습니다. Vercel이 충돌한다고 알려주는 기존 `@` 또는 `www` 웹 연결 기록만 확인합니다.
+
+DNS 연결은 바로 될 수도 있고 시간이 걸릴 수도 있습니다.
+
+---
+
+# 11단계. 실제 기능 시험하기
+
+## 11-1. 관리자 로그인
+
+1. `https://dynamic2020.com/login`을 엽니다.
+2. 7단계에서 만든 관리자 이메일과 비밀번호를 넣습니다.
+3. **로그인**을 누릅니다.
+4. 관리자 대시보드가 보이는지 확인합니다.
+
+## 11-2. 일반 회원 가입 신청
+
+1. 관리자 브라우저와 다른 브라우저 또는 휴대전화에서 홈페이지를 엽니다.
+2. **회원가입 신청**을 누릅니다.
+3. 테스트 회원 정보를 넣습니다.
+4. 가입 신청을 누릅니다.
+5. 이메일 확인을 켰다면 이메일의 인증 링크를 누릅니다.
+
+## 11-3. 관리자 승인과 고유 ID 자동 발급
+
+1. 관리자 화면에서 **회원 관리**를 누릅니다.
+2. 승인 대기 회원을 찾습니다.
+3. **승인·ID 자동발급**을 누릅니다.
+4. 확인을 누릅니다.
+5. `DD-연도-번호` 형식의 고유 ID가 생겼는지 확인합니다.
+
+## 11-4. 실시간 추첨
+
+1. 관리자 메뉴에서 **실시간 추첨**을 누릅니다.
+2. 진행 중인 뽑기를 선택합니다.
+3. 방금 승인한 회원을 선택합니다.
+4. 다른 휴대전화에서 `https://dynamic2020.com/live`를 열어 둡니다.
+5. 관리자 화면에서 **추첨 실행**을 누릅니다.
+6. 카드 흔들림 → 빛 → 뒤집기 → 결과 순서가 보이는지 확인합니다.
+7. 회원 계정의 **내 정보**에서 상품이 적립됐는지 확인합니다.
+
+## 11-5. 교환
+
+회원 직접 교환:
+
+1. 회원 계정으로 로그인합니다.
+2. **교환** 탭을 누릅니다.
+3. 재료 수량이 충분한 규칙에서 교환을 누릅니다.
+
+관리자 현장 교환:
+
+1. 관리자 메뉴에서 **교환 시스템**을 누릅니다.
+2. `관리자 현장 교환`의 회원 고유 ID를 입력합니다.
+3. 교환 규칙을 고릅니다.
+4. **현장 교환 실행**을 누릅니다.
+5. 재료가 자동 차감되고 대상 상품이 지급되는지 확인합니다.
+
+---
+
+# 12단계. 배포 후 꼭 할 것
+
+- `ADMIN_SETUP_SECRET`은 다른 사람에게 공개하지 않습니다.
+- Vercel의 `SUPABASE_SECRET_KEY`도 절대 공개하지 않습니다.
+- 최고 관리자 비밀번호를 안전한 곳에 보관합니다.
+- 관리자는 최소 두 명을 두는 것을 권장합니다.
+- 확률을 바꿀 때 실제 운영 사유를 정확하게 적습니다.
+- 행사 전에 휴대전화 두 대로 추첨과 교환을 시험합니다.
+- 결과를 지우지 말고 사유를 남겨 무효 처리합니다.
+
+---
+
+# 홈페이지를 나중에 수정하는 방법
+
+1. GitHub에서 파일을 수정하거나 새 버전을 업로드합니다.
+2. `Commit changes`를 누릅니다.
+3. Vercel이 자동으로 새 버전을 배포합니다.
+4. 환경변수를 바꿨다면 Vercel **Deployments**에서 최신 배포의 `...` 메뉴를 누르고 **Redeploy**를 누릅니다.
+
+---
+
+# 공식 참고 문서
+
+- Next.js 설치: https://nextjs.org/docs/app/getting-started/installation
+- Supabase Next.js 인증: https://supabase.com/docs/guides/auth/quickstarts/nextjs
+- Supabase Realtime: https://supabase.com/docs/guides/realtime
+- Vercel 커스텀 도메인: https://vercel.com/docs/domains/working-with-domains/add-a-domain

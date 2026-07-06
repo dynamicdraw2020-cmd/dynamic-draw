@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 export function RealtimeRefresh({ eventTypes = ["DRAW_RESULT", "STATS_UPDATE"] }: { eventTypes?: string[] }) {
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
   const eventKey = eventTypes.join(",");
 
   useEffect(() => {

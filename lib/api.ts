@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { demoMode, supabaseAdminConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getEmergencyProfileIdFromCookies } from "@/lib/emergency-session";
 import type { Profile } from "@/lib/types";
 import {
   type AdminCapability,
@@ -146,19 +145,6 @@ export async function getApiProfile(): Promise<{ profile: Profile; userId: strin
   if (demoMode) return null;
 
   try {
-    const emergencyProfileId = await getEmergencyProfileIdFromCookies();
-    if (emergencyProfileId) {
-      const admin = createAdminClient();
-      const profileResult = await withTimeout(
-        admin.from("profiles").select("*").eq("id", emergencyProfileId).maybeSingle(),
-        RUNTIME_LIMITS.readQueryTimeoutMs,
-        "api emergency profile lookup",
-      );
-      if (!profileResult.error && profileResult.data) {
-        return { profile: profileResult.data as Profile, userId: emergencyProfileId };
-      }
-    }
-
     const supabase = await createClient();
     const userResult = await withTimeout(supabase.auth.getUser(), RUNTIME_LIMITS.authTimeoutMs, "api auth getUser");
     const user = userResult.data.user;

@@ -23,6 +23,15 @@ function normalizeDateInput(value: unknown) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+function assertPrimaryRewardReady(reward: ReturnType<typeof safeRewardArray>[number] | undefined) {
+  if (!reward) return;
+  if (reward.type === "CURRENCY" && !reward.currencyId) throw Object.assign(new Error("포인트/화폐 보상은 지급할 화폐를 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "TICKET" && !reward.drawId) throw Object.assign(new Error("뽑기권 보상은 지급할 뽑기를 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "ITEM" && !reward.rewardId) throw Object.assign(new Error("아이템/상품 보상은 지급할 상품을 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "RANDOM_BOX" && !reward.boxId) throw Object.assign(new Error("랜덤박스 보상은 지급할 랜덤박스를 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "COUPON" && !reward.couponId) throw Object.assign(new Error("쿠폰 보상은 지급할 쿠폰을 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+}
+
 function parseRewards(body: Record<string, unknown>) {
   const primary = {
     type: body.rewardType,
@@ -37,6 +46,7 @@ function parseRewards(body: Record<string, unknown>) {
   };
 
   const rewards = safeRewardArray([primary]);
+  assertPrimaryRewardReady(rewards[0]);
   const extraText = String(body.extraRewardsJson ?? "").trim();
   if (!extraText) return rewards;
 
@@ -64,6 +74,69 @@ async function postHandler(request: Request) {
   const admin = createAdminClient();
   const meta = requestMeta(request);
   const now = new Date().toISOString();
+
+  if (body.action === "quick-create") {
+    const schema = z.object({
+      title: z.string().trim().min(2).max(120),
+      description: z.string().trim().max(2000).optional().default(""),
+      stepTitle: z.string().trim().min(1).max(120),
+      stepDescription: z.string().trim().max(2000).optional().default(""),
+      startAt: z.string().optional().nullable(),
+      endAt: z.string().optional().nullable(),
+      status: z.enum(STEP_EVENT_STATUSES).default("DRAFT"),
+      repeatType: z.enum(STEP_EVENT_REPEAT_TYPES).default("ONCE"),
+      missionType: z.enum(STEP_MISSION_TYPES),
+      targetValue: z.number().int().min(1).max(1_000_000),
+      autoReward: z.boolean().optional().default(false),
+      participationLimit: z.number().int().min(1).max(999).optional().default(1),
+    }).passthrough();
+    const input = schema.parse(body);
+    const rewards = parseRewards(body);
+
+    const { data: eventRow, error: eventError } = await admin
+      .from("step_events")
+      .insert({
+        title: input.title,
+        description: input.description || null,
+        start_at: normalizeDateInput(input.startAt),
+        end_at: normalizeDateInput(input.endAt),
+        status: input.status,
+        repeat_type: input.repeatType,
+        auto_reward: input.autoReward,
+        participation_limit: input.participationLimit,
+        created_by: guard.auth.userId,
+        updated_by: guard.auth.userId,
+      })
+      .select("*")
+      .single();
+    if (eventError || !eventRow) return fail("스탭업 이벤트를 만들지 못했습니다.", 400, "STEP_EVENT_CREATE_FAILED", eventError?.message);
+
+    const eventId = String((eventRow as { id: string }).id);
+    const { data: stepRow, error: stepError } = await admin
+      .from("step_event_steps")
+      .insert({
+        event_id: eventId,
+        step_no: 1,
+        title: input.stepTitle,
+        description: input.stepDescription || null,
+        mission_type: input.missionType,
+        target_value: input.targetValue,
+        rewards,
+        sort_order: 10,
+        is_active: true,
+        created_by: guard.auth.userId,
+        updated_by: guard.auth.userId,
+      })
+      .select("*")
+      .single();
+
+    if (stepError) {
+      await admin.from("step_events").update({ status: "ARCHIVED", updated_at: now }).eq("id", eventId);
+      return fail("이벤트는 생성됐지만 STEP 생성에 실패해서 보관 처리했습니다.", 400, "STEP_QUICK_CREATE_STEP_FAILED", stepError.message);
+    }
+
+    return ok({ event: eventRow, step: stepRow }, 201);
+  }
 
   if (body.action === "create-event") {
     const schema = z.object({

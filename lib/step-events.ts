@@ -177,29 +177,47 @@ export async function getUserStepEvents(profileId: string): Promise<UserStepEven
   }
 }
 
+
+function dbRows<T extends Record<string, unknown>>(result: PromiseSettledResult<{ data: T[] | null; error?: { message?: string; details?: string; code?: string } | null }>, event: string): T[] {
+  if (result.status !== "fulfilled") {
+    runtimeLog({ level: "WARN", event, details: { message: result.reason instanceof Error ? result.reason.message : String(result.reason) } });
+    return [];
+  }
+  if (result.value.error) {
+    runtimeLog({ level: "WARN", event, details: { code: result.value.error.code, message: result.value.error.message, details: result.value.error.details } });
+    return [];
+  }
+  return result.value.data ?? [];
+}
+
 async function getResources(admin: AdminClient): Promise<StepEventAdminData["resources"]> {
-  const [currencies, draws, rewards, boxes, coupons] = await Promise.allSettled([
+  const [currencies, draws, rewards, boxes, coupons, members] = await Promise.allSettled([
     withTimeout(admin.from("virtual_currencies").select("id,name,code,symbol,is_active,deleted_at").eq("is_active", true).order("sort_order", { ascending: true }).limit(300), RUNTIME_LIMITS.readQueryTimeoutMs, "step resources currencies"),
     withTimeout(admin.from("draws").select("id,name,status,deleted_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(300), RUNTIME_LIMITS.readQueryTimeoutMs, "step resources draws"),
     withTimeout(admin.from("rewards").select("id,name,deleted_at,is_active").eq("is_active", true).is("deleted_at", null).order("sort_order", { ascending: true }).limit(500), RUNTIME_LIMITS.readQueryTimeoutMs, "step resources rewards"),
     withTimeout(admin.from("random_boxes").select("id,name,is_active,deleted_at").eq("is_active", true).is("deleted_at", null).order("sort_order", { ascending: true }).limit(300), RUNTIME_LIMITS.readQueryTimeoutMs, "step resources boxes"),
     withTimeout(admin.from("promo_codes").select("id,name,code,is_active,deleted_at,visibility").eq("is_active", true).is("deleted_at", null).order("created_at", { ascending: false }).limit(500), RUNTIME_LIMITS.readQueryTimeoutMs, "step resources coupons"),
+    withTimeout(admin.from("profiles").select("id,display_name,username,email,member_code,status").eq("status", "APPROVED").order("display_name", { ascending: true }).limit(1000), RUNTIME_LIMITS.readQueryTimeoutMs, "step resources members"),
   ]);
 
-  const rows = <T extends Record<string, unknown>>(result: PromiseSettledResult<{ data: T[] | null }>) => (result.status === "fulfilled" ? result.value.data ?? [] : []);
-
   return {
-    currencies: rows(currencies).map((row) => ({ id: String(row.id), name: String(row.name ?? row.code ?? "화폐"), code: typeof row.code === "string" ? row.code : null, symbol: typeof row.symbol === "string" ? row.symbol : null })),
-    draws: rows(draws).map((row) => ({ id: String(row.id), name: String(row.name ?? "뽑기"), status: typeof row.status === "string" ? row.status : null })),
-    rewards: rows(rewards).map((row) => ({ id: String(row.id), name: String(row.name ?? "상품") })),
-    boxes: rows(boxes).map((row) => ({ id: String(row.id), name: String(row.name ?? "랜덤박스") })),
-    coupons: rows(coupons).map((row) => ({ id: String(row.id), name: `${String(row.code ?? "COUPON")} · ${String(row.name ?? "쿠폰")}`, code: typeof row.code === "string" ? row.code : null })),
+    currencies: dbRows(currencies, "STEP_RESOURCE_CURRENCIES_QUERY_ERROR").map((row) => ({ id: String(row.id), name: String(row.name ?? row.code ?? "화폐"), code: typeof row.code === "string" ? row.code : null, symbol: typeof row.symbol === "string" ? row.symbol : null })),
+    draws: dbRows(draws, "STEP_RESOURCE_DRAWS_QUERY_ERROR").map((row) => ({ id: String(row.id), name: String(row.name ?? "뽑기"), status: typeof row.status === "string" ? row.status : null })),
+    rewards: dbRows(rewards, "STEP_RESOURCE_REWARDS_QUERY_ERROR").map((row) => ({ id: String(row.id), name: String(row.name ?? "상품") })),
+    boxes: dbRows(boxes, "STEP_RESOURCE_BOXES_QUERY_ERROR").map((row) => ({ id: String(row.id), name: String(row.name ?? "랜덤박스") })),
+    coupons: dbRows(coupons, "STEP_RESOURCE_COUPONS_QUERY_ERROR").map((row) => ({ id: String(row.id), name: `${String(row.code ?? "COUPON")} · ${String(row.name ?? "쿠폰")}`, code: typeof row.code === "string" ? row.code : null })),
+    members: dbRows(members, "STEP_RESOURCE_MEMBERS_QUERY_ERROR").map((row) => {
+      const display = String(row.display_name ?? row.username ?? row.email ?? "회원");
+      const username = typeof row.username === "string" ? row.username : null;
+      const memberCode = typeof row.member_code === "string" ? row.member_code : null;
+      return { id: String(row.id), name: username ? `${display} (${username})` : display, code: memberCode };
+    }),
   };
 }
 
 export async function getAdminStepEventData(): Promise<StepEventAdminData> {
   const admin = createAdminClient();
-  const fallback: StepEventAdminData = { events: [], resources: { currencies: [], draws: [], rewards: [], boxes: [], coupons: [] } };
+  const fallback: StepEventAdminData = { events: [], resources: { currencies: [], draws: [], rewards: [], boxes: [], coupons: [], members: [] } };
   try {
     const [eventsResult, stepsResult, progressResult, rewardsResult, resources] = await Promise.allSettled([
       withTimeout(admin.from("step_events").select("id,title,description,image_url,start_at,end_at,status,repeat_type,auto_reward,participation_limit,created_at,updated_at").order("created_at", { ascending: false }).limit(200), RUNTIME_LIMITS.readQueryTimeoutMs, "admin step events"),
@@ -209,10 +227,10 @@ export async function getAdminStepEventData(): Promise<StepEventAdminData> {
       getResources(admin),
     ]);
 
-    const events = eventsResult.status === "fulfilled" ? ((eventsResult.value.data ?? []) as Array<Record<string, unknown>>).map(normalizeEvent) : [];
-    const steps = stepsResult.status === "fulfilled" ? ((stepsResult.value.data ?? []) as Array<Record<string, unknown>>).map(normalizeStep) : [];
-    const progressRows = progressResult.status === "fulfilled" ? ((progressResult.value.data ?? []) as ProgressRow[]) : [];
-    const rewardRows = rewardsResult.status === "fulfilled" ? ((rewardsResult.value.data ?? []) as RewardLogRow[]) : [];
+    const events = dbRows(eventsResult, "ADMIN_STEP_EVENTS_QUERY_ERROR").map(normalizeEvent);
+    const steps = dbRows(stepsResult, "ADMIN_STEP_STEPS_QUERY_ERROR").map(normalizeStep);
+    const progressRows = dbRows(progressResult, "ADMIN_STEP_PROGRESS_QUERY_ERROR") as ProgressRow[];
+    const rewardRows = dbRows(rewardsResult, "ADMIN_STEP_REWARD_LOGS_QUERY_ERROR") as RewardLogRow[];
     const resourceRows = resources.status === "fulfilled" ? resources.value : fallback.resources;
 
     const adminEvents: AdminStepEvent[] = events.map((event) => {

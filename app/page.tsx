@@ -1,9 +1,11 @@
-import { ArrowRight, CheckCircle2, ExternalLink, MessageSquare, Megaphone, ShieldCheck, Star, Ticket, Trophy, UsersRound } from "lucide-react";
+import { ArrowRight, CheckCircle2, ExternalLink, HandHeart, MessageSquare, Megaphone, ShieldCheck, Star, Ticket, Trophy, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { HomeRecentResultsFilter } from "@/components/home-recent-results-filter";
 import { PublicGachaRaffle } from "@/components/public-gacha-raffle";
 import { PublicEventBoard } from "@/components/public-event-board";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { DonationHomeBanner } from "@/components/donation-public";
+import { getDonationSettings } from "@/lib/donations";
 import { getPublicEvents, getPublicNotices, getPublicRaffles, getPublicRankings, getPublicResults } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { demoMode } from "@/lib/env";
@@ -25,7 +27,7 @@ async function homeSetting(key: string, fallback = "") {
 }
 
 export default async function HomePage() {
-  const [results, notices, events, raffles, rankings, monthlyRankImageUrl, footerMessage] = await Promise.all([
+  const [results, notices, events, raffles, rankings, monthlyRankImageUrl, footerMessage, donationSettings] = await Promise.all([
     getPublicResults(24),
     getPublicNotices(5),
     getPublicEvents(6),
@@ -33,13 +35,16 @@ export default async function HomePage() {
     getPublicRankings(),
     homeSetting("monthly_rank_image_url"),
     homeSetting("footer_message", "𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃는 온전한 이벤트 홈페이지로서 현금, 현물 등을 요구하지 않습니다."),
+    getDonationSettings(),
   ]);
   const pinnedNotice = notices.find((notice) => notice.is_pinned) ?? notices[0] ?? null;
 
   return <main className="public-home community-home mobile-public-home"><RealtimeRefresh />
     {pinnedNotice && <section className="top-notice-banner"><div className="container top-notice-inner"><Megaphone size={17} /><strong>{pinnedNotice.title}</strong><span>{pinnedNotice.body}</span><Link href="/notices">자세히 <ArrowRight size={14} /></Link></div></section>}
 
-    <section className="community-hero"><div className="container community-hero-grid"><div className="community-copy"><span className="section-kicker"><ShieldCheck size={14} /> Official 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event</span><h1>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃</h1><p className="official-lead">𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event server</p><p className="official-sublead">𝐃𝐲𝐧𝐚𝐦𝐢𝐜 제공</p><div className="official-actions"><Link className="btn btn-primary btn-lg" href="/notices"><Megaphone size={18} /> 공지</Link><Link className="btn btn-secondary btn-lg" href="/events"><Ticket size={18} /> 이벤트</Link><Link className="btn btn-secondary btn-lg" href="/rewards"><UsersRound size={18} /> 보상 센터</Link></div><div className="safe-service-note"><CheckCircle2 size={16} /> 𝐃𝐲𝐧𝐚𝐦𝐢𝐜에서 제공하는 이벤트 서버입니다.</div></div><aside className="official-contact-card clean-contact-card"><h2>공식 채널</h2><p>공지, 참여 안내, 문의는 아래 공식 채널을 기준으로 운영됩니다.</p><div className="official-link-list">{officialLinks.map((item) => <a key={item.label} href={item.href} target={item.href.startsWith("http") ? "_blank" : undefined} rel={item.href.startsWith("http") ? "noreferrer" : undefined}><span>{item.label}</span><strong>{item.text ?? item.href}</strong><ExternalLink size={15} /></a>)}</div></aside></div></section>
+    <section className="community-hero"><div className="container community-hero-grid"><div className="community-copy"><span className="section-kicker"><ShieldCheck size={14} /> Official 𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event</span><h1>𝐃𝐲𝐧𝐚𝐦𝐢𝐜 𝐃</h1><p className="official-lead">𝐃𝐲𝐧𝐚𝐦𝐢𝐜 Event server</p><p className="official-sublead">𝐃𝐲𝐧𝐚𝐦𝐢𝐜 제공</p><div className="official-actions"><Link className="btn btn-primary btn-lg" href="/notices"><Megaphone size={18} /> 공지</Link><Link className="btn btn-secondary btn-lg" href="/events"><Ticket size={18} /> 이벤트</Link><Link className="btn btn-secondary btn-lg" href="/rewards"><UsersRound size={18} /> 보상 센터</Link>{donationSettings.enabled && <Link className="btn btn-secondary btn-lg donation-hero-quick" href="/donations"><HandHeart size={18} /> 후원 안내</Link>}</div><div className="safe-service-note"><CheckCircle2 size={16} /> 𝐃𝐲𝐧𝐚𝐦𝐢𝐜에서 제공하는 이벤트 서버입니다.</div></div><aside className="official-contact-card clean-contact-card"><h2>공식 채널</h2><p>공지, 참여 안내, 문의는 아래 공식 채널을 기준으로 운영됩니다.</p><div className="official-link-list">{officialLinks.map((item) => <a key={item.label} href={item.href} target={item.href.startsWith("http") ? "_blank" : undefined} rel={item.href.startsWith("http") ? "noreferrer" : undefined}><span>{item.label}</span><strong>{item.text ?? item.href}</strong><ExternalLink size={15} /></a>)}</div></aside></div></section>
+
+    <DonationHomeBanner settings={donationSettings} />
 
     <section className="official-section first-info-section"><div className="container"><PublicEventBoard events={events} notices={notices} /></div></section>
 

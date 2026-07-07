@@ -28,6 +28,7 @@ export async function SiteFooter() {
           <Link href="/raffles">추첨 이벤트</Link>
           <Link href="/play">뽑기 & 교환</Link>
           <Link href="/rewards">보상 센터</Link>
+          <Link href="/donations">후원</Link>
         </div>
       </div>
     </footer>

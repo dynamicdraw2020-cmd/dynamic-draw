@@ -4,6 +4,37 @@ export type StepEventRepeatType = (typeof STEP_EVENT_REPEAT_TYPES)[number];
 export const STEP_EVENT_STATUSES = ["DRAFT", "ACTIVE", "PAUSED", "ENDED", "ARCHIVED"] as const;
 export type StepEventStatus = (typeof STEP_EVENT_STATUSES)[number];
 
+
+export const STEP_EVENT_STATUS_LABELS: Record<StepEventStatus, string> = {
+  DRAFT: "초안",
+  ACTIVE: "진행 중",
+  PAUSED: "일시정지",
+  ENDED: "종료",
+  ARCHIVED: "보관",
+};
+
+export const STEP_EVENT_STATUS_HELP: Record<StepEventStatus, string> = {
+  DRAFT: "관리자만 준비하는 상태입니다. 유저에게 공개되지 않습니다.",
+  ACTIVE: "유저 화면에 노출되고 미션 진행도가 반영됩니다.",
+  PAUSED: "잠시 멈춘 상태입니다. 유저 화면에는 진행 이벤트로 처리되지 않습니다.",
+  ENDED: "운영 종료 상태입니다. 과거 이벤트 확인용으로 남깁니다.",
+  ARCHIVED: "목록 보관용 상태입니다. 일반 운영에서는 사용하지 않습니다.",
+};
+
+export const STEP_EVENT_REPEAT_LABELS: Record<StepEventRepeatType, string> = {
+  ONCE: "1회성",
+  DAILY: "매일 반복",
+  WEEKLY: "매주 반복",
+  SEASON: "시즌 단위",
+};
+
+export const STEP_EVENT_REPEAT_HELP: Record<StepEventRepeatType, string> = {
+  ONCE: "이 이벤트 기간 동안 1번만 진행합니다. 처음 운영할 때 가장 안전합니다.",
+  DAILY: "매일 진행 기록이 따로 잡힙니다. 일일 미션에 사용하세요.",
+  WEEKLY: "주차별로 진행 기록이 따로 잡힙니다. 주간 미션에 사용하세요.",
+  SEASON: "이벤트 하나를 긴 시즌처럼 운영할 때 사용합니다.",
+};
+
 export const STEP_MISSION_TYPES = [
   "SIGNUP",
   "LOGIN",
@@ -129,6 +160,7 @@ export type StepEventAdminData = {
     rewards: StepEventResourceOption[];
     boxes: StepEventResourceOption[];
     coupons: StepEventResourceOption[];
+    members: StepEventResourceOption[];
   };
 };
 
@@ -148,6 +180,26 @@ export const STEP_MISSION_LABELS: Record<StepMissionType, string> = {
   COUPON_USE: "쿠폰 사용",
   ADMIN_GRANT: "관리자 지급",
   OTHER: "기타",
+};
+
+
+
+export const STEP_MISSION_HELP: Record<StepMissionType, string> = {
+  SIGNUP: "회원가입 성공 시 자동으로 1회 올라갑니다.",
+  LOGIN: "승인 회원이 로그인할 때마다 자동으로 1회 올라갑니다.",
+  ATTENDANCE: "보상센터 출석을 완료하면 자동으로 1회 올라갑니다.",
+  POST_CREATE: "게시글 작성 API에 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  COMMENT_CREATE: "댓글 작성 API에 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  LIKE: "좋아요 API에 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  POINT_EARN: "포인트 획득 기록과 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  POINT_SPEND: "포인트 사용 기록과 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  RANDOM_BOX_OPEN: "랜덤박스를 열면 자동으로 1회 올라갑니다.",
+  EVENT_PARTICIPATE: "이벤트 참여 API에 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  DONATION: "후원 기록과 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  FRIEND_INVITE: "추천/초대 성공 기록과 추가 연동이 필요합니다. 지금은 관리자 수동 진행으로 운영하세요.",
+  COUPON_USE: "쿠폰 또는 이벤트 코드를 사용하면 자동으로 1회 올라갑니다.",
+  ADMIN_GRANT: "관리자가 수동 진행 도구로 직접 진행도를 올릴 때 사용합니다.",
+  OTHER: "별도 연동이 없는 기타 미션입니다. 관리자 수동 진행으로 운영하세요.",
 };
 
 export const STEP_REWARD_LABELS: Record<StepRewardType, string> = {

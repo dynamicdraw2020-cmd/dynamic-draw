@@ -7,7 +7,7 @@ import { useState } from "react";
 const groups = [
   { title: "주요 기능", links: [["공지", "/notices"], ["이벤트", "/events"], ["뽑기 & 교환", "/play"], ["보상 센터", "/rewards"]] },
   { title: "확인", links: [["랭킹", "/rankings"], ["통계", "/dashboard"], ["추첨 이벤트", "/raffles"], ["최근 결과", "/results"]] },
-  { title: "소통", links: [["문의센터", "/support"], ["커뮤니티", "/community"], ["당첨 후기", "/reviews"]] },
+  { title: "소통", links: [["문의센터", "/support"], ["후원", "/donations"], ["커뮤니티", "/community"], ["당첨 후기", "/reviews"]] },
 ];
 
 export function MobileMenu() {

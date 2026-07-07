@@ -14,6 +14,7 @@ const navLinks = [
   { href: "/rewards", label: "보상 센터" },
   { href: "/rankings", label: "랭킹" },
   { href: "/support", label: "문의센터" },
+  { href: "/donations", label: "후원" },
   { href: "/dashboard", label: "통계" },
 ];
 

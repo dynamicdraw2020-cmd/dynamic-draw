@@ -26,6 +26,7 @@ export type AdminCouponRow = {
 
 export type AdminCouponVisibilityData = {
   coupons: AdminCouponRow[];
+  loadError?: string | null;
   resources: {
     currencies: StepEventResourceOption[];
     draws: StepEventResourceOption[];
@@ -57,6 +58,13 @@ function rowToCoupon(row: Record<string, unknown>): AdminCouponRow {
   };
 }
 
+function postgrestErrorMessage(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const error = (result as { error?: { message?: string; details?: string; code?: string } | null }).error;
+  if (!error) return null;
+  return [error.code, error.message, error.details].filter(Boolean).join(" · ") || "알 수 없는 DB 오류";
+}
+
 async function resourceRows() {
   const admin = createAdminClient();
   const [currencies, draws, rewards, boxes] = await Promise.allSettled([
@@ -76,7 +84,7 @@ async function resourceRows() {
 }
 
 export async function getAdminCouponVisibilityData(): Promise<AdminCouponVisibilityData> {
-  const fallback: AdminCouponVisibilityData = { coupons: [], resources: { currencies: [], draws: [], rewards: [], boxes: [] } };
+  const fallback: AdminCouponVisibilityData = { coupons: [], loadError: null, resources: { currencies: [], draws: [], rewards: [], boxes: [] } };
   const admin = createAdminClient();
   try {
     const [couponsResult, resourcesResult] = await Promise.allSettled([
@@ -88,12 +96,41 @@ export async function getAdminCouponVisibilityData(): Promise<AdminCouponVisibil
       resourceRows(),
     ]);
 
-    const coupons = couponsResult.status === "fulfilled" ? ((couponsResult.value.data ?? []) as Array<Record<string, unknown>>).map(rowToCoupon) : [];
+    let loadError: string | null = null;
+    let couponRows: Array<Record<string, unknown>> = [];
+
+    if (couponsResult.status === "fulfilled") {
+      loadError = postgrestErrorMessage(couponsResult.value);
+      if (loadError) {
+        runtimeLog({ level: "WARN", event: "COUPON_VISIBILITY_QUERY_ERROR", details: { message: loadError } });
+
+        // 예전 DB/누적 SQL 꼬임으로 일부 컬럼 조회가 실패하면 전체 컬럼 조회로 한 번 더 살립니다.
+        const retry = await withTimeout(
+          admin.from("promo_codes").select("*").order("created_at", { ascending: false }).limit(500),
+          RUNTIME_LIMITS.readQueryTimeoutMs,
+          "coupon visibility fallback rows",
+        );
+        const retryError = postgrestErrorMessage(retry);
+        if (retryError) {
+          loadError = retryError;
+        } else {
+          couponRows = ((retry.data ?? []) as Array<Record<string, unknown>>).filter((row) => !row.deleted_at);
+          loadError = null;
+        }
+      } else {
+        couponRows = (couponsResult.value.data ?? []) as Array<Record<string, unknown>>;
+      }
+    } else {
+      loadError = couponsResult.reason instanceof Error ? couponsResult.reason.message : "쿠폰 목록을 불러오지 못했습니다.";
+      runtimeLog({ level: "WARN", event: "COUPON_VISIBILITY_QUERY_REJECTED", details: { message: loadError } });
+    }
+
+    const coupons = couponRows.map(rowToCoupon);
     const resources = resourcesResult.status === "fulfilled" ? resourcesResult.value : fallback.resources;
-    return { coupons, resources };
+    return { coupons, loadError, resources };
   } catch (error) {
     runtimeLog({ level: "WARN", event: "COUPON_VISIBILITY_FALLBACK_EMPTY", error });
-    return fallback;
+    return { ...fallback, loadError: error instanceof Error ? error.message : "쿠폰 데이터를 불러오지 못했습니다." };
   }
 }
 

@@ -73,6 +73,7 @@ export function CouponVisibilityManager({ data }: { data: AdminCouponVisibilityD
   return (
     <div className="form-grid">
       {message && <div className={`form-message ${message.type}`}>{message.text}</div>}
+      {data.loadError && <div className="form-message error">쿠폰 목록 DB 오류: {data.loadError}</div>}
 
       <form className="panel panel-pad form-grid" onSubmit={(event) => submit(event, "create-coupon", "쿠폰을 만들었습니다.")}>
         <div className="flex items-center gap-1"><Plus size={19} className="text-gold" /><h2 className="panel-title mb-0">쿠폰 생성</h2></div>
@@ -90,8 +91,8 @@ export function CouponVisibilityManager({ data }: { data: AdminCouponVisibilityD
           <div className="field"><label>1인 제한</label><input className="input" name="perUserLimit" type="number" min="1" defaultValue="1" /></div>
         </div>
         <div className="form-row">
-          <div className="field"><label>보상 타입</label><select className="select" name="rewardType" defaultValue="CURRENCY">{STEP_REWARD_TYPES.filter((type) => ["CURRENCY", "TICKET", "ITEM", "RANDOM_BOX", "EXP"].includes(type)).map((type) => <option key={type} value={type}>{STEP_REWARD_LABELS[type]}</option>)}</select></div>
-          <div className="field"><label>수량</label><input className="input" name="rewardAmount" type="number" min="1" defaultValue="1" /></div>
+          <div className="field"><label>보상 타입</label><select className="select" name="rewardType" defaultValue="EXP">{STEP_REWARD_TYPES.filter((type) => ["CURRENCY", "TICKET", "ITEM", "RANDOM_BOX", "EXP"].includes(type)).map((type) => <option key={type} value={type}>{STEP_REWARD_LABELS[type]}</option>)}</select></div>
+          <div className="field"><label>수량</label><input className="input" name="rewardAmount" type="number" min="1" defaultValue="1" /><small>처음 테스트는 EXP가 가장 안전합니다. 포인트/뽑기/상품/랜덤박스는 아래 대상을 선택하세요.</small></div>
         </div>
         <div className="form-row">
           <div className="field"><label>화폐/포인트</label><select className="select" name="currencyId"><option value="">선택 없음</option>{data.resources.currencies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>

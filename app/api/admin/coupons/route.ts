@@ -21,6 +21,14 @@ function normalizeDateInput(value: unknown) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+function assertCouponRewardReady(reward: ReturnType<typeof safeRewardArray>[number] | undefined) {
+  if (!reward) return;
+  if (reward.type === "CURRENCY" && !reward.currencyId) throw Object.assign(new Error("포인트/화폐 보상은 지급할 화폐를 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "TICKET" && !reward.drawId) throw Object.assign(new Error("뽑기권 보상은 지급할 뽑기를 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "ITEM" && !reward.rewardId) throw Object.assign(new Error("아이템/상품 보상은 지급할 상품을 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+  if (reward.type === "RANDOM_BOX" && !reward.boxId) throw Object.assign(new Error("랜덤박스 보상은 지급할 랜덤박스를 선택해야 합니다."), { status: 422, code: "REWARD_TARGET_REQUIRED" });
+}
+
 function parseCouponRewards(body: Record<string, unknown>) {
   const primary = {
     type: body.rewardType,
@@ -32,6 +40,7 @@ function parseCouponRewards(body: Record<string, unknown>) {
     label: nullableText(body.rewardLabel),
   };
   const rewards = safeRewardArray([primary]);
+  assertCouponRewardReady(rewards[0]);
   const extraText = String(body.extraRewardsJson ?? "").trim();
   if (!extraText) return rewards;
   try {
